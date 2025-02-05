@@ -1,11 +1,11 @@
-extern crate ndarray;
 extern crate numpy;
-use ndarray::{array, linspace, stack, Array1, Array2, ArrayView1, ArrayView2, Axis, Zip};
 
+use numpy::ndarray::{array, linspace, stack, Array1, Array2, ArrayView1, ArrayView2, Axis, Zip};
 use numpy::{IntoPyArray, PyArray1, PyArray2, PyReadonlyArray1, PyReadonlyArray2, ToPyArray};
 use pyo3::{prelude::*, types::PyType};
 
-pub mod point {
+#[pymodule(name = "sphersgeo")]
+pub mod sphersgeo {
     use super::*;
 
     #[pyclass]
@@ -293,341 +293,342 @@ pub mod point {
             self.rotate_around(other, theta, degrees)
         }
     }
-}
 
-#[pymodule]
-#[pyo3(name = "great_circle")]
-pub mod great_circle {
-    use super::{point::SphericalPoint, point::SphericalPoints, *};
+    #[pymodule(name = "great_circle")]
+    pub mod great_circle {
+        use super::{SphericalPoint, SphericalPoints, *};
 
-    #[pyclass]
-    #[derive(Clone)]
-    struct GreatCircleArc {
-        a: SphericalPoint,
-        b: SphericalPoint,
-    }
-
-    impl GreatCircleArc {
-        pub fn subtends(&self) -> f64 {
-            self.a.xyz.dot(&self.b.xyz).acos()
+        #[pyclass]
+        #[derive(Clone)]
+        struct GreatCircleArc {
+            a: SphericalPoint,
+            b: SphericalPoint,
         }
 
-        pub fn intersects(&self, other: &Self) -> bool {
-            // TODO: write an intersects algorithm
-            self.intersection(other).is_some()
-        }
-
-        pub fn contains(&self, point: &SphericalPoint) -> bool {
-            // TODO: write a better algorithm; this one is not rigorous
-            let left_subtend = GreatCircleArc {
-                a: self.a.to_owned(),
-                b: point.to_owned(),
-            }
-            .subtends();
-            let right_subtend = GreatCircleArc {
-                a: point.to_owned(),
-                b: self.b.to_owned(),
-            }
-            .subtends();
-
-            let angle = angles(
-                &SphericalPoints {
-                    xyz: self.a.xyz.to_shape((1, 3)).unwrap().to_owned(),
-                },
-                &SphericalPoints {
-                    xyz: point.xyz.to_shape((1, 3)).unwrap().to_owned(),
-                },
-                &SphericalPoints {
-                    xyz: self.b.xyz.to_shape((1, 3)).unwrap().to_owned(),
-                },
-                false,
-            )[0];
-
-            left_subtend + right_subtend - self.subtends() < 3e-11 && angle == std::f64::consts::PI
-        }
-
-        pub fn intersection(&self, other: &Self) -> Option<SphericalPoint> {
-            // TODO: implement
-            None
-        }
-
-        pub fn midpoint(&self) -> SphericalPoint {
-            SphericalPoint {
-                xyz: (&self.a.xyz + &self.b.xyz) / 2.0,
-            }
-            .normalized()
-        }
-
-        pub fn interpolate_points(&self, n: usize) -> SphericalPoints {
-            let n = if n < 2 { 2 } else { n };
-            let t = Array1::<f64>::from_iter(linspace(0.0, 1.0, n));
-            let t = t.to_shape((n, 1)).unwrap();
-
-            let omega = self.subtends();
-
-            SphericalPoints {
-                xyz: &self.a.xyz
-                    * ((Zip::from(&t).par_map_collect(|t| 1.0 - t) * omega).sin() / omega.sin())
-                    + &self.b.xyz * ((t * omega).sin() / omega.sin()),
-            }
-        }
-    }
-
-    #[pymethods]
-    impl GreatCircleArc {
-        #[new]
-        fn new(a: &SphericalPoint, b: &SphericalPoint) -> Self {
-            Self {
-                a: a.to_owned(),
-                b: b.to_owned(),
-            }
-        }
-
-        #[getter]
-        fn a(&self) -> SphericalPoint {
-            self.a.to_owned()
-        }
-
-        #[getter]
-        fn b(&self) -> SphericalPoint {
-            self.b.to_owned()
-        }
-
-        /// radians subtended by the arc on the unit sphere
-        #[getter]
-        #[pyo3(name = "subtends")]
-        fn py_subtends(&self) -> f64 {
-            self.subtends()
-        }
-
-        /// whether this arc and another given arc intersect
-        #[pyo3(name = "intersects")]
-        fn py_intersects(&self, other: &Self) -> bool {
-            self.intersects(other)
-        }
-
-        /// whether this arc and a given point intersect
-        #[pyo3(name = "contains")]
-        fn py_contains(&self, point: &SphericalPoint) -> bool {
-            self.contains(point)
-        }
-
-        /// point at which this arc and another given arc intersect
-        #[pyo3(name = "intersection", signature=(other))]
-        fn py_intersection(&self, other: &Self) -> Option<SphericalPoint> {
-            self.intersection(other)
-        }
-
-        /// midpoint of this arc
-        #[getter]
-        #[pyo3(name = "midpoint")]
-        fn py_midpoint(&self) -> SphericalPoint {
-            self.midpoint()
-        }
-
-        /// interpolate the a given number of points along this arc
-        #[pyo3(name="interpolate_points", signature=(n=50))]
-        fn py_interpolate_points(&self, n: usize) -> SphericalPoints {
-            self.interpolate_points(n)
-        }
-    }
-
-    #[pyclass]
-    #[derive(Clone)]
-    struct GreatCircleArcs {
-        a: SphericalPoints,
-        b: SphericalPoints,
-    }
-
-    impl GreatCircleArcs {
-        pub fn arcs(&self) -> Vec<GreatCircleArc> {
-            let mut a = self.a.xyz.rows().into_iter();
-            let mut b = self.b.xyz.rows().into_iter();
-
-            let mut arcs = vec![];
-            for _ in 0..self.a.xyz.nrows() {
-                arcs.push(GreatCircleArc {
-                    a: SphericalPoint {
-                        xyz: a.next().unwrap().to_owned(),
-                    },
-                    b: SphericalPoint {
-                        xyz: b.next().unwrap().to_owned(),
-                    },
-                })
+        impl GreatCircleArc {
+            pub fn subtends(&self) -> f64 {
+                self.a.xyz.dot(&self.b.xyz).acos()
             }
 
-            arcs
-        }
-
-        pub fn subtends(&self) -> Array1<f64> {
-            Zip::from(self.a.xyz.rows())
-                .and(self.b.xyz.rows())
-                .par_map_collect(|a, b| a.dot(&b).acos())
-        }
-
-        pub fn intersects(&self, other: &Self) -> bool {
-            self.intersections(other).xyz.nrows() > 0
-        }
-
-        pub fn contains(&self, points: &SphericalPoints) -> bool {
-            // TODO: implement
-            true
-        }
-
-        pub fn intersections(&self, other: &Self) -> SphericalPoints {
-            // TODO: implement
-            SphericalPoints {
-                xyz: Array2::<f64>::zeros((1, 3)),
+            pub fn intersects(&self, other: &Self) -> bool {
+                // TODO: write an intersects algorithm
+                self.intersection(other).is_some()
             }
-        }
 
-        pub fn midpoints(&self) -> SphericalPoints {
-            SphericalPoints {
-                xyz: (&self.a.xyz + &self.b.xyz) / 2.0,
-            }
-            .normalized()
-        }
-
-        pub fn interpolate_points(&self, n: usize) -> Vec<SphericalPoints> {
-            let n = if n < 2 { 2 } else { n };
-
-            self.arcs()
-                .iter()
-                .map(|arc| arc.interpolate_points(n))
-                .collect()
-        }
-    }
-
-    #[pymethods]
-    impl GreatCircleArcs {
-        #[new]
-        fn new(a: &SphericalPoints, b: &SphericalPoints) -> Self {
-            Self {
-                a: a.to_owned(),
-                b: b.to_owned(),
-            }
-        }
-
-        #[getter]
-        fn a(&self) -> SphericalPoints {
-            self.a.to_owned()
-        }
-
-        #[getter]
-        fn b(&self) -> SphericalPoints {
-            self.b.to_owned()
-        }
-
-        #[getter]
-        #[pyo3(name = "arcs")]
-        fn py_arcs(&self) -> Vec<GreatCircleArc> {
-            self.arcs()
-        }
-
-        /// angular distances subtended by the arcs on the unit sphere
-        #[getter]
-        #[pyo3(name = "subtends")]
-        fn py_subtends<'py>(&self, py: Python<'py>) -> Bound<'py, PyArray1<f64>> {
-            self.subtends().to_pyarray(py)
-        }
-
-        /// whether these arcs and other given arcs intersect
-        #[pyo3(name = "intersects", signature=(other))]
-        fn py_intersects(&self, other: &Self) -> bool {
-            self.intersects(other)
-        }
-
-        /// whether these arcs and the given points intersect
-        #[pyo3(name = "contains")]
-        fn py_contains(&self, points: &SphericalPoints) -> bool {
-            self.contains(points)
-        }
-
-        /// points at which these arcs and the other given arcs intersect
-        #[pyo3(name = "intersection")]
-        fn py_intersections(&self, other: &Self) -> SphericalPoints {
-            self.intersections(other)
-        }
-
-        /// midpoints of these arcs
-        #[getter]
-        #[pyo3(name = "midpoints")]
-        fn py_midpoints(&self) -> SphericalPoints {
-            self.midpoints()
-        }
-
-        /// interpolate the given number of points along these arcs
-        #[pyo3(name="interpolate_points", signature=(n=50))]
-        fn py_interpolate_points(&self, n: usize) -> Vec<SphericalPoints> {
-            self.interpolate_points(n)
-        }
-    }
-
-    pub fn angles(
-        a: &SphericalPoints,
-        b: &SphericalPoints,
-        c: &SphericalPoints,
-        degrees: bool,
-    ) -> Array1<f64> {
-        let abx = a.cross_product(&b).normalized();
-        let bcx = c.cross_product(&b).normalized();
-        let x = abx.cross_product(&bcx).normalized();
-
-        let diff = (&b.xyz * &x.xyz).sum_axis(Axis(1));
-        let mut inner = (&abx.xyz * &bcx.xyz).sum_axis(Axis(1));
-        inner.par_mapv_inplace(|v| v.acos());
-
-        let angles = stack(Axis(0), &[inner.view(), diff.view()])
-            .unwrap()
-            .map_axis(Axis(0), |v| {
-                if v[1] < 0.0 {
-                    (2.0 * std::f64::consts::PI) - v[0]
-                } else {
-                    v[0]
+            pub fn contains(&self, point: &SphericalPoint) -> bool {
+                // TODO: write a better algorithm; this one is not rigorous
+                let left_subtend = GreatCircleArc {
+                    a: self.a.to_owned(),
+                    b: point.to_owned(),
                 }
-            });
+                .subtends();
+                let right_subtend = GreatCircleArc {
+                    a: point.to_owned(),
+                    b: self.b.to_owned(),
+                }
+                .subtends();
 
-        if degrees {
-            angles.to_degrees()
-        } else {
-            angles
+                let angle = angles(
+                    &SphericalPoints {
+                        xyz: self.a.xyz.to_shape((1, 3)).unwrap().to_owned(),
+                    },
+                    &SphericalPoints {
+                        xyz: point.xyz.to_shape((1, 3)).unwrap().to_owned(),
+                    },
+                    &SphericalPoints {
+                        xyz: self.b.xyz.to_shape((1, 3)).unwrap().to_owned(),
+                    },
+                    false,
+                )[0];
+
+                left_subtend + right_subtend - self.subtends() < 3e-11
+                    && angle == std::f64::consts::PI
+            }
+
+            pub fn intersection(&self, other: &Self) -> Option<SphericalPoint> {
+                // TODO: implement
+                None
+            }
+
+            pub fn midpoint(&self) -> SphericalPoint {
+                SphericalPoint {
+                    xyz: (&self.a.xyz + &self.b.xyz) / 2.0,
+                }
+                .normalized()
+            }
+
+            pub fn interpolate_points(&self, n: usize) -> SphericalPoints {
+                let n = if n < 2 { 2 } else { n };
+                let t = Array1::<f64>::from_iter(linspace(0.0, 1.0, n));
+                let t = t.to_shape((n, 1)).unwrap();
+
+                let omega = self.subtends();
+
+                SphericalPoints {
+                    xyz: &self.a.xyz
+                        * ((Zip::from(&t).par_map_collect(|t| 1.0 - t) * omega).sin()
+                            / omega.sin())
+                        + &self.b.xyz * ((t * omega).sin() / omega.sin()),
+                }
+            }
+        }
+
+        #[pymethods]
+        impl GreatCircleArc {
+            #[new]
+            fn new(a: &SphericalPoint, b: &SphericalPoint) -> Self {
+                Self {
+                    a: a.to_owned(),
+                    b: b.to_owned(),
+                }
+            }
+
+            #[getter]
+            fn a(&self) -> SphericalPoint {
+                self.a.to_owned()
+            }
+
+            #[getter]
+            fn b(&self) -> SphericalPoint {
+                self.b.to_owned()
+            }
+
+            /// radians subtended by the arc on the unit sphere
+            #[getter]
+            #[pyo3(name = "subtends")]
+            fn py_subtends(&self) -> f64 {
+                self.subtends()
+            }
+
+            /// whether this arc and another given arc intersect
+            #[pyo3(name = "intersects")]
+            fn py_intersects(&self, other: &Self) -> bool {
+                self.intersects(other)
+            }
+
+            /// whether this arc and a given point intersect
+            #[pyo3(name = "contains")]
+            fn py_contains(&self, point: &SphericalPoint) -> bool {
+                self.contains(point)
+            }
+
+            /// point at which this arc and another given arc intersect
+            #[pyo3(name = "intersection", signature=(other))]
+            fn py_intersection(&self, other: &Self) -> Option<SphericalPoint> {
+                self.intersection(other)
+            }
+
+            /// midpoint of this arc
+            #[getter]
+            #[pyo3(name = "midpoint")]
+            fn py_midpoint(&self) -> SphericalPoint {
+                self.midpoint()
+            }
+
+            /// interpolate the a given number of points along this arc
+            #[pyo3(name="interpolate_points", signature=(n=50))]
+            fn py_interpolate_points(&self, n: usize) -> SphericalPoints {
+                self.interpolate_points(n)
+            }
+        }
+
+        #[pyclass]
+        #[derive(Clone)]
+        struct GreatCircleArcs {
+            a: SphericalPoints,
+            b: SphericalPoints,
+        }
+
+        impl GreatCircleArcs {
+            pub fn arcs(&self) -> Vec<GreatCircleArc> {
+                let mut a = self.a.xyz.rows().into_iter();
+                let mut b = self.b.xyz.rows().into_iter();
+
+                let mut arcs = vec![];
+                for _ in 0..self.a.xyz.nrows() {
+                    arcs.push(GreatCircleArc {
+                        a: SphericalPoint {
+                            xyz: a.next().unwrap().to_owned(),
+                        },
+                        b: SphericalPoint {
+                            xyz: b.next().unwrap().to_owned(),
+                        },
+                    })
+                }
+
+                arcs
+            }
+
+            pub fn subtends(&self) -> Array1<f64> {
+                Zip::from(self.a.xyz.rows())
+                    .and(self.b.xyz.rows())
+                    .par_map_collect(|a, b| a.dot(&b).acos())
+            }
+
+            pub fn intersects(&self, other: &Self) -> bool {
+                self.intersections(other).xyz.nrows() > 0
+            }
+
+            pub fn contains(&self, points: &SphericalPoints) -> bool {
+                // TODO: implement
+                true
+            }
+
+            pub fn intersections(&self, other: &Self) -> SphericalPoints {
+                // TODO: implement
+                SphericalPoints {
+                    xyz: Array2::<f64>::zeros((1, 3)),
+                }
+            }
+
+            pub fn midpoints(&self) -> SphericalPoints {
+                SphericalPoints {
+                    xyz: (&self.a.xyz + &self.b.xyz) / 2.0,
+                }
+                .normalized()
+            }
+
+            pub fn interpolate_points(&self, n: usize) -> Vec<SphericalPoints> {
+                let n = if n < 2 { 2 } else { n };
+
+                self.arcs()
+                    .iter()
+                    .map(|arc| arc.interpolate_points(n))
+                    .collect()
+            }
+        }
+
+        #[pymethods]
+        impl GreatCircleArcs {
+            #[new]
+            fn new(a: &SphericalPoints, b: &SphericalPoints) -> Self {
+                Self {
+                    a: a.to_owned(),
+                    b: b.to_owned(),
+                }
+            }
+
+            #[getter]
+            fn a(&self) -> SphericalPoints {
+                self.a.to_owned()
+            }
+
+            #[getter]
+            fn b(&self) -> SphericalPoints {
+                self.b.to_owned()
+            }
+
+            #[getter]
+            #[pyo3(name = "arcs")]
+            fn py_arcs(&self) -> Vec<GreatCircleArc> {
+                self.arcs()
+            }
+
+            /// angular distances subtended by the arcs on the unit sphere
+            #[getter]
+            #[pyo3(name = "subtends")]
+            fn py_subtends<'py>(&self, py: Python<'py>) -> Bound<'py, PyArray1<f64>> {
+                self.subtends().to_pyarray(py)
+            }
+
+            /// whether these arcs and other given arcs intersect
+            #[pyo3(name = "intersects", signature=(other))]
+            fn py_intersects(&self, other: &Self) -> bool {
+                self.intersects(other)
+            }
+
+            /// whether these arcs and the given points intersect
+            #[pyo3(name = "contains")]
+            fn py_contains(&self, points: &SphericalPoints) -> bool {
+                self.contains(points)
+            }
+
+            /// points at which these arcs and the other given arcs intersect
+            #[pyo3(name = "intersection")]
+            fn py_intersections(&self, other: &Self) -> SphericalPoints {
+                self.intersections(other)
+            }
+
+            /// midpoints of these arcs
+            #[getter]
+            #[pyo3(name = "midpoints")]
+            fn py_midpoints(&self) -> SphericalPoints {
+                self.midpoints()
+            }
+
+            /// interpolate the given number of points along these arcs
+            #[pyo3(name="interpolate_points", signature=(n=50))]
+            fn py_interpolate_points(&self, n: usize) -> Vec<SphericalPoints> {
+                self.interpolate_points(n)
+            }
+        }
+
+        pub fn angles(
+            a: &SphericalPoints,
+            b: &SphericalPoints,
+            c: &SphericalPoints,
+            degrees: bool,
+        ) -> Array1<f64> {
+            let abx = a.cross_product(&b).normalized();
+            let bcx = c.cross_product(&b).normalized();
+            let x = abx.cross_product(&bcx).normalized();
+
+            let diff = (&b.xyz * &x.xyz).sum_axis(Axis(1));
+            let mut inner = (&abx.xyz * &bcx.xyz).sum_axis(Axis(1));
+            inner.par_mapv_inplace(|v| v.acos());
+
+            let angles = stack(Axis(0), &[inner.view(), diff.view()])
+                .unwrap()
+                .map_axis(Axis(0), |v| {
+                    if v[1] < 0.0 {
+                        (2.0 * std::f64::consts::PI) - v[0]
+                    } else {
+                        v[0]
+                    }
+                });
+
+            if degrees {
+                angles.to_degrees()
+            } else {
+                angles
+            }
+        }
+
+        /// given spherical points A, B, and C, retrieve the angle at B between AB and BC
+        ///
+        /// References:
+        /// - Miller, Robert D. Computing the area of a spherical polygon. Graphics Gems IV. 1994. Academic Press. doi:10.5555/180895.180907
+        #[pyfunction]
+        #[pyo3(name = "angles", signature=(a,b,c,degrees=true))]
+        fn py_angles<'py>(
+            py: Python<'py>,
+            a: SphericalPoints,
+            b: SphericalPoints,
+            c: SphericalPoints,
+            degrees: bool,
+        ) -> Bound<'py, PyArray1<f64>> {
+            angles(&a, &b, &c, degrees).to_pyarray(py)
         }
     }
 
-    /// given spherical points A, B, and C, retrieve the angle at B between AB and BC
-    ///
-    /// References:
-    /// - Miller, Robert D. Computing the area of a spherical polygon. Graphics Gems IV. 1994. Academic Press. doi:10.5555/180895.180907
-    #[pyfunction]
-    #[pyo3(name = "angles", signature=(a,b,c,degrees=true))]
-    fn py_angles<'py>(
-        py: Python<'py>,
-        a: SphericalPoints,
-        b: SphericalPoints,
-        c: SphericalPoints,
-        degrees: bool,
-    ) -> Bound<'py, PyArray1<f64>> {
-        angles(&a, &b, &c, degrees).to_pyarray(py)
+    #[pymodule(name = "polygon")]
+    pub mod polygon {
+        use super::*;
+
+        #[pyclass]
+        pub struct SphericalPolygon {}
+
+        #[pyclass]
+        pub struct SphericalMultiPolygon {}
     }
-}
 
-#[pymodule]
-pub mod polygon {
-    use super::*;
+    #[pymodule(name = "graph")]
+    pub mod graph {
+        use super::*;
 
-    #[pyclass]
-    pub struct SphericalPolygon {}
-
-    #[pyclass]
-    pub struct SphericalMultiPolygon {}
-}
-
-#[pymodule]
-pub mod graph {
-    use super::*;
-
-    #[pyclass]
-    pub struct Graph {
-        polygons: polygon::SphericalPolygon,
+        #[pyclass]
+        pub struct Graph {
+            polygons: polygon::SphericalPolygon,
+        }
     }
 }
