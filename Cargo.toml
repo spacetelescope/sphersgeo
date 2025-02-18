@@ -9,6 +9,7 @@ name = "sphersgeo"
 crate-type = ["cdylib"]
 
 [dependencies]
+impl_ops = "0.1.1"
 ndarray = { version = "0.16.1", features = ["rayon"] }
 numpy = "0.23.0"
 pyo3 = "0.23.3"
