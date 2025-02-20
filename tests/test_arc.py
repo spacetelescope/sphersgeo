@@ -1,7 +1,6 @@
 import numpy as np
-import pytest
-from numpy.testing import assert_almost_equal, assert_allclose
-from sphersgeo import ArcString, VectorPoint, MultiVectorPoint, interpolate
+from numpy.testing import assert_allclose, assert_almost_equal
+from sphersgeo import ArcString, MultiVectorPoint, VectorPoint, arc_length, interpolate
 
 
 def test_midpoint():
@@ -29,29 +28,33 @@ def test_midpoint():
 
 def test_contains():
     arc = ArcString(
+        MultiVectorPoint.from_lonlats(np.array([[-30.0, -30.0], [30.0, 30.0]]))
+    )
+    assert arc.contains(VectorPoint.from_lonlat(np.array([0.0, 0.0])))
+
+    vertical_arc = ArcString(
         MultiVectorPoint.from_lonlats(np.array([[60.0, 0.0], [60.0, 30.0]])),
     )
     for i in range(1, 29):
-        assert arc.contains(VectorPoint.from_lonlat(np.array([60.0, i], dtype=float)))
+        assert vertical_arc.contains(
+            VectorPoint.from_lonlat(np.array([60.0, i], dtype=float))
+        )
 
-    arc = ArcString(
+    horizontal_arc = ArcString(
         MultiVectorPoint.from_lonlats(np.array([[0.0, 60.0], [30.0, 60.0]])),
     )
     for i in range(1, 29):
-        assert not arc.contains(
+        assert not horizontal_arc.contains(
             VectorPoint.from_lonlat(np.array([i, 60.0], dtype=float))
         )
 
 
 def test_interpolate():
-    arc = ArcString(
-        MultiVectorPoint(np.array([[60.0, 0.0], [60.0, 30.0]])),
-    )
     cvec = interpolate(np.array([60.0, 0.0]), np.array([60.0, 30.0]), n=10)
 
-    first_length = ArcString(cvec[0], cvec[1]).subtends
+    first_length = arc_length(cvec[0], cvec[1])
     for i in range(1, 9):
-        length = ArcString(cvec[i], cvec[i + 1]).subtends
+        length = ArcString(MultiVectorPoint(cvec[i : i + 1])).length
         assert abs(length - first_length) < 1.0e-10
 
 
@@ -119,8 +122,7 @@ def test_angle_domain():
 def test_length_domain():
     A = VectorPoint(np.array([np.nan, 0.0, 0.0]))
     B = VectorPoint(np.array([0.0, 0.0, np.inf]))
-    with pytest.raises(ValueError):
-        A.distance(B)
+    assert np.isnan(A.distance(B))
 
 
 def test_angle_nearly_coplanar_vec():
@@ -139,7 +141,7 @@ def test_angle_nearly_coplanar_vec():
         )
     )
     # vectors = np.stack([A, B, C], axis=0)
-    angles = B.angle(A, C)
+    angles = B.angles(A, C)
 
     assert_allclose(angles[:-1], np.pi, rtol=0, atol=1e-16)
     assert_allclose(angles[-1], 0, rtol=0, atol=1e-32)

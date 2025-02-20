@@ -8,6 +8,17 @@ use numpy::ndarray::{linspace, s, stack, Array1, Array2, ArrayView1, ArrayView2,
 use pyo3::prelude::*;
 use std::ops;
 
+pub fn interpolate(a: &ArrayView1<f64>, b: &ArrayView1<f64>, n: usize) -> Array2<f64> {
+    let n = if n < 2 { 2 } else { n };
+    let t = Array1::<f64>::from_iter(linspace(0.0, 1.0, n));
+    let t = t.to_shape((n, 1)).unwrap();
+
+    let omega = arc_length(a, b);
+
+    a * ((Zip::from(&t).par_map_collect(|t| 1.0 - t) * omega).sin() / omega.sin())
+        + b * ((t * omega).sin() / omega.sin())
+}
+
 /// given points A, B, and C on the unit sphere, retrieve the angle at B between arc AB and arc BC
 ///
 /// References:
@@ -64,6 +75,7 @@ pub fn angles(
         angles
     }
 }
+
 /// radians subtended by this arc on the sphere
 pub fn arc_length(a: &ArrayView1<f64>, b: &ArrayView1<f64>) -> f64 {
     a.dot(b).acos()
@@ -82,6 +94,7 @@ pub fn spherical_triangle_area(
 pub fn collinear(a: &ArrayView1<f64>, b: &ArrayView1<f64>, c: &ArrayView1<f64>) -> bool {
     spherical_triangle_area(a, b, c) < 3e-11
 }
+
 /// series of great circle arcs along the sphere
 #[pyclass]
 #[derive(Clone)]
@@ -101,6 +114,22 @@ impl Into<MultiVectorPoint> for ArcString {
     }
 }
 
+impl Into<Vec<ArcString>> for ArcString {
+    fn into(self) -> Vec<ArcString> {
+        let vectors = self.points.xyz;
+        let mut arcs = vec![];
+        for index in 0..vectors.nrows() - 1 {
+            arcs.push(ArcString {
+                points: MultiVectorPoint {
+                    xyz: vectors.slice(s![index..index + 1, ..]).to_owned(),
+                },
+            })
+        }
+
+        arcs
+    }
+}
+
 impl ArcString {
     pub fn midpoints(&self) -> MultiVectorPoint {
         MultiVectorPoint {
@@ -115,6 +144,10 @@ impl ArcString {
             .par_map_collect(|a, b| arc_length(&a, &b))
     }
 
+    pub fn length(&self) -> f64 {
+        self.lengths().sum()
+    }
+
     pub fn contains(&self, point: &VectorPoint) -> bool {
         // check if point is one of the vertices of this linestring
         if self.points.contains(point) {
@@ -124,7 +157,7 @@ impl ArcString {
         // check if point is within the bounding box
         let bounds = self.bounds(false);
         let pc = point.to_lonlat(false);
-        if pc[0] > bounds[0] && pc[1] < bounds[2] && pc[1] > bounds[1] && pc[1] < bounds[3] {
+        if pc[0] >= bounds[0] && pc[1] <= bounds[2] && pc[1] >= bounds[1] && pc[1] <= bounds[3] {
             // compare lengths to endpoints with the arc length
             for index in 0..self.points.xyz.nrows() - 1 {
                 let a = self.points.xyz.slice(s![index, ..]);
@@ -162,6 +195,12 @@ impl ArcString {
     }
 }
 
+impl ToString for ArcString {
+    fn to_string(&self) -> String {
+        format!("ArcString({0})", self.points.to_string())
+    }
+}
+
 impl PartialEq for ArcString {
     fn eq(&self, other: &ArcString) -> bool {
         &self == &other
@@ -186,20 +225,10 @@ impl BoundingBox for ArcString {
         let y = coordinates.slice(s![.., 1]);
 
         [
-            min_1darray(&x),
-            min_1darray(&y),
-            max_1darray(&x),
-            max_1darray(&y),
+            min_1darray(&x).unwrap_or(std::f64::NAN),
+            min_1darray(&y).unwrap_or(std::f64::NAN),
+            max_1darray(&x).unwrap_or(std::f64::NAN),
+            max_1darray(&y).unwrap_or(std::f64::NAN),
         ]
     }
-}
-pub fn interpolate(a: &ArrayView1<f64>, b: &ArrayView1<f64>, n: usize) -> Array2<f64> {
-    let n = if n < 2 { 2 } else { n };
-    let t = Array1::<f64>::from_iter(linspace(0.0, 1.0, n));
-    let t = t.to_shape((n, 1)).unwrap();
-
-    let omega = arc_length(a, b);
-
-    a * ((Zip::from(&t).par_map_collect(|t| 1.0 - t) * omega).sin() / omega.sin())
-        + b * ((t * omega).sin() / omega.sin())
 }
