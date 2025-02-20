@@ -42,7 +42,8 @@ pub mod sphersgeo {
 
         /// xyz vector as a 1-dimensional array of 3 floats
         #[getter]
-        fn xyz<'py>(&self, py: Python<'py>) -> Bound<'py, PyArray1<f64>> {
+        #[pyo3(name = "xyz")]
+        fn py_xyz<'py>(&self, py: Python<'py>) -> Bound<'py, PyArray1<f64>> {
             self.xyz.to_owned().into_pyarray(py)
         }
 
@@ -131,7 +132,8 @@ pub mod sphersgeo {
 
         /// xyz vector as a 2-dimensional array of Nx3 floats
         #[getter]
-        fn xyz<'py>(&self, py: Python<'py>) -> Bound<'py, PyArray2<f64>> {
+        #[pyo3(name = "xyz")]
+        fn py_xyz<'py>(&self, py: Python<'py>) -> Bound<'py, PyArray2<f64>> {
             self.xyz.to_owned().into_pyarray(py)
         }
 
@@ -201,7 +203,8 @@ pub mod sphersgeo {
 
         /// list of vector points
         #[getter]
-        fn vector_points(&self) -> Vec<VectorPoint> {
+        #[pyo3(name = "vector_points")]
+        fn py_vector_points(&self) -> Vec<VectorPoint> {
             self.to_owned().into()
         }
 
@@ -288,7 +291,8 @@ pub mod sphersgeo {
         }
 
         #[getter]
-        fn points(&self) -> MultiVectorPoint {
+        #[pyo3(name = "points")]
+        fn py_points(&self) -> MultiVectorPoint {
             self.points.to_owned()
         }
 
@@ -308,18 +312,9 @@ pub mod sphersgeo {
 
         /// individual arcs along this string
         #[getter]
-        fn arcs(&self) -> Vec<ArcString> {
-            let vectors = &self.points.xyz;
-            let mut arcs = vec![];
-            for index in 0..vectors.nrows() - 1 {
-                arcs.push(ArcString {
-                    points: MultiVectorPoint {
-                        xyz: vectors.slice(s![index..index + 1, ..]).to_owned(),
-                    },
-                })
-            }
-
-            arcs
+        #[pyo3(name = "arcs")]
+        fn py_arcs(&self) -> Vec<ArcString> {
+            self.to_owned().into()
         }
 
         /// midpoints of each arc
