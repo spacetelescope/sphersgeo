@@ -8,7 +8,6 @@ mod vectorpoint;
 extern crate impl_ops;
 extern crate numpy;
 
-use numpy::ndarray::s;
 use numpy::{IntoPyArray, PyArray1, PyArray2, PyReadonlyArray1, PyReadonlyArray2, ToPyArray};
 use pyo3::{exceptions::PyValueError, prelude::*, types::PyType};
 
@@ -364,4 +363,16 @@ pub mod sphersgeo {
             self.to_string()
         }
     }
+
+    #[pymodule_export]
+    use crate::sphericalpolygon::SphericalPolygon;
+
+    #[pymethods]
+    impl SphericalPolygon {}
+
+    #[pymodule_export]
+    use crate::sphericalgraph::SphericalGraph;
+
+    #[pymethods]
+    impl SphericalGraph {}
 }
