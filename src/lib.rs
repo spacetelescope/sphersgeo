@@ -8,6 +8,7 @@ mod vectorpoint;
 extern crate impl_ops;
 extern crate numpy;
 
+use numpy::ndarray::s;
 use numpy::{IntoPyArray, PyArray1, PyArray2, PyReadonlyArray1, PyReadonlyArray2, ToPyArray};
 use pyo3::{exceptions::PyValueError, prelude::*, types::PyType};
 
@@ -35,8 +36,11 @@ pub mod sphersgeo {
             cls: &Bound<'_, PyType>,
             coordinates: PyReadonlyArray1<'py, f64>,
             degrees: bool,
-        ) -> Self {
-            Self::from_lonlat(&coordinates.as_array(), degrees)
+        ) -> PyResult<Self> {
+            match Self::try_from_lonlat(&coordinates.as_array(), degrees) {
+                Ok(result) => Ok(result),
+                Err(err) => Err(PyValueError::new_err(err)),
+            }
         }
 
         /// xyz vector as a 1-dimensional array of 3 floats
@@ -218,6 +222,12 @@ pub mod sphersgeo {
             self.length()
         }
 
+        fn __getitem__(&self, index: usize) -> VectorPoint {
+            VectorPoint {
+                xyz: self.xyz.slice(s![index, ..]).to_owned(),
+            }
+        }
+
         fn __add__(&self, other: &Self) -> Self {
             self + other
         }
@@ -250,8 +260,11 @@ pub mod sphersgeo {
         a: PyReadonlyArray1<f64>,
         b: PyReadonlyArray1<f64>,
         n: usize,
-    ) -> Bound<'py, PyArray2<f64>> {
-        interpolate(&a.as_array(), &b.as_array(), n).to_pyarray(py)
+    ) -> PyResult<Bound<'py, PyArray2<f64>>> {
+        match interpolate(&a.as_array(), &b.as_array(), n) {
+            Ok(result) => Ok(result.to_pyarray(py)),
+            Err(err) => Err(PyValueError::new_err(err)),
+        }
     }
 
     /// generate the given number of points at equal intervals between vectorpoints A and B

@@ -27,6 +27,15 @@ def test_already_normalized():
 
 
 def test_from_lonlat():
+    a_lonlat = np.array([60.0, 0.0])
+    b_lonlat = np.array([60.0, 30.0])
+
+    a = VectorPoint.from_lonlat(a_lonlat)
+    b = VectorPoint.from_lonlat(b_lonlat)
+
+    assert_almost_equal(a.to_lonlat(), a_lonlat)
+    assert_almost_equal(b.to_lonlat(), b_lonlat)
+
     lons = np.arange(-360.0, 360.0, 1.0)
 
     equator_lat = 0.0
@@ -126,9 +135,9 @@ def test_distance():
 
     assert a.distance(a) == 0.0
 
-    assert ab.distance(bc) == 0.0
-    assert bc.distance(cd) == 0.0
-    assert ab.distance(cd) == np.pi / 2.0
+    assert_almost_equal(ab.distance(bc), 0.0)
+    assert_almost_equal(bc.distance(cd), 0.0)
+    assert_almost_equal(ab.distance(cd), np.pi / 2.0)
 
 
 def test_str():

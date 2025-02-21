@@ -156,20 +156,24 @@ impl Into<MultiVectorPoint> for VectorPoint {
 
 impl VectorPoint {
     /// from the given coordinates, build an xyz vector representing a point on the sphere
-    pub fn from_lonlat(coordinates: &ArrayView1<f64>, degrees: bool) -> Self {
-        let coordinates = if degrees {
-            coordinates.to_radians()
-        } else {
-            coordinates.to_owned()
-        };
+    pub fn try_from_lonlat(coordinates: &ArrayView1<f64>, degrees: bool) -> Result<Self, String> {
+        if coordinates.len() == 2 {
+            let coordinates = if degrees {
+                coordinates.to_radians()
+            } else {
+                coordinates.to_owned()
+            };
 
-        return Self {
-            xyz: array![
-                coordinates[0].cos() * coordinates[1].cos(),
-                coordinates[0].sin() * coordinates[1].cos(),
-                coordinates[1].sin(),
-            ],
-        };
+            Ok(Self {
+                xyz: array![
+                    coordinates[0].cos() * coordinates[1].cos(),
+                    coordinates[0].sin() * coordinates[1].cos(),
+                    coordinates[1].sin(),
+                ],
+            })
+        } else {
+            Err(String::from("invalid shape"))
+        }
     }
 
     /// convert this point on the sphere to angular coordinates
@@ -318,7 +322,7 @@ impl TryFrom<Array2<f64>> for MultiVectorPoint {
     #[inline]
     fn try_from(xyz: Array2<f64>) -> Result<Self, Self::Error> {
         if xyz.shape()[1] != 3 {
-            Err(format!("array should be Nx3, not Nx{:?}", xyz.nrows()))
+            Err(format!("array should be Nx3, not Nx{:?}", xyz.shape()[1]))
         } else {
             Ok(Self { xyz })
         }
@@ -584,6 +588,15 @@ mod tests {
 
     #[test]
     fn test_from_lonlat() {
+        let a_lonlat = array![60.0, 0.0];
+        let b_lonlat = array![60.0, 30.0];
+
+        let a = VectorPoint::try_from_lonlat(&a_lonlat.view(), true).unwrap();
+        let b = VectorPoint::try_from_lonlat(&b_lonlat.view(), true).unwrap();
+
+        assert!(Zip::from(&(a.to_lonlat(true) - a_lonlat).abs()).all(|point| point < &3e-11));
+        assert!(Zip::from(&(b.to_lonlat(true) - b_lonlat).abs()).all(|point| point < &3e-11));
+
         let lons = Array1::<f64>::from_iter(linspace(-360.0, 360.0, 360));
 
         let equator_lat = array![0.0];
@@ -591,7 +604,8 @@ mod tests {
         let equators = Zip::from(&lons)
             .and(equator_lats)
             .par_map_collect(|lon, lat| {
-                VectorPoint::from_lonlat(&array![lon.to_owned(), lat.to_owned()].view(), false)
+                VectorPoint::try_from_lonlat(&array![lon.to_owned(), lat.to_owned()].view(), false)
+                    .unwrap()
             });
         let multi_equator = MultiVectorPoint::from_lonlats(
             &stack(Axis(1), &[equator_lats, lons.view()]).unwrap().view(),
@@ -612,7 +626,8 @@ mod tests {
         let north_poles = Zip::from(&lons)
             .and(north_pole_lats)
             .par_map_collect(|lon, lat| {
-                VectorPoint::from_lonlat(&array![lon.to_owned(), lat.to_owned()].view(), false)
+                VectorPoint::try_from_lonlat(&array![lon.to_owned(), lat.to_owned()].view(), false)
+                    .unwrap()
             });
         let multi_north_pole = MultiVectorPoint::from_lonlats(
             &stack(Axis(1), &[north_pole_lats, lons.view()])
@@ -643,7 +658,8 @@ mod tests {
         let south_poles = Zip::from(&lons)
             .and(south_pole_lats)
             .par_map_collect(|lon, lat| {
-                VectorPoint::from_lonlat(&array![lat.to_owned(), lon.to_owned()].view(), false)
+                VectorPoint::try_from_lonlat(&array![lat.to_owned(), lon.to_owned()].view(), false)
+                    .unwrap()
             });
         let multi_south_pole = MultiVectorPoint::from_lonlats(
             &stack(Axis(1), &[south_pole_lats, lons.view()])

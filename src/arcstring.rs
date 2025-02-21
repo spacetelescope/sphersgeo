@@ -1,22 +1,61 @@
-use crate::vectorpoint::{cross_vectors, max_1darray, min_1darray};
+use crate::vectorpoint::{cross_vectors, max_1darray, min_1darray, normalize_vector};
 use crate::{
     geometry::BoundingBox,
     vectorpoint::{MultiVectorPoint, VectorPoint},
 };
 use impl_ops::impl_op_ex;
-use numpy::ndarray::{linspace, s, stack, Array1, Array2, ArrayView1, ArrayView2, Axis, Zip};
+use numpy::ndarray::{
+    concatenate, linspace, s, stack, Array1, Array2, ArrayView1, ArrayView2, Axis, Zip,
+};
 use pyo3::prelude::*;
 use std::ops;
 
-pub fn interpolate(a: &ArrayView1<f64>, b: &ArrayView1<f64>, n: usize) -> Array2<f64> {
+pub fn interpolate(
+    a: &ArrayView1<f64>,
+    b: &ArrayView1<f64>,
+    n: usize,
+) -> Result<Array2<f64>, String> {
     let n = if n < 2 { 2 } else { n };
     let t = Array1::<f64>::from_iter(linspace(0.0, 1.0, n));
     let t = t.to_shape((n, 1)).unwrap();
-
     let omega = arc_length(a, b);
 
-    a * ((Zip::from(&t).par_map_collect(|t| 1.0 - t) * omega).sin() / omega.sin())
-        + b * ((t * omega).sin() / omega.sin())
+    if a.len() == b.len() {
+        if a.len() == 3 && b.len() == 3 {
+            let offsets = if omega == 0.0 {
+                t.to_owned()
+            } else {
+                (t * omega).sin() / omega.sin()
+            };
+            let mut inverted_offsets = offsets.to_owned();
+            inverted_offsets.invert_axis(Axis(0));
+
+            Ok(concatenate(
+                Axis(0),
+                &[
+                    (inverted_offsets * a + offsets * b).view(),
+                    b.broadcast((1, 3)).unwrap(),
+                ],
+            )
+            .unwrap())
+        } else if a.len() == 2 && b.len() == 2 {
+            Ok(concatenate(
+                Axis(0),
+                &[
+                    (a * ((Zip::from(&t).par_map_collect(|t| 1.0 - t) * omega).sin()
+                        / omega.sin())
+                        + b * &((t * omega).sin() / omega.sin()).view())
+                        .view(),
+                    b.broadcast((1, 3)).unwrap(),
+                ],
+            )
+            .unwrap())
+        } else {
+            Err(String::from(""))
+        }
+    } else {
+        Err(String::from("shape must match"))
+    }
 }
 
 /// given points A, B, and C on the unit sphere, retrieve the angle at B between arc AB and arc BC
@@ -78,7 +117,7 @@ pub fn angles(
 
 /// radians subtended by this arc on the sphere
 pub fn arc_length(a: &ArrayView1<f64>, b: &ArrayView1<f64>) -> f64 {
-    a.dot(b).acos()
+    normalize_vector(a).dot(&normalize_vector(b)).acos()
 }
 
 /// surface area of a spherical triangle via Girard's theorum
