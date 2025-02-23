@@ -3,12 +3,11 @@ use crate::{
     geometry::BoundingBox,
     vectorpoint::{MultiVectorPoint, VectorPoint},
 };
-use impl_ops::impl_op_ex;
 use numpy::ndarray::{
     concatenate, linspace, s, stack, Array1, Array2, ArrayView1, ArrayView2, Axis, Zip,
 };
 use pyo3::prelude::*;
-use std::ops;
+use std::ops::Add;
 
 pub fn interpolate(
     a: &ArrayView1<f64>,
@@ -63,11 +62,13 @@ pub fn interpolate(
 /// References:
 /// - Miller, Robert D. Computing the area of a spherical polygon. Graphics Gems IV. 1994. Academic Press. doi:10.5555/180895.180907
 pub fn angle(a: &ArrayView1<f64>, b: &ArrayView1<f64>, c: &ArrayView1<f64>, degrees: bool) -> f64 {
+    let tolerance = 3e-11;
+
     let ab = arc_length(a, b);
     let bc = arc_length(b, c);
     let ca = arc_length(c, a);
 
-    let angle = if ab > 3e-11 && bc > 3e-11 {
+    let angle = if ab > tolerance && bc > tolerance {
         (ca.cos() - bc.cos() * ab.cos()) / (bc.sin() * ab.sin()).acos()
     } else {
         (1.0 - ca.powi(2) / 2.0).acos()
@@ -131,7 +132,8 @@ pub fn spherical_triangle_area(
 
 /// whether the three points exist on the same line
 pub fn collinear(a: &ArrayView1<f64>, b: &ArrayView1<f64>, c: &ArrayView1<f64>) -> bool {
-    spherical_triangle_area(a, b, c) < 3e-11
+    let tolerance = 3e-11;
+    spherical_triangle_area(a, b, c) < tolerance
 }
 
 /// series of great circle arcs along the sphere
@@ -211,9 +213,10 @@ impl ArcString {
                 // let right = arc_length(&p, &b);
                 // let total = arc_length(&a, &b);
 
-                // if left + right - total < 3e-11 {
+                // let tolerance = 3e-11;
+                // if left + right - total < tolerance {
                 //     // ensure angle is flat
-                //     if angle(&a, &point.xyz.view(), &b, false) - std::f64::consts::PI < 3e-11 {
+                //     if angle(&a, &point.xyz.view(), &b, false) - std::f64::consts::PI < tolerance {
                 //         return true;
                 //     }
                 // }
@@ -252,9 +255,23 @@ impl PartialEq<&ArcString> for ArcString {
     }
 }
 
-impl_op_ex!(+ |a: &ArcString, b: &ArcString| -> ArcString { ArcString {
-                points: &a.points + &b.points,
-            } });
+impl Add for ArcString {
+    type Output = Self;
+
+    fn add(self, rhs: Self) -> Self::Output {
+        &self + &rhs
+    }
+}
+
+impl Add<&ArcString> for &ArcString {
+    type Output = ArcString;
+
+    fn add(self, rhs: &ArcString) -> Self::Output {
+        Self::Output {
+            points: &self.points + &rhs.points,
+        }
+    }
+}
 
 impl BoundingBox for ArcString {
     fn bounds(&self, degrees: bool) -> [f64; 4] {

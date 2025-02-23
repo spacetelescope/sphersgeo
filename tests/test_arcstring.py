@@ -1,9 +1,11 @@
 import numpy as np
-from numpy.testing import assert_allclose, assert_almost_equal
+from numpy.testing import assert_allclose
 from sphersgeo import ArcString, MultiVectorPoint, VectorPoint, arc_length, interpolate
 
 
 def test_midpoint():
+    tolerance = 1e-10
+
     avec = [
         np.array([[i, j]], dtype=float) + 7.0
         for i in range(0, 11, 5)
@@ -23,7 +25,7 @@ def test_midpoint():
             C = ArcString(A + B).midpoints
             aclen = ArcString(A + C).length
             bclen = ArcString(B + C).length
-            assert abs(aclen - bclen) < 1.0e-10
+            assert_allclose(aclen, bclen, atol=tolerance)
 
 
 def test_contains():
@@ -72,7 +74,7 @@ def test_interpolate():
         point = VectorPoint(xyz)
         assert arc_from_lonlats.contains(point)
         assert arc_from_xyzs.contains(point)
-        
+
     distances_from_lonlats = arc_from_lonlats.lengths
     distances_from_xyz = arc_from_xyzs.lengths
 
@@ -96,12 +98,12 @@ def test_intersection():
     assert AB.intersects(CD)
     r = AB.intersection(CD)
     assert r.shape == (3,)
-    assert_almost_equal(r, reference_intersection)
+    assert_allclose(r, reference_intersection)
 
     # assert not np.all(great_circle_arc.intersects([A, E], [B, F], [C], [D]))
     # r = great_circle_arc.intersection([A, E], [B, F], [C], [D])
     # assert r.shape == (2, 3)
-    # assert_almost_equal(r[0], reference_intersection)
+    # assert_allclose(r[0], reference_intersection)
     # assert np.all(np.isnan(r[1]))
 
     # Test parallel arcs
@@ -112,15 +114,15 @@ def test_intersection():
 def test_distance():
     A = VectorPoint.from_lonlat(np.array([90.0, 0.0]))
     B = VectorPoint.from_lonlat(np.array([-90.0, 0.0]))
-    assert_almost_equal(A.distance(B), np.pi)
+    assert_allclose(A.distance(B), np.pi)
 
     A = VectorPoint.from_lonlat(np.array([135.0, 0.0]))
     B = VectorPoint.from_lonlat(np.array([-90.0, 0.0]))
-    assert_almost_equal(A.distance(B), (3.0 / 4.0) * np.pi)
+    assert_allclose(A.distance(B), (3.0 / 4.0) * np.pi)
 
     A = VectorPoint.from_lonlat(np.array([0.0, 0.0]))
     B = VectorPoint.from_lonlat(np.array([0.0, 90.0]))
-    assert_almost_equal(A.distance(B), np.pi / 2.0)
+    assert_allclose(A.distance(B), np.pi / 2.0)
 
 
 def test_angle():
