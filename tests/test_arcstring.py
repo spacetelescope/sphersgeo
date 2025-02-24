@@ -59,13 +59,13 @@ def test_interpolate():
     a = VectorPoint.from_lonlat(a_lonlat)
     b = VectorPoint.from_lonlat(b_lonlat)
 
-    assert assert_allclose(lonlats[0], a_lonlat)
-    assert assert_allclose(lonlats[-1], b_lonlat)
+    assert_allclose(lonlats[0], a_lonlat)
+    assert_allclose(lonlats[-1], b_lonlat)
 
     xyzs = interpolate(a.xyz, b.xyz, n=10)
 
-    assert assert_allclose(xyzs[0], a.xyz)
-    assert assert_allclose(xyzs[-1], b.xyz)
+    assert_allclose(xyzs[0], a.xyz)
+    assert_allclose(xyzs[-1], b.xyz)
 
     arc_from_lonlats = ArcString(MultiVectorPoint.from_lonlats(lonlats))
     arc_from_xyzs = ArcString(MultiVectorPoint(xyzs))

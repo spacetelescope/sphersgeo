@@ -4,7 +4,7 @@ use crate::{
     vectorpoint::{MultiVectorPoint, VectorPoint},
 };
 use numpy::ndarray::{
-    concatenate, linspace, s, stack, Array1, Array2, ArrayView1, ArrayView2, Axis, Zip,
+    Array1, Array2, ArrayView1, ArrayView2, Axis, Zip, array, concatenate, linspace, s, stack,
 };
 use pyo3::prelude::*;
 use std::ops::Add;
@@ -45,7 +45,7 @@ pub fn interpolate(
                         / omega.sin())
                         + b * &((t * omega).sin() / omega.sin()).view())
                         .view(),
-                    b.to_shape((1, 3)).unwrap().view(),
+                    b.to_shape((1, 2)).unwrap().view(),
                 ],
             )
             .unwrap())
@@ -74,11 +74,7 @@ pub fn angle(a: &ArrayView1<f64>, b: &ArrayView1<f64>, c: &ArrayView1<f64>, degr
         (1.0 - ca.powi(2) / 2.0).acos()
     };
 
-    if degrees {
-        angle.to_degrees()
-    } else {
-        angle
-    }
+    if degrees { angle.to_degrees() } else { angle }
 }
 
 /// given points A, B, and C on the unit sphere, retrieve the angle at B between arc AB and arc BC
@@ -109,11 +105,7 @@ pub fn angles(
             }
         });
 
-    if degrees {
-        angles.to_degrees()
-    } else {
-        angles
-    }
+    if degrees { angles.to_degrees() } else { angles }
 }
 
 /// radians subtended by this arc on the sphere
@@ -286,5 +278,275 @@ impl BoundingBox for ArcString {
             max_1darray(&x).unwrap_or(std::f64::NAN),
             max_1darray(&y).unwrap_or(std::f64::NAN),
         ]
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::geometry::Distance;
+    use crate::vectorpoint::{MultiVectorPoint, VectorPoint};
+
+    #[test]
+    fn test_midpoint() {
+        let tolerance = 1e-10;
+
+        let mut avec = Array2::<f64>::zeros((0, 2));
+        let mut bvec = Array2::<f64>::zeros((0, 2));
+        for i in linspace(0., 11., 5) {
+            for j in linspace(0., 11., 5) {
+                let row = array![i, j];
+                avec.push_row(row.view()).unwrap();
+                bvec.push_row(row.view()).unwrap();
+            }
+        }
+        avec += 7.0;
+        bvec += 10.0;
+
+        for a in avec.rows() {
+            let a = VectorPoint::try_from_lonlat(&a, true).unwrap();
+            for b in bvec.rows() {
+                let b = VectorPoint::try_from_lonlat(&b, true).unwrap();
+                let c = ArcString { points: &a + &b }.midpoints();
+                let aclen = ArcString { points: &a + &c }.length();
+                let bclen = ArcString { points: &b + &c }.length();
+                assert!((aclen - bclen) < tolerance)
+            }
+        }
+    }
+
+    #[test]
+    fn test_contains() {
+        let arc = ArcString {
+            points: MultiVectorPoint::try_from_lonlats(
+                &array![[-30.0, -30.0], [30.0, 30.0]].view(),
+                true,
+            )
+            .unwrap(),
+        };
+        assert!(
+            arc.contains(
+                &VectorPoint::try_from_lonlat(&array![349.10660535, -12.30998866].view(), true)
+                    .unwrap()
+            )
+        );
+
+        let vertical_arc = ArcString {
+            points: MultiVectorPoint::try_from_lonlats(
+                &array![[60.0, 0.0], [60.0, 30.0]].view(),
+                true,
+            )
+            .unwrap(),
+        };
+        for i in linspace(1., 29., 1) {
+            assert!(
+                vertical_arc.contains(
+                    &VectorPoint::try_from_lonlat(&array![60.0, i].view(), true).unwrap()
+                )
+            )
+        }
+
+        let horizontal_arc = ArcString {
+            points: MultiVectorPoint::try_from_lonlats(
+                &array![[0.0, 60.0], [30.0, 60.0]].view(),
+                true,
+            )
+            .unwrap(),
+        };
+        for i in linspace(1., 29., 1) {
+            assert!(
+                horizontal_arc.contains(
+                    &VectorPoint::try_from_lonlat(&array![i, 60.0].view(), true).unwrap()
+                )
+            );
+        }
+    }
+
+    #[test]
+    fn test_interpolate() {
+        let tolerance = 1e-10;
+
+        let a_lonlat = array![60.0, 0.0];
+        let b_lonlat = array![60.0, 30.0];
+        let lonlats = interpolate(&a_lonlat.view(), &b_lonlat.view(), 10).unwrap();
+
+        let a = VectorPoint::try_from_lonlat(&a_lonlat.view(), true).unwrap();
+        let b = VectorPoint::try_from_lonlat(&b_lonlat.view(), true).unwrap();
+
+        assert!(
+            Zip::from(&lonlats.slice(s![0, ..]))
+                .and(&a_lonlat.view())
+                .all(|test, reference| (test - reference).abs() < tolerance)
+        );
+        assert!(
+            Zip::from(&lonlats.slice(s![-1, ..]))
+                .and(&b_lonlat.view())
+                .all(|test, reference| (test - reference).abs() < tolerance)
+        );
+
+        let xyzs = interpolate(&a.xyz.view(), &b.xyz.view(), 10).unwrap();
+
+        assert!(
+            Zip::from(&xyzs.slice(s![0, ..]))
+                .and(&a.xyz.view())
+                .all(|test, reference| (test - reference).abs() < tolerance)
+        );
+        assert!(
+            Zip::from(&xyzs.slice(s![-1, ..]))
+                .and(&b.xyz.view())
+                .all(|test, reference| (test - reference).abs() < tolerance)
+        );
+
+        let arc_from_lonlats = ArcString {
+            points: MultiVectorPoint::try_from_lonlats(&lonlats.view(), true).unwrap(),
+        };
+        let arc_from_xyzs = ArcString {
+            points: MultiVectorPoint {
+                xyz: xyzs.to_owned(),
+            },
+        };
+
+        for xyz in xyzs.rows() {
+            let point = VectorPoint {
+                xyz: xyz.to_owned(),
+            };
+            assert!(arc_from_lonlats.contains(&point));
+            assert!(arc_from_xyzs.contains(&point));
+        }
+
+        let distances_from_lonlats = arc_from_lonlats.lengths();
+        let distances_from_xyz = arc_from_xyzs.lengths();
+
+        assert!(
+            Zip::from(&distances_from_lonlats)
+                .and(&distances_from_xyz)
+                .all(|from_lonlats, from_xyz| (from_lonlats - from_xyz).abs() < tolerance)
+        );
+    }
+
+    #[test]
+    fn test_intersection() {
+        let tolerance = 1e-10;
+
+        let a = VectorPoint::try_from_lonlat(&array![-10.0, -10.0].view(), true).unwrap();
+        let b = VectorPoint::try_from_lonlat(&array![10.0, 10.0].view(), true).unwrap();
+
+        let c = VectorPoint::try_from_lonlat(&array![-25.0, 10.0].view(), true).unwrap();
+        let d = VectorPoint::try_from_lonlat(&array![15.0, -10.0].view(), true).unwrap();
+
+        let e = VectorPoint::try_from_lonlat(&array![-20.0, 40.0].view(), true).unwrap();
+        let f = VectorPoint::try_from_lonlat(&array![20.0, 40.0].view(), true).unwrap();
+
+        let reference_intersection = array![0.99912414, -0.02936109, -0.02981403];
+
+        let ab = ArcString { points: a + b };
+        let cd = ArcString { points: c + d };
+        assert!(ab.intersects(&cd));
+        let r = ab.intersection(&cd).unwrap();
+        assert!(r.len() == 3);
+        assert!(
+            Zip::from(r.xyz.rows())
+                .all(|point| (&point - &reference_intersection.view()).abs().sum() < tolerance)
+        );
+
+        // assert not np.all(great_circle_arc.intersects([A, E], [B, F], [C], [D]))
+        // r = great_circle_arc.intersection([A, E], [B, F], [C], [D])
+        // assert r.shape == (2, 3)
+        // assert_allclose(r[0], reference_intersection)
+        // assert np.all(np.isnan(r[1]))
+
+        // Test parallel arcs
+        let r = ab.intersection(&ab).unwrap();
+        assert!(r.xyz.is_all_nan());
+    }
+
+    #[test]
+    fn test_distance() {
+        let tolerance = 1e-10;
+
+        let a = VectorPoint::try_from_lonlat(&array![90.0, 0.0].view(), true).unwrap();
+        let b = VectorPoint::try_from_lonlat(&array![-90.0, 0.0].view(), true).unwrap();
+        assert!(((&a).distance(&b) - std::f64::consts::PI).abs() < tolerance);
+
+        let a = VectorPoint::try_from_lonlat(&array![135.0, 0.0].view(), true).unwrap();
+        let b = VectorPoint::try_from_lonlat(&array![-90.0, 0.0].view(), true).unwrap();
+        assert!(((&a).distance(&b) - (3.0 / 4.0) * std::f64::consts::PI).abs() < tolerance);
+
+        let a = VectorPoint::try_from_lonlat(&array![0.0, 0.0].view(), true).unwrap();
+        let b = VectorPoint::try_from_lonlat(&array![0.0, 90.0].view(), true).unwrap();
+        assert!(((&a).distance(&b) - std::f64::consts::PI / 2.0).abs() < tolerance);
+    }
+
+    #[test]
+    fn test_angle() {
+        let a = VectorPoint {
+            xyz: array![1.0, 0.0, 0.0],
+        };
+        let b = VectorPoint {
+            xyz: array![0.0, 1.0, 0.0],
+        };
+        let c = VectorPoint {
+            xyz: array![0.0, 0.0, 1.0],
+        };
+        assert_eq!(b.angle(&a, &c, false), (3.0 / 2.0) * std::f64::consts::PI);
+
+        // TODO: More angle tests
+    }
+
+    #[test]
+    fn test_angle_domain() {
+        let a = VectorPoint {
+            xyz: array![0.0, 0.0, 0.0],
+        };
+        let b = VectorPoint {
+            xyz: array![0.0, 0.0, 0.0],
+        };
+        let c = VectorPoint {
+            xyz: array![0.0, 0.0, 0.0],
+        };
+        assert_eq!(b.angle(&a, &c, false), (3.0 / 2.0) * std::f64::consts::PI);
+        assert!(!(b.angle(&a, &c, false)).is_infinite());
+    }
+
+    #[test]
+    fn test_length_domain() {
+        let a = VectorPoint {
+            xyz: array![std::f64::NAN, 0.0, 0.0],
+        };
+        let b = VectorPoint {
+            xyz: array![0.0, 0.0, std::f64::INFINITY],
+        };
+        assert!((&a).distance(&b).is_nan());
+    }
+
+    #[test]
+    fn test_angle_nearly_coplanar_vec() {
+        // test from issue #222 + extra values
+        let a = MultiVectorPoint {
+            xyz: array![1.0, 1.0, 1.0].broadcast((5, 3)).unwrap().to_owned(),
+        };
+        let b = MultiVectorPoint {
+            xyz: array![1.0, 0.9999999, 1.0]
+                .broadcast((5, 3))
+                .unwrap()
+                .to_owned(),
+        };
+        let c = MultiVectorPoint {
+            xyz: array![
+                [1.0, 0.5, 1.0],
+                [1.0, 0.15, 1.0],
+                [1.0, 0.001, 1.0],
+                [1.0, 0.15, 1.0],
+                [-1.0, 0.1, -1.0],
+            ],
+        };
+        // vectors = np.stack([A, B, C], axis=0)
+        let angles = b.angles(&a, &c, false);
+
+        assert!(
+            Zip::from(&angles.slice(s![..-1]).abs_sub(std::f64::consts::PI))
+                .all(|value| value < &1e-16)
+        );
+        assert!(Zip::from(&angles.slice(s![-1]).abs()).all(|value| value < &1e-32));
     }
 }
