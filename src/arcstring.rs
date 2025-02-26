@@ -1,4 +1,4 @@
-use crate::geometry::SingleGeometry;
+use crate::geometry::{MultiGeometry, SingleGeometry};
 use crate::vectorpoint::{cross_vectors, max_1darray, min_1darray, normalize_vector};
 use crate::{
     geometry::{GeometricOperations, Geometry},
@@ -247,6 +247,16 @@ impl Geometry for ArcString {
 }
 
 impl SingleGeometry for ArcString {}
+
+impl MultiGeometry<ArcString> for &ArcString {
+    fn parts(&self) -> Vec<ArcString> {
+        self.to_owned().into()
+    }
+
+    fn len(&self) -> usize {
+        self.points.xyz.nrows() - 1
+    }
+}
 
 impl GeometricOperations<&ArcString> for &ArcString {
     fn distance(self, other: &ArcString) -> f64 {
