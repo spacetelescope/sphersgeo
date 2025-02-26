@@ -327,7 +327,7 @@ impl Geometry for VectorPoint {
 impl SingleGeometry for VectorPoint {}
 
 impl GeometricOperations<&VectorPoint> for &VectorPoint {
-    fn distance(&self, other: &VectorPoint) -> f64 {
+    fn distance(self, other: &VectorPoint) -> f64 {
         if self.xyz == other.xyz {
             0.
         } else {
@@ -335,21 +335,21 @@ impl GeometricOperations<&VectorPoint> for &VectorPoint {
         }
     }
 
-    fn contains(&self, other: &VectorPoint) -> bool {
+    fn contains(self, other: &VectorPoint) -> bool {
         self.intersects(other)
     }
 
-    fn within(&self, other: &VectorPoint) -> bool {
+    fn within(self, other: &VectorPoint) -> bool {
         other.contains(self)
     }
 
-    fn intersects(&self, other: &VectorPoint) -> bool {
+    fn intersects(self, other: &VectorPoint) -> bool {
         let tolerance = 3e-11;
         (&other.xyz - &self.xyz).abs().sum() < tolerance
     }
 
     #[allow(refining_impl_trait)]
-    fn intersection(&self, other: &VectorPoint) -> Option<VectorPoint> {
+    fn intersection(self, other: &VectorPoint) -> Option<VectorPoint> {
         if self.intersects(other) {
             Some(VectorPoint::new(self.xyz.to_owned()))
         } else {
@@ -706,7 +706,7 @@ impl GeometryCollection<VectorPoint> for MultiVectorPoint {
 }
 
 impl GeometricOperations<&MultiVectorPoint> for &MultiVectorPoint {
-    fn distance(&self, other: &MultiVectorPoint) -> f64 {
+    fn distance(self, other: &MultiVectorPoint) -> f64 {
         // TODO: write a more efficient algorithm than brute-force
         min_1darray(
             &Zip::from(self.xyz.rows())
@@ -723,23 +723,23 @@ impl GeometricOperations<&MultiVectorPoint> for &MultiVectorPoint {
         .unwrap_or(0.)
     }
 
-    fn contains(&self, other: &MultiVectorPoint) -> bool {
+    fn contains(self, other: &MultiVectorPoint) -> bool {
         other.len() < self.len()
             && self
                 .intersection(other)
                 .map_or(false, |intersection| intersection.len() < self.len())
     }
 
-    fn within(&self, other: &MultiVectorPoint) -> bool {
-        other.contains(*self)
+    fn within(self, other: &MultiVectorPoint) -> bool {
+        other.contains(self)
     }
 
-    fn intersects(&self, other: &MultiVectorPoint) -> bool {
+    fn intersects(self, other: &MultiVectorPoint) -> bool {
         self.intersection(other).is_some()
     }
 
     #[allow(refining_impl_trait)]
-    fn intersection(&self, other: &MultiVectorPoint) -> Option<MultiVectorPoint> {
+    fn intersection(self, other: &MultiVectorPoint) -> Option<MultiVectorPoint> {
         let tolerance: f64 = 3e-11;
         let other_point = other.xyz.view();
 
@@ -761,7 +761,7 @@ impl GeometricOperations<&MultiVectorPoint> for &MultiVectorPoint {
 }
 
 impl GeometricOperations<&VectorPoint> for &MultiVectorPoint {
-    fn distance(&self, other: &VectorPoint) -> f64 {
+    fn distance(self, other: &VectorPoint) -> f64 {
         let other_point = other.xyz.view();
         // TODO: write a more efficient algorithm than brute-force
         min_1darray(
@@ -772,22 +772,22 @@ impl GeometricOperations<&VectorPoint> for &MultiVectorPoint {
         .unwrap_or(0.)
     }
 
-    fn contains(&self, other: &VectorPoint) -> bool {
+    fn contains(self, other: &VectorPoint) -> bool {
         let tolerance = 1e-10;
         let other_point = other.xyz.view();
         Zip::from(self.xyz.rows()).any(|point| (&point - &other_point).abs().sum() < tolerance)
     }
 
-    fn within(&self, other: &VectorPoint) -> bool {
+    fn within(self, other: &VectorPoint) -> bool {
         false
     }
 
-    fn intersects(&self, other: &VectorPoint) -> bool {
+    fn intersects(self, other: &VectorPoint) -> bool {
         self.contains(other)
     }
 
     #[allow(refining_impl_trait)]
-    fn intersection(&self, other: &VectorPoint) -> Option<VectorPoint> {
+    fn intersection(self, other: &VectorPoint) -> Option<VectorPoint> {
         let tolerance = 1e-10;
         let other_point = other.xyz.view();
 

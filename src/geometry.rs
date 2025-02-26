@@ -34,19 +34,19 @@ pub trait GeometryCollection<T: SingleGeometry> {
 
 pub trait GeometricOperations<OtherGeometry: Geometry = Self> {
     /// distance between this geometry and another
-    fn distance(&self, other: OtherGeometry) -> f64;
+    fn distance(self, other: OtherGeometry) -> f64;
 
     /// whether this geometry contains another
-    fn contains(&self, other: OtherGeometry) -> bool;
+    fn contains(self, other: OtherGeometry) -> bool;
 
     /// whether this geometry is within another
-    fn within(&self, other: OtherGeometry) -> bool;
+    fn within(self, other: OtherGeometry) -> bool;
 
     /// whether this geometry and another given geometry intersect
-    fn intersects(&self, other: OtherGeometry) -> bool;
+    fn intersects(self, other: OtherGeometry) -> bool;
 
     /// intersection between this geometry and another given geometry
-    fn intersection(&self, other: OtherGeometry) -> Option<impl Geometry>;
+    fn intersection(self, other: OtherGeometry) -> Option<impl Geometry>;
 }
 
 pub struct SphericalDistanceMetric {}

@@ -1,12 +1,13 @@
 use crate::{
     arcstring::ArcString,
-    geometry::{GeometricOperations, Geometry},
-    vectorpoint::{MultiVectorPoint, VectorPoint},
+    geometry::{GeometricOperations, Geometry, GeometryCollection, MultiGeometry, SingleGeometry},
+    vectorpoint::VectorPoint,
 };
 use kiddo::ImmutableKdTree;
 use pyo3::prelude::*;
 
 #[pyclass]
+#[derive(Clone)]
 pub struct SphericalPolygon {
     arcstring: ArcString,
     interior: VectorPoint,
@@ -72,31 +73,34 @@ impl Geometry for SphericalPolygon {
 }
 
 impl GeometricOperations<&SphericalPolygon> for &SphericalPolygon {
-    fn distance(&self, other: &SphericalPolygon) -> f64 {
+    fn distance(self, other: &SphericalPolygon) -> f64 {
         // TODO: implement
         -1.
     }
 
-    fn contains(&self, other: &SphericalPolygon) -> bool {
+    fn contains(self, other: &SphericalPolygon) -> bool {
         // TODO: implement
         false
     }
 
-    fn within(&self, other: &SphericalPolygon) -> bool {
+    fn within(self, other: &SphericalPolygon) -> bool {
         other.contains(self)
     }
 
-    fn intersects(&self, other: &SphericalPolygon) -> bool {
+    fn intersects(self, other: &SphericalPolygon) -> bool {
         self.intersection(other).is_some()
     }
 
-    fn intersection(&self, other: &SphericalPolygon) -> Option<SphericalPolygon> {
+    fn intersection(self, other: &SphericalPolygon) -> Option<SphericalPolygon> {
         // TODO: implement
         None
     }
 }
 
+impl SingleGeometry for SphericalPolygon {}
+
 #[pyclass]
+#[derive(Clone)]
 pub struct MultiSphericalPolygon {
     polygons: Vec<SphericalPolygon>,
     kdtree: ImmutableKdTree<f64, 3>,
@@ -164,26 +168,46 @@ impl Geometry for MultiSphericalPolygon {
     }
 }
 
+impl MultiGeometry<SphericalPolygon> for &MultiSphericalPolygon {
+    fn parts(&self) -> Vec<SphericalPolygon> {
+        self.polygons.to_owned()
+    }
+
+    fn len(&self) -> usize {
+        self.polygons.len()
+    }
+}
+
+impl GeometryCollection<SphericalPolygon> for MultiSphericalPolygon {
+    fn extend(&mut self, other: Self) {
+        self.polygons.extend(other.polygons);
+    }
+
+    fn push(&mut self, value: SphericalPolygon) {
+        self.polygons.push(value);
+    }
+}
+
 impl GeometricOperations<&MultiSphericalPolygon> for &MultiSphericalPolygon {
-    fn distance(&self, other: &MultiSphericalPolygon) -> f64 {
+    fn distance(self, other: &MultiSphericalPolygon) -> f64 {
         // TODO: implement
         -1.
     }
 
-    fn contains(&self, other: &MultiSphericalPolygon) -> bool {
+    fn contains(self, other: &MultiSphericalPolygon) -> bool {
         // TODO: implement
         false
     }
 
-    fn within(&self, other: &MultiSphericalPolygon) -> bool {
+    fn within(self, other: &MultiSphericalPolygon) -> bool {
         other.contains(self)
     }
 
-    fn intersects(&self, other: &MultiSphericalPolygon) -> bool {
+    fn intersects(self, other: &MultiSphericalPolygon) -> bool {
         self.intersection(other).is_some()
     }
 
-    fn intersection(&self, other: &MultiSphericalPolygon) -> Option<MultiSphericalPolygon> {
+    fn intersection(self, other: &MultiSphericalPolygon) -> Option<MultiSphericalPolygon> {
         // TODO: implement
         None
     }
