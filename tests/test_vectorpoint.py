@@ -174,3 +174,9 @@ def test_add():
     assert b + c == bc
     assert c + d == cd
     assert d + a == da
+
+    a += b
+    c += d
+
+    assert a == ab
+    assert c == cd
