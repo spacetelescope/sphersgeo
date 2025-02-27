@@ -1,3 +1,4 @@
+use crate::{collection::GeometryCollection, vectorpoint::MultiVectorPoint};
 use kiddo::traits::DistanceMetric;
 
 pub trait Geometry {
@@ -12,19 +13,16 @@ pub trait Geometry {
 
     /// convex hull of this geometry
     fn convex_hull(&self) -> Option<crate::sphericalpolygon::SphericalPolygon>;
+
+    fn points(&self) -> MultiVectorPoint;
 }
 
-pub trait SingleGeometry {}
-
-pub trait MultiGeometry<T: SingleGeometry> {
-    /// elements of this collection
-    fn parts(&self) -> Vec<T>;
-
+pub trait MultiGeometry {
     /// number of elements in this collection
     fn len(&self) -> usize;
 }
 
-pub trait GeometryCollection<T: SingleGeometry> {
+pub trait MutableMultiGeometry<T: Geometry> {
     /// extend this collection with elements from the other collection
     fn extend(&mut self, other: Self);
 
@@ -46,7 +44,31 @@ pub trait GeometricOperations<OtherGeometry: Geometry = Self> {
     fn intersects(self, other: OtherGeometry) -> bool;
 
     /// intersection between this geometry and another given geometry
-    fn intersection(self, other: OtherGeometry) -> Option<impl Geometry>;
+    fn intersection(self, other: OtherGeometry) -> GeometryCollection;
+}
+
+pub struct AnyGeometry(dyn Geometry);
+
+impl Geometry for AnyGeometry {
+    fn area(&self) -> f64 {
+        self.0.area()
+    }
+
+    fn length(&self) -> f64 {
+        self.0.length()
+    }
+
+    fn bounds(&self, degrees: bool) -> [f64; 4] {
+        self.0.bounds(degrees)
+    }
+
+    fn convex_hull(&self) -> Option<crate::sphericalpolygon::SphericalPolygon> {
+        self.0.convex_hull()
+    }
+
+    fn points(&self) -> MultiVectorPoint {
+        self.0.points()
+    }
 }
 
 pub struct SphericalDistanceMetric {}

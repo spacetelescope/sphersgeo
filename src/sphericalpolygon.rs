@@ -1,13 +1,14 @@
 use crate::{
     arcstring::ArcString,
-    geometry::{GeometricOperations, Geometry, GeometryCollection, MultiGeometry, SingleGeometry},
+    collection::GeometryCollection,
+    geometry::{GeometricOperations, Geometry, MultiGeometry, MutableMultiGeometry},
     vectorpoint::VectorPoint,
 };
 use kiddo::ImmutableKdTree;
 use pyo3::prelude::*;
 
 #[pyclass]
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct SphericalPolygon {
     arcstring: ArcString,
     interior: VectorPoint,
@@ -35,22 +36,24 @@ impl SphericalPolygon {
 impl Geometry for &SphericalPolygon {
     fn area(&self) -> f64 {
         // TODO: implement
-        -1.
+        std::f64::NAN
     }
 
     fn length(&self) -> f64 {
         // TODO: implement
-        -1.
+        std::f64::NAN
     }
 
     fn bounds(&self, degrees: bool) -> [f64; 4] {
-        // TODO: implement
-        [-1., -1., -1., -1.]
+        self.arcstring.bounds(degrees)
     }
 
     fn convex_hull(&self) -> Option<SphericalPolygon> {
-        // TODO: implement
-        None
+        self.arcstring.convex_hull()
+    }
+
+    fn points(&self) -> crate::vectorpoint::MultiVectorPoint {
+        self.arcstring.points()
     }
 }
 
@@ -67,15 +70,19 @@ impl Geometry for SphericalPolygon {
         (&self).bounds(degrees)
     }
 
-    fn convex_hull(&self) -> Option<crate::sphericalpolygon::SphericalPolygon> {
+    fn convex_hull(&self) -> Option<SphericalPolygon> {
         (&self).convex_hull()
+    }
+
+    fn points(&self) -> crate::vectorpoint::MultiVectorPoint {
+        (&self).arcstring.points()
     }
 }
 
 impl GeometricOperations<&SphericalPolygon> for &SphericalPolygon {
     fn distance(self, other: &SphericalPolygon) -> f64 {
         // TODO: implement
-        -1.
+        std::f64::NAN
     }
 
     fn contains(self, other: &SphericalPolygon) -> bool {
@@ -88,16 +95,15 @@ impl GeometricOperations<&SphericalPolygon> for &SphericalPolygon {
     }
 
     fn intersects(self, other: &SphericalPolygon) -> bool {
-        self.intersection(other).is_some()
+        self.intersection(other).len() > 0
     }
 
-    fn intersection(self, other: &SphericalPolygon) -> Option<SphericalPolygon> {
+    #[allow(refining_impl_trait)]
+    fn intersection(self, other: &SphericalPolygon) -> GeometryCollection {
         // TODO: implement
-        None
+        GeometryCollection::empty()
     }
 }
-
-impl SingleGeometry for SphericalPolygon {}
 
 #[pyclass]
 #[derive(Clone)]
@@ -131,22 +137,24 @@ impl MultiSphericalPolygon {
 impl Geometry for &MultiSphericalPolygon {
     fn area(&self) -> f64 {
         // TODO: implement
-        -1.
+        std::f64::NAN
     }
 
     fn length(&self) -> f64 {
         // TODO: implement
-        -1.
+        std::f64::NAN
     }
 
     fn bounds(&self, degrees: bool) -> [f64; 4] {
-        // TODO: implement
-        [-1., -1., -1., -1.]
+        self.points().bounds(degrees)
     }
 
     fn convex_hull(&self) -> Option<SphericalPolygon> {
-        // TODO: implement
-        None
+        self.points().convex_hull()
+    }
+
+    fn points(&self) -> crate::vectorpoint::MultiVectorPoint {
+        self.polygons.iter().map(|geometry| geometry.points()).sum()
     }
 }
 
@@ -166,19 +174,19 @@ impl Geometry for MultiSphericalPolygon {
     fn convex_hull(&self) -> Option<SphericalPolygon> {
         (&self).convex_hull()
     }
+
+    fn points(&self) -> crate::vectorpoint::MultiVectorPoint {
+        (&self).points()
+    }
 }
 
-impl MultiGeometry<SphericalPolygon> for &MultiSphericalPolygon {
-    fn parts(&self) -> Vec<SphericalPolygon> {
-        self.polygons.to_owned()
-    }
-
+impl MultiGeometry for &MultiSphericalPolygon {
     fn len(&self) -> usize {
         self.polygons.len()
     }
 }
 
-impl GeometryCollection<SphericalPolygon> for MultiSphericalPolygon {
+impl MutableMultiGeometry<SphericalPolygon> for MultiSphericalPolygon {
     fn extend(&mut self, other: Self) {
         self.polygons.extend(other.polygons);
     }
@@ -191,7 +199,7 @@ impl GeometryCollection<SphericalPolygon> for MultiSphericalPolygon {
 impl GeometricOperations<&MultiSphericalPolygon> for &MultiSphericalPolygon {
     fn distance(self, other: &MultiSphericalPolygon) -> f64 {
         // TODO: implement
-        -1.
+        std::f64::NAN
     }
 
     fn contains(self, other: &MultiSphericalPolygon) -> bool {
@@ -204,11 +212,12 @@ impl GeometricOperations<&MultiSphericalPolygon> for &MultiSphericalPolygon {
     }
 
     fn intersects(self, other: &MultiSphericalPolygon) -> bool {
-        self.intersection(other).is_some()
+        self.intersection(other).len() > 0
     }
 
-    fn intersection(self, other: &MultiSphericalPolygon) -> Option<MultiSphericalPolygon> {
+    #[allow(refining_impl_trait)]
+    fn intersection(self, other: &MultiSphericalPolygon) -> GeometryCollection {
         // TODO: implement
-        None
+        GeometryCollection::empty()
     }
 }

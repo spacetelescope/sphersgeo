@@ -1,4 +1,5 @@
 mod arcstring;
+mod collection;
 mod geometry;
 mod sphericalgraph;
 mod sphericalpolygon;
@@ -6,15 +7,36 @@ mod vectorpoint;
 
 extern crate numpy;
 
-use numpy::ndarray::s;
-use numpy::{IntoPyArray, PyArray1, PyArray2, PyReadonlyArray1, PyReadonlyArray2, ToPyArray};
-use pyo3::{exceptions::PyValueError, prelude::*, types::PyType};
+use crate::{
+    arcstring::ArcString,
+    sphericalpolygon::SphericalPolygon,
+    vectorpoint::{MultiVectorPoint, VectorPoint},
+};
+use pyo3::prelude::*;
+
+#[derive(FromPyObject, IntoPyObject, Debug)]
+enum GeometryType {
+    VectorPoint(VectorPoint),
+    MultiVectorPoint(MultiVectorPoint),
+    ArcString(ArcString),
+    SphericalPolygon(SphericalPolygon),
+    Collection(Vec<GeometryType>),
+}
 
 #[pymodule(name = "sphersgeo")]
-pub mod sphersgeo {
+mod py_module {
+    use core::panic;
+    use numpy::{
+        ndarray::s, IntoPyArray, PyArray1, PyArray2, PyReadonlyArray1, PyReadonlyArray2, ToPyArray,
+    };
+    use pyo3::{exceptions::PyValueError, types::PyType};
+
     use super::*;
-    use crate::arcstring::{angle, angles, arc_length, interpolate};
-    use crate::geometry::{GeometricOperations, Geometry, GeometryCollection, MultiGeometry};
+    use crate::{
+        arcstring::{angle, angles, arc_length, interpolate},
+        collection::GeometryCollection,
+        geometry::{GeometricOperations, Geometry, MultiGeometry, MutableMultiGeometry},
+    };
 
     #[pymodule_export]
     use super::vectorpoint::VectorPoint;
@@ -78,30 +100,45 @@ pub mod sphersgeo {
             self.convex_hull()
         }
 
-        /// angular distance on the sphere between this point and another
+        /// closest angular distance on the sphere between this geometry and another
         #[pyo3(name = "distance")]
-        fn py_distance(&self, other: &Self) -> f64 {
-            self.distance(other)
+        fn py_distance(&self, other: GeometryType) -> f64 {
+            match other {
+                GeometryType::VectorPoint(point) => self.distance(&point),
+                _ => panic!("not implemented {:?}", other),
+            }
         }
 
         #[pyo3(name = "contains")]
-        fn py_contains(&self, other: &Self) -> bool {
-            self.contains(other)
+        fn py_contains(&self, other: GeometryType) -> bool {
+            match other {
+                GeometryType::VectorPoint(point) => self.contains(&point),
+                _ => panic!("not implemented {:?}", other),
+            }
         }
 
         #[pyo3(name = "within")]
-        fn py_within(&self, other: &Self) -> bool {
-            self.within(other)
+        fn py_within(&self, other: GeometryType) -> bool {
+            match other {
+                GeometryType::VectorPoint(point) => self.within(&point),
+                _ => panic!("not implemented {:?}", other),
+            }
         }
 
         #[pyo3(name = "intersects")]
-        fn py_intersects(&self, other: &Self) -> bool {
-            self.intersects(other)
+        fn py_intersects(&self, other: GeometryType) -> bool {
+            match other {
+                GeometryType::VectorPoint(point) => self.intersects(&point),
+                _ => panic!("not implemented {:?}", other),
+            }
         }
 
         #[pyo3(name = "intersection")]
-        fn py_intersection(&self, other: &Self) -> Option<VectorPoint> {
-            self.intersection(other)
+        fn py_intersection(&self, other: GeometryType) -> GeometryCollection {
+            match other {
+                GeometryType::VectorPoint(point) => self.intersection(&point),
+                _ => panic!("not implemented {:?}", other),
+            }
         }
 
         /// normalize this vector to length 1 (the unit sphere) while preserving direction
@@ -183,21 +220,14 @@ pub mod sphersgeo {
             }
         }
 
-        /// xyz vector as a 2-dimensional array of Nx3 floats
+        /// xyz vectors as a 2-dimensional array of Nx3 floats
         #[getter]
         #[pyo3(name = "xyz")]
         fn py_xyz<'py>(&self, py: Python<'py>) -> Bound<'py, PyArray2<f64>> {
             self.xyz.to_owned().into_pyarray(py)
         }
 
-        /// individual arcs along this string
-        #[getter]
-        #[pyo3(name = "parts")]
-        fn py_parts(&self) -> Vec<VectorPoint> {
-            self.into()
-        }
-
-        /// number of arcs in this string
+        /// number of points in this collection
         fn __len__(&self) -> usize {
             self.len()
         }
@@ -208,7 +238,6 @@ pub mod sphersgeo {
             self.area()
         }
 
-        /// total radians subtended by this arcstring on the sphere
         #[getter]
         #[pyo3(name = "length")]
         fn py_length(&self) -> f64 {
@@ -227,30 +256,56 @@ pub mod sphersgeo {
             self.convex_hull()
         }
 
-        /// angular distance on the sphere between these points and others
+        #[getter]
+        #[pyo3(name = "points")]
+        fn py_points(&self) -> MultiVectorPoint {
+            self.points()
+        }
+
+        /// closest angular distance on the sphere between this geometry and another
         #[pyo3(name = "distance")]
-        fn py_distance(&self, other: &Self) -> f64 {
-            self.distance(other)
+        fn py_distance(&self, other: GeometryType) -> f64 {
+            match other {
+                GeometryType::VectorPoint(point) => self.distance(&point),
+                GeometryType::MultiVectorPoint(multipoint) => self.distance(&multipoint),
+                _ => panic!("not implemented {:?}", other),
+            }
         }
 
         #[pyo3(name = "contains")]
-        fn py_contains(&self, other: &Self) -> bool {
-            self.contains(other)
+        fn py_contains(&self, other: GeometryType) -> bool {
+            match other {
+                GeometryType::VectorPoint(point) => self.contains(&point),
+                GeometryType::MultiVectorPoint(multipoint) => self.contains(&multipoint),
+                _ => panic!("not implemented {:?}", other),
+            }
         }
 
         #[pyo3(name = "within")]
-        fn py_within(&self, other: &Self) -> bool {
-            self.within(other)
+        fn py_within(&self, other: GeometryType) -> bool {
+            match other {
+                GeometryType::VectorPoint(point) => self.within(&point),
+                GeometryType::MultiVectorPoint(multipoint) => self.within(&multipoint),
+                _ => panic!("not implemented {:?}", other),
+            }
         }
 
         #[pyo3(name = "intersects")]
-        fn py_intersects(&self, other: &Self) -> bool {
-            self.intersects(other)
+        fn py_intersects(&self, other: GeometryType) -> bool {
+            match other {
+                GeometryType::VectorPoint(point) => self.intersects(&point),
+                GeometryType::MultiVectorPoint(multipoint) => self.intersects(&multipoint),
+                _ => panic!("not implemented {:?}", other),
+            }
         }
 
         #[pyo3(name = "intersection")]
-        fn py_intersection(&self, other: &Self) -> Option<MultiVectorPoint> {
-            self.intersection(other)
+        fn py_intersection(&self, other: GeometryType) -> GeometryCollection {
+            match other {
+                GeometryType::VectorPoint(point) => self.intersection(&point),
+                GeometryType::MultiVectorPoint(multipoint) => self.intersection(&multipoint),
+                _ => panic!("not implemented {:?}", other),
+            }
         }
 
         /// convert to angle coordinates along the sphere
@@ -288,7 +343,7 @@ pub mod sphersgeo {
             self.angles(a, b, degrees).to_pyarray(py)
         }
 
-        /// whether these points lie exactly between the given points
+        /// whether these points share a line with the given points
         #[pyo3(name = "collinear")]
         fn py_collinear<'py>(
             &self,
@@ -413,13 +468,6 @@ pub mod sphersgeo {
             self.points.to_owned()
         }
 
-        /// individual arcs along this string
-        #[getter]
-        #[pyo3(name = "parts")]
-        fn py_parts(&self) -> Vec<ArcString> {
-            self.into()
-        }
-
         /// number of arcs in this string
         fn __len__(&self) -> usize {
             self.len()
@@ -463,32 +511,51 @@ pub mod sphersgeo {
             self.convex_hull()
         }
 
-        /// angular distance on the sphere between these points and others
+        /// closest angular distance on the sphere between this geometry and another
         #[pyo3(name = "distance")]
-        fn py_distance(&self, other: &Self) -> f64 {
-            self.distance(other)
+        fn py_distance(&self, other: GeometryType) -> f64 {
+            match other {
+                GeometryType::VectorPoint(point) => self.distance(&point),
+                GeometryType::ArcString(arcstring) => self.distance(&arcstring),
+                _ => panic!("not implemented {:?}", other),
+            }
         }
 
         #[pyo3(name = "contains")]
-        fn py_contains(&self, other: &Self) -> bool {
-            self.contains(other)
+        fn py_contains(&self, other: GeometryType) -> bool {
+            match other {
+                GeometryType::VectorPoint(point) => self.contains(&point),
+                GeometryType::ArcString(arcstring) => self.contains(&arcstring),
+                _ => panic!("not implemented {:?}", other),
+            }
         }
 
         #[pyo3(name = "within")]
-        fn py_within(&self, other: &Self) -> bool {
-            self.within(other)
+        fn py_within(&self, other: GeometryType) -> bool {
+            match other {
+                GeometryType::VectorPoint(point) => self.within(&point),
+                GeometryType::ArcString(arcstring) => self.within(&arcstring),
+                _ => panic!("not implemented {:?}", other),
+            }
         }
 
-        /// whether this arcstring and another given arcstring intersect
         #[pyo3(name = "intersects")]
-        fn py_intersects(&self, other: &Self) -> bool {
-            self.intersects(other)
+        fn py_intersects(&self, other: GeometryType) -> bool {
+            match other {
+                GeometryType::VectorPoint(point) => self.intersects(&point),
+                GeometryType::ArcString(arcstring) => self.intersects(&arcstring),
+                _ => panic!("not implemented {:?}", other),
+            }
         }
 
-        /// point(s) at which this arcstring and another given arcstring intersect
         #[pyo3(name = "intersection")]
-        fn py_intersection(&self, other: &Self) -> Option<MultiVectorPoint> {
-            self.intersection(other)
+        fn py_intersection(&self, other: GeometryType) -> GeometryCollection {
+            match other {
+                GeometryType::VectorPoint(point) => self.intersection(&point),
+                GeometryType::ArcString(arcstring) => self.intersection(&arcstring),
+
+                _ => panic!("not implemented {:?}", other),
+            }
         }
 
         fn __eq__(&self, other: &Self) -> bool {
