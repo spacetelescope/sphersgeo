@@ -1,31 +1,17 @@
 mod arcstring;
-mod collection;
 mod geometry;
+mod geometrycollection;
 mod sphericalgraph;
 mod sphericalpolygon;
 mod vectorpoint;
 
 extern crate numpy;
 
-use crate::{
-    arcstring::ArcString,
-    sphericalpolygon::SphericalPolygon,
-    vectorpoint::{MultiVectorPoint, VectorPoint},
-};
+use crate::geometry::AnyGeometry;
 use pyo3::prelude::*;
-
-#[derive(FromPyObject, IntoPyObject, Debug)]
-enum GeometryType {
-    VectorPoint(VectorPoint),
-    MultiVectorPoint(MultiVectorPoint),
-    ArcString(ArcString),
-    SphericalPolygon(SphericalPolygon),
-    Collection(Vec<GeometryType>),
-}
 
 #[pymodule(name = "sphersgeo")]
 mod py_module {
-    use core::panic;
     use numpy::{
         ndarray::s, IntoPyArray, PyArray1, PyArray2, PyReadonlyArray1, PyReadonlyArray2, ToPyArray,
     };
@@ -34,8 +20,8 @@ mod py_module {
     use super::*;
     use crate::{
         arcstring::{angle, angles, arc_length, interpolate},
-        collection::GeometryCollection,
-        geometry::{GeometricOperations, Geometry, MultiGeometry, MutableMultiGeometry},
+        geometry::{ExtendMultiGeometry, GeometricOperations, Geometry, MultiGeometry},
+        geometrycollection::GeometryCollection,
     };
 
     #[pymodule_export]
@@ -53,7 +39,7 @@ mod py_module {
         #[classmethod]
         #[pyo3(name="from_lonlat", signature=(coordinates,degrees=true))]
         fn py_from_lonlat<'py>(
-            cls: &Bound<'_, PyType>,
+            _: &Bound<'_, PyType>,
             coordinates: PyReadonlyArray1<'py, f64>,
             degrees: bool,
         ) -> PyResult<Self> {
@@ -102,42 +88,57 @@ mod py_module {
 
         /// closest angular distance on the sphere between this geometry and another
         #[pyo3(name = "distance")]
-        fn py_distance(&self, other: GeometryType) -> f64 {
+        fn py_distance(&self, other: &AnyGeometry) -> f64 {
             match other {
-                GeometryType::VectorPoint(point) => self.distance(&point),
-                _ => panic!("not implemented {:?}", other),
+                AnyGeometry::VectorPoint(point) => self.distance(point),
+                AnyGeometry::MultiVectorPoint(multipoint) => self.distance(multipoint),
+                AnyGeometry::ArcString(arcstring) => self.distance(arcstring),
+                AnyGeometry::SphericalPolygon(polygon) => self.distance(polygon),
+                AnyGeometry::MultiSphericalPolygon(multipolygon) => self.distance(multipolygon),
             }
         }
 
         #[pyo3(name = "contains")]
-        fn py_contains(&self, other: GeometryType) -> bool {
+        fn py_contains(&self, other: &AnyGeometry) -> bool {
             match other {
-                GeometryType::VectorPoint(point) => self.contains(&point),
-                _ => panic!("not implemented {:?}", other),
+                AnyGeometry::VectorPoint(point) => self.contains(point),
+                AnyGeometry::MultiVectorPoint(multipoint) => self.contains(multipoint),
+                AnyGeometry::ArcString(arcstring) => self.contains(arcstring),
+                AnyGeometry::SphericalPolygon(polygon) => self.contains(polygon),
+                AnyGeometry::MultiSphericalPolygon(multipolygon) => self.contains(multipolygon),
             }
         }
 
         #[pyo3(name = "within")]
-        fn py_within(&self, other: GeometryType) -> bool {
+        fn py_within(&self, other: &AnyGeometry) -> bool {
             match other {
-                GeometryType::VectorPoint(point) => self.within(&point),
-                _ => panic!("not implemented {:?}", other),
+                AnyGeometry::VectorPoint(point) => self.within(point),
+                AnyGeometry::MultiVectorPoint(multipoint) => self.within(multipoint),
+                AnyGeometry::ArcString(arcstring) => self.within(arcstring),
+                AnyGeometry::SphericalPolygon(polygon) => self.within(polygon),
+                AnyGeometry::MultiSphericalPolygon(multipolygon) => self.within(multipolygon),
             }
         }
 
         #[pyo3(name = "intersects")]
-        fn py_intersects(&self, other: GeometryType) -> bool {
+        fn py_intersects(&self, other: &AnyGeometry) -> bool {
             match other {
-                GeometryType::VectorPoint(point) => self.intersects(&point),
-                _ => panic!("not implemented {:?}", other),
+                AnyGeometry::VectorPoint(point) => self.intersects(point),
+                AnyGeometry::MultiVectorPoint(multipoint) => self.intersects(multipoint),
+                AnyGeometry::ArcString(arcstring) => self.intersects(arcstring),
+                AnyGeometry::SphericalPolygon(polygon) => self.intersects(polygon),
+                AnyGeometry::MultiSphericalPolygon(multipolygon) => self.intersects(multipolygon),
             }
         }
 
         #[pyo3(name = "intersection")]
-        fn py_intersection(&self, other: GeometryType) -> GeometryCollection {
+        fn py_intersection(&self, other: &AnyGeometry) -> GeometryCollection {
             match other {
-                GeometryType::VectorPoint(point) => self.intersection(&point),
-                _ => panic!("not implemented {:?}", other),
+                AnyGeometry::VectorPoint(point) => self.intersection(point),
+                AnyGeometry::MultiVectorPoint(multipoint) => self.intersection(multipoint),
+                AnyGeometry::ArcString(arcstring) => self.intersection(arcstring),
+                AnyGeometry::SphericalPolygon(polygon) => self.intersection(polygon),
+                AnyGeometry::MultiSphericalPolygon(multipolygon) => self.intersection(multipolygon),
             }
         }
 
@@ -164,7 +165,7 @@ mod py_module {
         #[getter]
         #[pyo3(name = "vector_length")]
         fn py_vector_length(&self) -> f64 {
-            self.vector_length()
+            self.vector_radius()
         }
 
         /// rotate this xyz vector by theta angle around another xyz vector
@@ -210,7 +211,7 @@ mod py_module {
         #[classmethod]
         #[pyo3(name = "from_lonlats", signature=(coordinates, degrees = true))]
         fn py_from_lonlats<'py>(
-            cls: &Bound<'_, PyType>,
+            _: &Bound<'_, PyType>,
             coordinates: PyReadonlyArray2<'py, f64>,
             degrees: bool,
         ) -> PyResult<Self> {
@@ -264,47 +265,57 @@ mod py_module {
 
         /// closest angular distance on the sphere between this geometry and another
         #[pyo3(name = "distance")]
-        fn py_distance(&self, other: GeometryType) -> f64 {
+        fn py_distance(&self, other: &AnyGeometry) -> f64 {
             match other {
-                GeometryType::VectorPoint(point) => self.distance(&point),
-                GeometryType::MultiVectorPoint(multipoint) => self.distance(&multipoint),
-                _ => panic!("not implemented {:?}", other),
+                AnyGeometry::VectorPoint(point) => self.distance(point),
+                AnyGeometry::MultiVectorPoint(multipoint) => self.distance(multipoint),
+                AnyGeometry::ArcString(arcstring) => self.distance(arcstring),
+                AnyGeometry::SphericalPolygon(polygon) => self.distance(polygon),
+                AnyGeometry::MultiSphericalPolygon(multipolygon) => self.distance(multipolygon),
             }
         }
 
         #[pyo3(name = "contains")]
-        fn py_contains(&self, other: GeometryType) -> bool {
+        fn py_contains(&self, other: &AnyGeometry) -> bool {
             match other {
-                GeometryType::VectorPoint(point) => self.contains(&point),
-                GeometryType::MultiVectorPoint(multipoint) => self.contains(&multipoint),
-                _ => panic!("not implemented {:?}", other),
+                AnyGeometry::VectorPoint(point) => self.contains(point),
+                AnyGeometry::MultiVectorPoint(multipoint) => self.contains(multipoint),
+                AnyGeometry::ArcString(arcstring) => self.contains(arcstring),
+                AnyGeometry::SphericalPolygon(polygon) => self.contains(polygon),
+                AnyGeometry::MultiSphericalPolygon(multipolygon) => self.contains(multipolygon),
             }
         }
 
         #[pyo3(name = "within")]
-        fn py_within(&self, other: GeometryType) -> bool {
+        fn py_within(&self, other: &AnyGeometry) -> bool {
             match other {
-                GeometryType::VectorPoint(point) => self.within(&point),
-                GeometryType::MultiVectorPoint(multipoint) => self.within(&multipoint),
-                _ => panic!("not implemented {:?}", other),
+                AnyGeometry::VectorPoint(point) => self.within(point),
+                AnyGeometry::MultiVectorPoint(multipoint) => self.within(multipoint),
+                AnyGeometry::ArcString(arcstring) => self.within(arcstring),
+                AnyGeometry::SphericalPolygon(polygon) => self.within(polygon),
+                AnyGeometry::MultiSphericalPolygon(multipolygon) => self.within(multipolygon),
             }
         }
 
         #[pyo3(name = "intersects")]
-        fn py_intersects(&self, other: GeometryType) -> bool {
+        fn py_intersects(&self, other: &AnyGeometry) -> bool {
             match other {
-                GeometryType::VectorPoint(point) => self.intersects(&point),
-                GeometryType::MultiVectorPoint(multipoint) => self.intersects(&multipoint),
-                _ => panic!("not implemented {:?}", other),
+                AnyGeometry::VectorPoint(point) => self.intersects(point),
+                AnyGeometry::MultiVectorPoint(multipoint) => self.intersects(multipoint),
+                AnyGeometry::ArcString(arcstring) => self.intersects(arcstring),
+                AnyGeometry::SphericalPolygon(polygon) => self.intersects(polygon),
+                AnyGeometry::MultiSphericalPolygon(multipolygon) => self.intersects(multipolygon),
             }
         }
 
         #[pyo3(name = "intersection")]
-        fn py_intersection(&self, other: GeometryType) -> GeometryCollection {
+        fn py_intersection(&self, other: &AnyGeometry) -> GeometryCollection {
             match other {
-                GeometryType::VectorPoint(point) => self.intersection(&point),
-                GeometryType::MultiVectorPoint(multipoint) => self.intersection(&multipoint),
-                _ => panic!("not implemented {:?}", other),
+                AnyGeometry::VectorPoint(point) => self.intersection(point),
+                AnyGeometry::MultiVectorPoint(multipoint) => self.intersection(multipoint),
+                AnyGeometry::ArcString(arcstring) => self.intersection(arcstring),
+                AnyGeometry::SphericalPolygon(polygon) => self.intersection(polygon),
+                AnyGeometry::MultiSphericalPolygon(multipolygon) => self.intersection(multipolygon),
             }
         }
 
@@ -365,7 +376,7 @@ mod py_module {
         #[getter]
         #[pyo3(name = "vector_lengths")]
         fn py_vector_lengths<'py>(&self, py: Python<'py>) -> Bound<'py, PyArray1<f64>> {
-            self.vector_lengths().to_pyarray(py)
+            self.vector_radii().to_pyarray(py)
         }
 
         fn __getitem__(&self, index: usize) -> VectorPoint {
@@ -513,48 +524,57 @@ mod py_module {
 
         /// closest angular distance on the sphere between this geometry and another
         #[pyo3(name = "distance")]
-        fn py_distance(&self, other: GeometryType) -> f64 {
+        fn py_distance(&self, other: &AnyGeometry) -> f64 {
             match other {
-                GeometryType::VectorPoint(point) => self.distance(&point),
-                GeometryType::ArcString(arcstring) => self.distance(&arcstring),
-                _ => panic!("not implemented {:?}", other),
+                AnyGeometry::VectorPoint(point) => self.distance(point),
+                AnyGeometry::MultiVectorPoint(multipoint) => self.distance(multipoint),
+                AnyGeometry::ArcString(arcstring) => self.distance(arcstring),
+                AnyGeometry::SphericalPolygon(polygon) => self.distance(polygon),
+                AnyGeometry::MultiSphericalPolygon(multipolygon) => self.distance(multipolygon),
             }
         }
 
         #[pyo3(name = "contains")]
-        fn py_contains(&self, other: GeometryType) -> bool {
+        fn py_contains(&self, other: &AnyGeometry) -> bool {
             match other {
-                GeometryType::VectorPoint(point) => self.contains(&point),
-                GeometryType::ArcString(arcstring) => self.contains(&arcstring),
-                _ => panic!("not implemented {:?}", other),
+                AnyGeometry::VectorPoint(point) => self.contains(point),
+                AnyGeometry::MultiVectorPoint(multipoint) => self.contains(multipoint),
+                AnyGeometry::ArcString(arcstring) => self.contains(arcstring),
+                AnyGeometry::SphericalPolygon(polygon) => self.contains(polygon),
+                AnyGeometry::MultiSphericalPolygon(multipolygon) => self.contains(multipolygon),
             }
         }
 
         #[pyo3(name = "within")]
-        fn py_within(&self, other: GeometryType) -> bool {
+        fn py_within(&self, other: &AnyGeometry) -> bool {
             match other {
-                GeometryType::VectorPoint(point) => self.within(&point),
-                GeometryType::ArcString(arcstring) => self.within(&arcstring),
-                _ => panic!("not implemented {:?}", other),
+                AnyGeometry::VectorPoint(point) => self.within(point),
+                AnyGeometry::MultiVectorPoint(multipoint) => self.within(multipoint),
+                AnyGeometry::ArcString(arcstring) => self.within(arcstring),
+                AnyGeometry::SphericalPolygon(polygon) => self.within(polygon),
+                AnyGeometry::MultiSphericalPolygon(multipolygon) => self.within(multipolygon),
             }
         }
 
         #[pyo3(name = "intersects")]
-        fn py_intersects(&self, other: GeometryType) -> bool {
+        fn py_intersects(&self, other: &AnyGeometry) -> bool {
             match other {
-                GeometryType::VectorPoint(point) => self.intersects(&point),
-                GeometryType::ArcString(arcstring) => self.intersects(&arcstring),
-                _ => panic!("not implemented {:?}", other),
+                AnyGeometry::VectorPoint(point) => self.intersects(point),
+                AnyGeometry::MultiVectorPoint(multipoint) => self.intersects(multipoint),
+                AnyGeometry::ArcString(arcstring) => self.intersects(arcstring),
+                AnyGeometry::SphericalPolygon(polygon) => self.intersects(polygon),
+                AnyGeometry::MultiSphericalPolygon(multipolygon) => self.intersects(multipolygon),
             }
         }
 
         #[pyo3(name = "intersection")]
-        fn py_intersection(&self, other: GeometryType) -> GeometryCollection {
+        fn py_intersection(&self, other: &AnyGeometry) -> GeometryCollection {
             match other {
-                GeometryType::VectorPoint(point) => self.intersection(&point),
-                GeometryType::ArcString(arcstring) => self.intersection(&arcstring),
-
-                _ => panic!("not implemented {:?}", other),
+                AnyGeometry::VectorPoint(point) => self.intersection(point),
+                AnyGeometry::MultiVectorPoint(multipoint) => self.intersection(multipoint),
+                AnyGeometry::ArcString(arcstring) => self.intersection(arcstring),
+                AnyGeometry::SphericalPolygon(polygon) => self.intersection(polygon),
+                AnyGeometry::MultiSphericalPolygon(multipolygon) => self.intersection(multipolygon),
             }
         }
 
