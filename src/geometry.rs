@@ -1,4 +1,3 @@
-use crate::{geometrycollection::GeometryCollection, vectorpoint::MultiVectorPoint};
 use kiddo::traits::DistanceMetric;
 use pyo3::prelude::*;
 
@@ -15,7 +14,7 @@ pub trait Geometry {
     }
 
     /// convex hull of this geometry
-    fn convex_hull(&self) -> Option<crate::angularpolygon::AngularPolygon> {
+    fn convex_hull(&self) -> Option<crate::sphericalpolygon::SphericalPolygon> {
         self.points().convex_hull()
     }
 
@@ -70,8 +69,8 @@ pub enum AnyGeometry {
     ArcString(crate::arcstring::ArcString),
     MultiArcString(crate::arcstring::MultiArcString),
     AngularBounds(crate::angularbounds::AngularBounds),
-    AngularPolygon(crate::angularpolygon::AngularPolygon),
-    MultiAngularPolygon(crate::angularpolygon::MultiAngularPolygon),
+    SphericalPolygon(crate::sphericalpolygon::SphericalPolygon),
+    MultiSphericalPolygon(crate::sphericalpolygon::MultiSphericalPolygon),
 }
 
 impl Geometry for AnyGeometry {
@@ -82,8 +81,8 @@ impl Geometry for AnyGeometry {
             Self::ArcString(arcstring) => arcstring.area(),
             Self::MultiArcString(multiarcstring) => multiarcstring.area(),
             Self::AngularBounds(bounding_box) => bounding_box.area(),
-            Self::AngularPolygon(polygon) => polygon.area(),
-            Self::MultiAngularPolygon(multipolygon) => multipolygon.area(),
+            Self::SphericalPolygon(polygon) => polygon.area(),
+            Self::MultiSphericalPolygon(multipolygon) => multipolygon.area(),
         }
     }
 
@@ -94,8 +93,8 @@ impl Geometry for AnyGeometry {
             Self::ArcString(arcstring) => arcstring.length(),
             Self::MultiArcString(multiarcstring) => multiarcstring.length(),
             Self::AngularBounds(bounding_box) => bounding_box.length(),
-            Self::AngularPolygon(polygon) => polygon.length(),
-            Self::MultiAngularPolygon(multipolygon) => multipolygon.length(),
+            Self::SphericalPolygon(polygon) => polygon.length(),
+            Self::MultiSphericalPolygon(multipolygon) => multipolygon.length(),
         }
     }
 
@@ -106,20 +105,20 @@ impl Geometry for AnyGeometry {
             Self::ArcString(arcstring) => arcstring.bounds(degrees),
             Self::MultiArcString(multiarcstring) => multiarcstring.bounds(degrees),
             Self::AngularBounds(bounding_box) => bounding_box.bounds(degrees),
-            Self::AngularPolygon(polygon) => polygon.bounds(degrees),
-            Self::MultiAngularPolygon(multipolygon) => multipolygon.bounds(degrees),
+            Self::SphericalPolygon(polygon) => polygon.bounds(degrees),
+            Self::MultiSphericalPolygon(multipolygon) => multipolygon.bounds(degrees),
         }
     }
 
-    fn convex_hull(&self) -> Option<crate::angularpolygon::AngularPolygon> {
+    fn convex_hull(&self) -> Option<crate::sphericalpolygon::SphericalPolygon> {
         match self {
             Self::VectorPoint(point) => point.convex_hull(),
             Self::MultiVectorPoint(multipoint) => multipoint.convex_hull(),
             Self::ArcString(arcstring) => arcstring.convex_hull(),
             Self::MultiArcString(multiarcstring) => multiarcstring.convex_hull(),
             Self::AngularBounds(bounding_box) => bounding_box.convex_hull(),
-            Self::AngularPolygon(polygon) => polygon.convex_hull(),
-            Self::MultiAngularPolygon(multipolygon) => multipolygon.convex_hull(),
+            Self::SphericalPolygon(polygon) => polygon.convex_hull(),
+            Self::MultiSphericalPolygon(multipolygon) => multipolygon.convex_hull(),
         }
     }
 
@@ -130,8 +129,8 @@ impl Geometry for AnyGeometry {
             Self::ArcString(arcstring) => arcstring.points(),
             Self::MultiArcString(multiarcstring) => multiarcstring.points(),
             Self::AngularBounds(bounding_box) => bounding_box.points(),
-            Self::AngularPolygon(polygon) => polygon.points(),
-            Self::MultiAngularPolygon(multipolygon) => multipolygon.points(),
+            Self::SphericalPolygon(polygon) => polygon.points(),
+            Self::MultiSphericalPolygon(multipolygon) => multipolygon.points(),
         }
     }
 }

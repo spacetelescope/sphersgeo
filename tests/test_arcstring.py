@@ -1,6 +1,7 @@
 import numpy as np
 from numpy.testing import assert_allclose
-from sphersgeo import ArcString, MultiVectorPoint, VectorPoint, arc_length, interpolate
+from sphersgeo import ArcString, MultiVectorPoint, VectorPoint
+import sphersgeo
 
 
 def test_midpoint():
@@ -19,9 +20,9 @@ def test_midpoint():
     ]
 
     for a in avec:
-        A = np.asarray(MultiVectorPoint.from_lonlats(a))
+        A = np.asarray(MultiVectorPoint.from_lonlats(a, degrees=True))
         for b in bvec:
-            B = np.asarray(MultiVectorPoint.from_lonlats(b))
+            B = np.asarray(MultiVectorPoint.from_lonlats(b, degrees=True))
             C = ArcString(A + B).midpoints
             aclen = ArcString(A + C).length
             bclen = ArcString(B + C).length
@@ -30,24 +31,32 @@ def test_midpoint():
 
 def test_contains():
     arc = ArcString(
-        MultiVectorPoint.from_lonlats(np.array([[-30.0, -30.0], [30.0, 30.0]]))
+        MultiVectorPoint.from_lonlats(
+            np.array([[-30.0, -30.0], [30.0, 30.0]]), degrees=True
+        )
     )
-    assert arc.contains(VectorPoint.from_lonlat(np.array([349.10660535, -12.30998866])))
+    assert arc.contains(
+        VectorPoint.from_lonlat(np.array([349.10660535, -12.30998866])), degrees=True
+    )
 
     vertical_arc = ArcString(
-        MultiVectorPoint.from_lonlats(np.array([[60.0, 0.0], [60.0, 30.0]])),
+        MultiVectorPoint.from_lonlats(
+            np.array([[60.0, 0.0], [60.0, 30.0]]), degrees=True
+        ),
     )
     for i in range(1, 29):
         assert vertical_arc.contains(
-            VectorPoint.from_lonlat(np.array([60.0, i], dtype=float))
+            VectorPoint.from_lonlat(np.array([60.0, i], dtype=float), degrees=True)
         )
 
     horizontal_arc = ArcString(
-        MultiVectorPoint.from_lonlats(np.array([[0.0, 60.0], [30.0, 60.0]])),
+        MultiVectorPoint.from_lonlats(
+            np.array([[0.0, 60.0], [30.0, 60.0]]), degrees=True
+        ),
     )
     for i in range(1, 29):
         assert not horizontal_arc.contains(
-            VectorPoint.from_lonlat(np.array([i, 60.0], dtype=float))
+            VectorPoint.from_lonlat(np.array([i, 60.0], dtype=float), degrees=True)
         )
 
 
@@ -56,20 +65,20 @@ def test_interpolate():
 
     a_lonlat = np.array([60.0, 0.0])
     b_lonlat = np.array([60.0, 30.0])
-    lonlats = interpolate(a_lonlat, b_lonlat, n=10)
+    lonlats = sphersgeo.array.interpolate(a_lonlat, b_lonlat, n=10)
 
-    a = VectorPoint.from_lonlat(a_lonlat)
-    b = VectorPoint.from_lonlat(b_lonlat)
+    a = VectorPoint.from_lonlat(a_lonlat, degrees=True)
+    b = VectorPoint.from_lonlat(b_lonlat, degrees=True)
 
     assert_allclose(lonlats[0], a_lonlat)
     assert_allclose(lonlats[-1], b_lonlat)
 
-    xyzs = interpolate(a.xyz, b.xyz, n=10)
+    xyzs = sphersgeo.array.interpolate(a.xyz, b.xyz, n=10)
 
     assert_allclose(xyzs[0], a.xyz)
     assert_allclose(xyzs[-1], b.xyz)
 
-    arc_from_lonlats = ArcString(MultiVectorPoint.from_lonlats(lonlats))
+    arc_from_lonlats = ArcString(MultiVectorPoint.from_lonlats(lonlats, degrees=True))
     arc_from_xyzs = ArcString(MultiVectorPoint(xyzs))
 
     for xyz in xyzs:
@@ -84,14 +93,14 @@ def test_interpolate():
 
 
 def test_intersection():
-    A = VectorPoint.from_lonlat(np.array([-10.0, -10.0]))
-    B = VectorPoint.from_lonlat(np.array([10.0, 10.0]))
+    A = VectorPoint.from_lonlat(np.array([-10.0, -10.0]), degrees=True)
+    B = VectorPoint.from_lonlat(np.array([10.0, 10.0]), degrees=True)
 
-    C = VectorPoint.from_lonlat(np.array([-25.0, 10.0]))
-    D = VectorPoint.from_lonlat(np.array([15.0, -10.0]))
+    C = VectorPoint.from_lonlat(np.array([-25.0, 10.0]), degrees=True)
+    D = VectorPoint.from_lonlat(np.array([15.0, -10.0]), degrees=True)
 
-    # E = VectorPoint.from_lonlat(np.array([-20.0, 40.0]))
-    # F = VectorPoint.from_lonlat(np.array([20.0, 40.0]))
+    # E = VectorPoint.from_lonlat(np.array([-20.0, 40.0]), degrees=True)
+    # F = VectorPoint.from_lonlat(np.array([20.0, 40.0]), degrees=True)
 
     reference_intersection = [0.99912414, -0.02936109, -0.02981403]
 
@@ -114,16 +123,16 @@ def test_intersection():
 
 
 def test_distance():
-    A = VectorPoint.from_lonlat(np.array([90.0, 0.0]))
-    B = VectorPoint.from_lonlat(np.array([-90.0, 0.0]))
+    A = VectorPoint.from_lonlat(np.array([90.0, 0.0]), degrees=True)
+    B = VectorPoint.from_lonlat(np.array([-90.0, 0.0]), degrees=True)
     assert_allclose(A.distance(B), np.pi)
 
-    A = VectorPoint.from_lonlat(np.array([135.0, 0.0]))
-    B = VectorPoint.from_lonlat(np.array([-90.0, 0.0]))
+    A = VectorPoint.from_lonlat(np.array([135.0, 0.0]), degrees=True)
+    B = VectorPoint.from_lonlat(np.array([-90.0, 0.0]), degrees=True)
     assert_allclose(A.distance(B), (3.0 / 4.0) * np.pi)
 
-    A = VectorPoint.from_lonlat(np.array([0.0, 0.0]))
-    B = VectorPoint.from_lonlat(np.array([0.0, 90.0]))
+    A = VectorPoint.from_lonlat(np.array([0.0, 0.0]), degrees=True)
+    B = VectorPoint.from_lonlat(np.array([0.0, 90.0]), degrees=True)
     assert_allclose(A.distance(B), np.pi / 2.0)
 
 
@@ -131,7 +140,7 @@ def test_angle():
     A = VectorPoint(np.array([1.0, 0.0, 0.0]))
     B = VectorPoint(np.array([0.0, 1.0, 0.0]))
     C = VectorPoint(np.array([0.0, 0.0, 1.0]))
-    assert A.angle(B, C) == (3.0 / 2.0) * np.pi
+    assert A.angle(B, C, degrees=False) == (3.0 / 2.0) * np.pi
 
     # TODO: More angle tests
 
@@ -140,8 +149,8 @@ def test_angle_domain():
     A = VectorPoint(np.array([0.0, 0.0, 0.0]))
     B = VectorPoint(np.array([0.0, 0.0, 0.0]))
     C = VectorPoint(np.array([0.0, 0.0, 0.0]))
-    assert A.angle(B, C) == (3.0 / 2.0) * np.pi
-    assert not np.isfinite(A.angle(B, C))
+    assert A.angle(B, C, degrees=False) == (3.0 / 2.0) * np.pi
+    assert not np.isfinite(A.angle(B, C, degrees=False))
 
 
 def test_length_domain():
@@ -166,7 +175,7 @@ def test_angle_nearly_coplanar_vec():
         )
     )
     # vectors = np.stack([A, B, C], axis=0)
-    angles = B.angles(A, C)
+    angles = B.angles(A, C, degrees=False)
 
     assert_allclose(angles[:-1], np.pi, rtol=0, atol=1e-16)
     assert_allclose(angles[-1], 0, rtol=0, atol=1e-32)

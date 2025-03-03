@@ -32,34 +32,38 @@ def test_from_lonlat():
     a_lonlat = np.array([60.0, 0.0])
     b_lonlat = np.array([60.0, 30.0])
 
-    a = VectorPoint.from_lonlat(a_lonlat)
-    b = VectorPoint.from_lonlat(b_lonlat)
+    a = VectorPoint.from_lonlat(a_lonlat, degrees=True)
+    b = VectorPoint.from_lonlat(b_lonlat, degrees=True)
 
-    assert_allclose(a.to_lonlat(), a_lonlat)
-    assert_allclose(b.to_lonlat(), b_lonlat)
+    assert_allclose(a.to_lonlat(degrees=True), a_lonlat)
+    assert_allclose(b.to_lonlat(degrees=True), b_lonlat)
 
     lons = np.arange(-360.0, 360.0, 1.0)
 
     equator_lat = 0.0
-    equators = [VectorPoint.from_lonlat(np.array([lon, equator_lat])) for lon in lons]
+    equators = [
+        VectorPoint.from_lonlat(np.array([lon, equator_lat]), degrees=True)
+        for lon in lons
+    ]
     for equator in equators:
-        assert_allclose(equator.to_lonlat()[1], 0.0)
+        assert_allclose(equator.to_lonlat(degrees=True)[1], 0.0)
 
     multi_equator = MultiVectorPoint.from_lonlats(
-        np.stack([lons, np.repeat(equator_lat, len(lons))], axis=1)
+        np.stack([lons, np.repeat(equator_lat, len(lons))], axis=1), degrees=True
     )
     assert equators == multi_equator.vector_points
     assert_allclose(multi_equator.xyz[:, 2], 0.0)
 
     north_pole_lat = 90.0
     north_poles = [
-        VectorPoint.from_lonlat(np.array([lon, north_pole_lat])) for lon in lons
+        VectorPoint.from_lonlat(np.array([lon, north_pole_lat]), degrees=True)
+        for lon in lons
     ]
     for north_pole in north_poles:
         assert_allclose(north_pole.xyz, [0.0, 0.0, 1.0], atol=tolerance)
 
     multi_north_pole = MultiVectorPoint.from_lonlats(
-        np.stack([lons, np.repeat(north_pole_lat, len(lons))], axis=1)
+        np.stack([lons, np.repeat(north_pole_lat, len(lons))], axis=1), degrees=True
     )
     assert north_poles == multi_north_pole.vector_points
     assert_allclose(
@@ -70,13 +74,14 @@ def test_from_lonlat():
 
     south_pole_lat = -90.0
     south_poles = [
-        VectorPoint.from_lonlat(np.array([lon, south_pole_lat])) for lon in lons
+        VectorPoint.from_lonlat(np.array([lon, south_pole_lat]), degrees=True)
+        for lon in lons
     ]
     for south_pole in south_poles:
         assert_allclose(south_pole.xyz, [0.0, 0.0, -1.0], atol=tolerance)
 
     multi_south_pole = MultiVectorPoint.from_lonlats(
-        np.stack([lons, np.repeat(south_pole_lat, len(lons))], axis=1)
+        np.stack([lons, np.repeat(south_pole_lat, len(lons))], axis=1), degrees=True
     )
     assert south_poles == multi_south_pole.vector_points
     assert_allclose(
@@ -99,19 +104,19 @@ def test_to_lonlats():
     lonlats = np.array([[0, 90], [0, -90], [45, 0], [315, 0]])
 
     a = VectorPoint(xyz[0])
-    assert_allclose(a.to_lonlat(), lonlats[0])
+    assert_allclose(a.to_lonlat(degrees=True), lonlats[0])
 
     b = VectorPoint(xyz[1])
-    assert_allclose(b.to_lonlat(), lonlats[1])
+    assert_allclose(b.to_lonlat(degrees=True), lonlats[1])
 
     c = VectorPoint(xyz[2])
-    assert_allclose(c.to_lonlat(), lonlats[2])
+    assert_allclose(c.to_lonlat(degrees=True), lonlats[2])
 
     d = VectorPoint(xyz[3])
-    assert_allclose(d.to_lonlat(), lonlats[3])
+    assert_allclose(d.to_lonlat(degrees=True), lonlats[3])
 
     abcd = MultiVectorPoint(xyz)
-    assert_allclose(abcd.to_lonlats(), lonlats)
+    assert_allclose(abcd.to_lonlats(degrees=True), lonlats)
 
 
 def test_distance():
@@ -145,6 +150,7 @@ def test_distance():
     assert_allclose(bc.distance(cd), 0.0, atol=tolerance)
     assert_allclose(ab.distance(cd), np.pi / 2.0, atol=tolerance)
 
+
 def test_contains():
     xyz = np.array(
         [
@@ -161,7 +167,7 @@ def test_contains():
     d = VectorPoint(xyz[3, :])
 
     abc = MultiVectorPoint(xyz[:3, :])
-    
+
     assert abc.contains(a)
     assert abc.contains(b)
     assert abc.contains(c)

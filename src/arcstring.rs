@@ -1,20 +1,19 @@
-use std::collections::VecDeque;
-
 use crate::{
     angularbounds::AngularBounds,
-    angularpolygon::{spherical_triangle_area, AngularPolygon, MultiAngularPolygon},
     geometry::{
         AnyGeometry, ExtendMultiGeometry, GeometricOperations, Geometry, MultiGeometry,
         MultiGeometryIntoIterator, MultiGeometryIterator,
     },
     geometrycollection::GeometryCollection,
-    vectorpoint::{cross_vectors, normalize_vector, MultiVectorPoint, VectorPoint},
+    sphericalpolygon::{spherical_triangle_area, MultiSphericalPolygon, SphericalPolygon},
+    vectorpoint::{cross_vectors, MultiVectorPoint, VectorPoint},
 };
 use kiddo::ImmutableKdTree;
 use numpy::ndarray::{concatenate, s, stack, Array1, Array2, ArrayView1, ArrayView2, Axis, Zip};
 use pyo3::prelude::*;
+use std::collections::VecDeque;
 
-pub fn interpolate(
+pub fn arc_interpolate_points(
     a: &ArrayView1<f64>,
     b: &ArrayView1<f64>,
     n: usize,
@@ -22,7 +21,7 @@ pub fn interpolate(
     let n = if n < 2 { 2 } else { n };
     let t = Array1::<f64>::linspace(0.0, 1.0, n);
     let t = t.to_shape((n, 1)).unwrap();
-    let omega = arc_length(a, b);
+    let omega = arc_length_from_vectors(a, b);
 
     if a.len() == b.len() {
         if a.len() == 3 && b.len() == 3 {
@@ -66,26 +65,17 @@ pub fn interpolate(
 ///
 /// References:
 /// - Miller, Robert D. Computing the area of a spherical polygon. Graphics Gems IV. 1994. Academic Press. doi:10.5555/180895.180907
-pub fn angle(a: &ArrayView1<f64>, b: &ArrayView1<f64>, c: &ArrayView1<f64>, degrees: bool) -> f64 {
+pub fn arc_angle(
+    a: &ArrayView1<f64>,
+    b: &ArrayView1<f64>,
+    c: &ArrayView1<f64>,
+    degrees: bool,
+) -> f64 {
     let tolerance = 3e-11;
 
-    let ab = arc_length(a, b);
-    let bc = arc_length(b, c);
-    let ca = arc_length(c, a);
-
-    println!(
-        "(({:?} - {:?} * {:?}) / ({:?} * {:?})).acos()",
-        ca.cos(),
-        bc.cos(),
-        ab.cos(),
-        bc.sin(),
-        ab.sin()
-    );
-    println!(
-        "(({:?}) / ({:?})).acos()",
-        ca.cos() - bc.cos() * ab.cos(),
-        bc.sin() * ab.sin()
-    );
+    let ab = arc_length_from_vectors(a, b);
+    let bc = arc_length_from_vectors(b, c);
+    let ca = arc_length_from_vectors(c, a);
 
     let angle = if ab > tolerance && bc > tolerance {
         (ca.cos() - bc.cos() * ab.cos()) / (bc.sin() * ab.sin()).acos()
@@ -104,7 +94,7 @@ pub fn angle(a: &ArrayView1<f64>, b: &ArrayView1<f64>, c: &ArrayView1<f64>, degr
 ///
 /// References:
 /// - Miller, Robert D. Computing the area of a spherical polygon. Graphics Gems IV. 1994. Academic Press. doi:10.5555/180895.180907
-pub fn angles(
+pub fn arc_angles(
     a: &ArrayView2<f64>,
     b: &ArrayView2<f64>,
     c: &ArrayView2<f64>,
@@ -136,14 +126,31 @@ pub fn angles(
 }
 
 /// radians subtended by this arc on the sphere
-pub fn arc_length(a: &ArrayView1<f64>, b: &ArrayView1<f64>) -> f64 {
-    normalize_vector(a).dot(&normalize_vector(b)).acos()
+///    Notes
+///    -----
+///    The length is computed using the following:
+///
+///       l = arccos(A ⋅ B) / r^2
+pub fn arc_length_from_vectors(a: &ArrayView1<f64>, b: &ArrayView1<f64>) -> f64 {
+    a.dot(b).acos()
 }
 
 /// whether the three points exist on the same line
 pub fn collinear(a: &ArrayView1<f64>, b: &ArrayView1<f64>, c: &ArrayView1<f64>) -> bool {
     let tolerance = 3e-11;
     spherical_triangle_area(a, b, c) < tolerance
+
+    // let left = arc_length(&a, &p);
+    // let right = arc_length(&p, &b);
+    // let total = arc_length(&a, &b);
+
+    // let tolerance = 3e-11;
+    // if left + right - total < tolerance {
+    //     // ensure angle is flat
+    //     if angle(&a, &point.xyz.view(), &b, false) - std::f64::consts::PI < tolerance {
+    //         return true;
+    //     }
+    // }
 }
 
 /// series of great circle arcs along the sphere
@@ -178,10 +185,10 @@ impl Into<Vec<ArcString>> for &ArcString {
         let mut arcs = vec![];
         for index in 0..vectors.nrows() - 1 {
             arcs.push(ArcString {
-                points: unsafe {
-                    MultiVectorPoint::try_from(vectors.slice(s![index..index + 1, ..]).to_owned())
-                        .unwrap_unchecked()
-                },
+                points: MultiVectorPoint::try_from(
+                    vectors.slice(s![index..index + 1, ..]).to_owned(),
+                )
+                .unwrap(),
             })
         }
 
@@ -191,19 +198,17 @@ impl Into<Vec<ArcString>> for &ArcString {
 
 impl ArcString {
     pub fn midpoints(&self) -> MultiVectorPoint {
-        unsafe {
-            MultiVectorPoint::try_from(
-                (&self.points.xyz.slice(s![..-1, ..]) + &self.points.xyz.slice(s![1.., ..]) / 2.0)
-                    .to_owned(),
-            )
-            .unwrap_unchecked()
-        }
+        MultiVectorPoint::try_from(
+            (&self.points.xyz.slice(s![..-1, ..]) + &self.points.xyz.slice(s![1.., ..]) / 2.0)
+                .to_owned(),
+        )
+        .unwrap()
     }
 
     pub fn lengths(&self) -> Array1<f64> {
         Zip::from(self.points.xyz.slice(s![..-1, ..]).rows())
             .and(self.points.xyz.slice(s![1.., ..]).rows())
-            .par_map_collect(|a, b| arc_length(&a, &b))
+            .par_map_collect(|a, b| arc_length_from_vectors(&a, &b))
     }
 }
 
@@ -234,7 +239,7 @@ impl Geometry for &ArcString {
         self.lengths().sum()
     }
 
-    fn convex_hull(&self) -> Option<crate::angularpolygon::AngularPolygon> {
+    fn convex_hull(&self) -> Option<crate::sphericalpolygon::SphericalPolygon> {
         (&self.points).convex_hull()
     }
 
@@ -252,7 +257,7 @@ impl Geometry for ArcString {
         (&self).length()
     }
 
-    fn convex_hull(&self) -> Option<crate::angularpolygon::AngularPolygon> {
+    fn convex_hull(&self) -> Option<crate::sphericalpolygon::SphericalPolygon> {
         (&self).convex_hull()
     }
 
@@ -263,7 +268,7 @@ impl Geometry for ArcString {
 
 impl GeometricOperations<&VectorPoint> for &ArcString {
     fn distance(self, other: &VectorPoint) -> f64 {
-        self.points.distance(other)
+        todo!()
     }
 
     fn contains(self, point: &VectorPoint) -> bool {
@@ -283,18 +288,6 @@ impl GeometricOperations<&VectorPoint> for &ArcString {
                 if collinear(&a.view(), &p.view(), &b.view()) {
                     return true;
                 }
-
-                // let left = arc_length(&a, &p);
-                // let right = arc_length(&p, &b);
-                // let total = arc_length(&a, &b);
-
-                // let tolerance = 3e-11;
-                // if left + right - total < tolerance {
-                //     // ensure angle is flat
-                //     if angle(&a, &point.xyz.view(), &b, false) - std::f64::consts::PI < tolerance {
-                //         return true;
-                //     }
-                // }
             }
         }
 
@@ -445,46 +438,46 @@ impl GeometricOperations<&AngularBounds> for &ArcString {
     }
 }
 
-impl GeometricOperations<&AngularPolygon> for &ArcString {
-    fn distance(self, other: &AngularPolygon) -> f64 {
+impl GeometricOperations<&SphericalPolygon> for &ArcString {
+    fn distance(self, other: &SphericalPolygon) -> f64 {
         other.distance(self)
     }
 
-    fn contains(self, _: &AngularPolygon) -> bool {
+    fn contains(self, _: &SphericalPolygon) -> bool {
         false
     }
 
-    fn within(self, other: &AngularPolygon) -> bool {
+    fn within(self, other: &SphericalPolygon) -> bool {
         other.contains(self)
     }
 
-    fn intersects(self, other: &AngularPolygon) -> bool {
+    fn intersects(self, other: &SphericalPolygon) -> bool {
         other.intersects(self)
     }
 
-    fn intersection(self, other: &AngularPolygon) -> GeometryCollection {
+    fn intersection(self, other: &SphericalPolygon) -> GeometryCollection {
         other.intersection(self)
     }
 }
 
-impl GeometricOperations<&MultiAngularPolygon> for &ArcString {
-    fn distance(self, other: &MultiAngularPolygon) -> f64 {
+impl GeometricOperations<&MultiSphericalPolygon> for &ArcString {
+    fn distance(self, other: &MultiSphericalPolygon) -> f64 {
         other.distance(self)
     }
 
-    fn contains(self, _: &MultiAngularPolygon) -> bool {
+    fn contains(self, _: &MultiSphericalPolygon) -> bool {
         false
     }
 
-    fn within(self, other: &MultiAngularPolygon) -> bool {
+    fn within(self, other: &MultiSphericalPolygon) -> bool {
         other.contains(self)
     }
 
-    fn intersects(self, other: &MultiAngularPolygon) -> bool {
+    fn intersects(self, other: &MultiSphericalPolygon) -> bool {
         other.intersects(self)
     }
 
-    fn intersection(self, other: &MultiAngularPolygon) -> GeometryCollection {
+    fn intersection(self, other: &MultiSphericalPolygon) -> GeometryCollection {
         other.intersection(self)
     }
 }
@@ -562,7 +555,7 @@ impl Geometry for &MultiArcString {
             .sum()
     }
 
-    fn convex_hull(&self) -> Option<crate::angularpolygon::AngularPolygon> {
+    fn convex_hull(&self) -> Option<crate::sphericalpolygon::SphericalPolygon> {
         todo!()
     }
 
@@ -591,7 +584,7 @@ impl Geometry for MultiArcString {
         (&self).points()
     }
 
-    fn convex_hull(&self) -> Option<crate::angularpolygon::AngularPolygon> {
+    fn convex_hull(&self) -> Option<crate::sphericalpolygon::SphericalPolygon> {
         (&self).convex_hull()
     }
 }
@@ -709,15 +702,23 @@ impl GeometricOperations<&ArcString> for &MultiArcString {
 
 impl GeometricOperations<&MultiArcString> for &MultiArcString {
     fn distance(self, other: &MultiArcString) -> f64 {
-        todo!()
+        self.arcstrings
+            .iter()
+            .map(|arcstring| arcstring.distance(other))
+            .min_by(|a, b| a.partial_cmp(b).unwrap())
+            .unwrap()
     }
 
     fn contains(self, other: &MultiArcString) -> bool {
-        todo!()
+        self.arcstrings
+            .iter()
+            .any(|arcstring| arcstring.contains(other))
     }
 
     fn within(self, other: &MultiArcString) -> bool {
-        todo!()
+        self.arcstrings
+            .iter()
+            .all(|arcstring| arcstring.within(other))
     }
 
     fn intersects(self, other: &MultiArcString) -> bool {
@@ -757,8 +758,8 @@ impl GeometricOperations<&AngularBounds> for &MultiArcString {
     }
 }
 
-impl GeometricOperations<&AngularPolygon> for &MultiArcString {
-    fn distance(self, other: &AngularPolygon) -> f64 {
+impl GeometricOperations<&SphericalPolygon> for &MultiArcString {
+    fn distance(self, other: &SphericalPolygon) -> f64 {
         self.arcstrings
             .iter()
             .map(|arcstring| arcstring.distance(other))
@@ -766,50 +767,17 @@ impl GeometricOperations<&AngularPolygon> for &MultiArcString {
             .unwrap()
     }
 
-    fn contains(self, _: &AngularPolygon) -> bool {
+    fn contains(self, _: &SphericalPolygon) -> bool {
         false
     }
 
-    fn within(self, other: &AngularPolygon) -> bool {
+    fn within(self, other: &SphericalPolygon) -> bool {
         self.arcstrings
             .iter()
             .all(|arcstring| arcstring.within(other))
     }
 
-    fn intersects(self, other: &AngularPolygon) -> bool {
-        self.arcstrings
-            .iter()
-            .any(|arcstring| arcstring.intersects(other))
-    }
-
-    fn intersection(self, other: &AngularPolygon) -> crate::geometrycollection::GeometryCollection {
-        self.arcstrings
-            .iter()
-            .map(|arcstring| arcstring.intersection(other))
-            .sum()
-    }
-}
-
-impl GeometricOperations<&MultiAngularPolygon> for &MultiArcString {
-    fn distance(self, other: &MultiAngularPolygon) -> f64 {
-        self.arcstrings
-            .iter()
-            .map(|arcstring| arcstring.distance(other))
-            .min_by(|a, b| a.partial_cmp(b).unwrap())
-            .unwrap()
-    }
-
-    fn contains(self, _: &MultiAngularPolygon) -> bool {
-        false
-    }
-
-    fn within(self, other: &MultiAngularPolygon) -> bool {
-        self.arcstrings
-            .iter()
-            .all(|arcstring| arcstring.within(other))
-    }
-
-    fn intersects(self, other: &MultiAngularPolygon) -> bool {
+    fn intersects(self, other: &SphericalPolygon) -> bool {
         self.arcstrings
             .iter()
             .any(|arcstring| arcstring.intersects(other))
@@ -817,7 +785,43 @@ impl GeometricOperations<&MultiAngularPolygon> for &MultiArcString {
 
     fn intersection(
         self,
-        other: &MultiAngularPolygon,
+        other: &SphericalPolygon,
+    ) -> crate::geometrycollection::GeometryCollection {
+        self.arcstrings
+            .iter()
+            .map(|arcstring| arcstring.intersection(other))
+            .sum()
+    }
+}
+
+impl GeometricOperations<&MultiSphericalPolygon> for &MultiArcString {
+    fn distance(self, other: &MultiSphericalPolygon) -> f64 {
+        self.arcstrings
+            .iter()
+            .map(|arcstring| arcstring.distance(other))
+            .min_by(|a, b| a.partial_cmp(b).unwrap())
+            .unwrap()
+    }
+
+    fn contains(self, _: &MultiSphericalPolygon) -> bool {
+        false
+    }
+
+    fn within(self, other: &MultiSphericalPolygon) -> bool {
+        self.arcstrings
+            .iter()
+            .all(|arcstring| arcstring.within(other))
+    }
+
+    fn intersects(self, other: &MultiSphericalPolygon) -> bool {
+        self.arcstrings
+            .iter()
+            .any(|arcstring| arcstring.intersects(other))
+    }
+
+    fn intersection(
+        self,
+        other: &MultiSphericalPolygon,
     ) -> crate::geometrycollection::GeometryCollection {
         self.arcstrings
             .iter()
@@ -947,7 +951,7 @@ mod tests {
 
         let a_lonlat = array![60.0, 0.0];
         let b_lonlat = array![60.0, 30.0];
-        let lonlats = interpolate(&a_lonlat.view(), &b_lonlat.view(), 10).unwrap();
+        let lonlats = arc_interpolate_points(&a_lonlat.view(), &b_lonlat.view(), 10).unwrap();
 
         let a = VectorPoint::try_from_lonlat(&a_lonlat.view(), true).unwrap();
         let b = VectorPoint::try_from_lonlat(&b_lonlat.view(), true).unwrap();
@@ -959,7 +963,7 @@ mod tests {
             .and(&b_lonlat.view())
             .all(|test, reference| (test - reference).abs() < tolerance));
 
-        let xyzs = interpolate(&a.xyz.view(), &b.xyz.view(), 10).unwrap();
+        let xyzs = arc_interpolate_points(&a.xyz.view(), &b.xyz.view(), 10).unwrap();
 
         assert!(Zip::from(&xyzs.slice(s![0, ..]))
             .and(&a.xyz.view())
@@ -972,11 +976,11 @@ mod tests {
             points: MultiVectorPoint::try_from_lonlats(&lonlats.view(), true).unwrap(),
         };
         let arc_from_xyzs = ArcString {
-            points: unsafe { MultiVectorPoint::try_from(xyzs.to_owned()).unwrap_unchecked() },
+            points: MultiVectorPoint::try_from(xyzs.to_owned()).unwrap(),
         };
 
         for xyz in xyzs.rows() {
-            let point = unsafe { VectorPoint::try_from(xyz.to_owned()).unwrap_unchecked() };
+            let point = VectorPoint::try_from(xyz.to_owned()).unwrap();
             assert!((&arc_from_lonlats).contains(&point));
             assert!((&arc_from_xyzs).contains(&point));
         }

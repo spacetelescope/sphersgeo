@@ -1,7 +1,7 @@
-use crate::angularpolygon::AngularPolygon;
+use crate::sphericalpolygon::SphericalPolygon;
 use pyo3::prelude::*;
 
 #[pyclass]
 pub struct SphericalGraph {
-    polygons: Vec<AngularPolygon>,
+    polygons: Vec<SphericalPolygon>,
 }

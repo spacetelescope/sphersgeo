@@ -1,14 +1,17 @@
+use crate::geometry::AnyGeometry;
 use crate::geometry::{ExtendMultiGeometry, Geometry, MultiGeometry};
 use ndarray::array;
 use pyo3::prelude::*;
-use std::iter::Sum;
-use std::ops::{Add, AddAssign};
+use std::{
+    iter::Sum,
+    ops::{Add, AddAssign},
+};
 
-use crate::geometry::AnyGeometry;
 /// collection of assorted geometries
 #[pyclass]
 #[derive(Debug, Clone)]
 pub struct GeometryCollection {
+    // TODO: figure out how to make this dyn Geometry
     pub geometries: Vec<AnyGeometry>,
 }
 
@@ -44,7 +47,7 @@ impl Geometry for &GeometryCollection {
         }
     }
 
-    fn convex_hull(&self) -> Option<crate::angularpolygon::AngularPolygon> {
+    fn convex_hull(&self) -> Option<crate::sphericalpolygon::SphericalPolygon> {
         self.points().convex_hull()
     }
 
@@ -55,25 +58,23 @@ impl Geometry for &GeometryCollection {
                 .map(|geometry| geometry.points())
                 .sum()
         } else {
-            unsafe {
-                crate::vectorpoint::MultiVectorPoint::try_from(array![[
-                    std::f64::NAN,
-                    std::f64::NAN,
-                    std::f64::NAN
-                ]])
-                .unwrap_unchecked()
-            }
+            crate::vectorpoint::MultiVectorPoint::try_from(array![[
+                std::f64::NAN,
+                std::f64::NAN,
+                std::f64::NAN
+            ]])
+            .unwrap()
         }
     }
 }
 
 impl Geometry for GeometryCollection {
     fn area(&self) -> f64 {
-        todo!()
+        (&self).area()
     }
 
     fn length(&self) -> f64 {
-        todo!()
+        (&self).length()
     }
 
     fn bounds(&self, degrees: bool) -> crate::angularbounds::AngularBounds {
@@ -81,10 +82,10 @@ impl Geometry for GeometryCollection {
     }
 
     fn points(&self) -> crate::vectorpoint::MultiVectorPoint {
-        todo!()
+        (&self).points()
     }
 
-    fn convex_hull(&self) -> Option<crate::angularpolygon::AngularPolygon> {
+    fn convex_hull(&self) -> Option<crate::sphericalpolygon::SphericalPolygon> {
         (&self).convex_hull()
     }
 }
@@ -155,24 +156,24 @@ impl ExtendMultiGeometry<crate::angularbounds::AngularBounds> for GeometryCollec
     }
 }
 
-impl ExtendMultiGeometry<crate::angularpolygon::AngularPolygon> for GeometryCollection {
+impl ExtendMultiGeometry<crate::sphericalpolygon::SphericalPolygon> for GeometryCollection {
     fn extend(&mut self, other: GeometryCollection) {
         self.geometries.extend(other.geometries);
     }
 
-    fn push(&mut self, other: crate::angularpolygon::AngularPolygon) {
-        self.geometries.push(AnyGeometry::AngularPolygon(other));
+    fn push(&mut self, other: crate::sphericalpolygon::SphericalPolygon) {
+        self.geometries.push(AnyGeometry::SphericalPolygon(other));
     }
 }
 
-impl ExtendMultiGeometry<crate::angularpolygon::MultiAngularPolygon> for GeometryCollection {
+impl ExtendMultiGeometry<crate::sphericalpolygon::MultiSphericalPolygon> for GeometryCollection {
     fn extend(&mut self, other: GeometryCollection) {
         self.geometries.extend(other.geometries);
     }
 
-    fn push(&mut self, other: crate::angularpolygon::MultiAngularPolygon) {
+    fn push(&mut self, other: crate::sphericalpolygon::MultiSphericalPolygon) {
         self.geometries
-            .push(AnyGeometry::MultiAngularPolygon(other));
+            .push(AnyGeometry::MultiSphericalPolygon(other));
     }
 }
 
