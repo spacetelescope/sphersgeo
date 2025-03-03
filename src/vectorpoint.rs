@@ -3,7 +3,7 @@ use crate::{
     arcstring::{arc_angle, arc_length_from_vectors, collinear, ArcString, MultiArcString},
     geometry::{
         AnyGeometry, ExtendMultiGeometry, GeometricOperations, Geometry, MultiGeometry,
-        MultiGeometryIntoIterator, MultiGeometryIterator,
+        MultiGeometryIntoIterator,
     },
     geometrycollection::GeometryCollection,
     sphericalpolygon::{MultiSphericalPolygon, SphericalPolygon},
@@ -590,36 +590,13 @@ pub struct MultiVectorPoint {
     pub kdtree: ImmutableKdTree<f64, 3>,
 }
 
-impl From<Vec<VectorPoint>> for MultiVectorPoint {
-    fn from(points: Vec<VectorPoint>) -> Self {
+impl From<&Vec<VectorPoint>> for MultiVectorPoint {
+    fn from(points: &Vec<VectorPoint>) -> Self {
         let mut xyz = Array2::uninit((points.len(), 3));
         for (index, point) in points.iter().enumerate() {
             point.xyz.assign_to(xyz.index_axis_mut(Axis(0), index));
         }
         Self::try_from(unsafe { xyz.assume_init() }).unwrap()
-    }
-}
-
-impl<'a> Iterator for MultiGeometryIterator<'a, MultiVectorPoint> {
-    type Item = VectorPoint;
-
-    fn next(&mut self) -> Option<Self::Item> {
-        if self.index < self.multi.len() {
-            Some(
-                VectorPoint::try_from(self.multi.xyz.slice(s![self.index, ..]).to_owned()).unwrap(),
-            )
-        } else {
-            None
-        }
-    }
-}
-
-impl MultiVectorPoint {
-    fn iter(&self) -> MultiGeometryIterator<MultiVectorPoint> {
-        MultiGeometryIterator::<MultiVectorPoint> {
-            multi: self,
-            index: 0,
-        }
     }
 }
 
@@ -650,9 +627,17 @@ impl IntoIterator for MultiVectorPoint {
     }
 }
 
+impl Into<Array1<VectorPoint>> for &MultiVectorPoint {
+    fn into(self) -> Array1<VectorPoint> {
+        Zip::from(self.xyz.rows())
+            .par_map_collect(|row| VectorPoint::try_from(row.to_owned()).unwrap())
+    }
+}
+
 impl Into<Vec<VectorPoint>> for &MultiVectorPoint {
     fn into(self) -> Vec<VectorPoint> {
-        self.iter().collect()
+        let points: Array1<VectorPoint> = self.into();
+        points.to_vec()
     }
 }
 
@@ -663,13 +648,11 @@ impl TryFrom<Array2<f64>> for MultiVectorPoint {
         if xyz.shape()[1] != 3 {
             Err(format!("array should be Nx3, not Nx{:?}", xyz.shape()[1]))
         } else {
-            let vec_xyz = Zip::from(xyz.rows())
-                .par_map_collect(|row| [row[0], row[1], row[2]])
-                .to_vec();
+            let array = Zip::from(xyz.rows()).par_map_collect(|row| [row[0], row[1], row[2]]);
 
             Ok(Self {
                 xyz,
-                kdtree: vec_xyz.as_slice().into(),
+                kdtree: ImmutableKdTree::<f64, 3>::from(array.as_slice().unwrap()),
             })
         }
     }
@@ -707,8 +690,8 @@ impl Into<Vec<[f64; 3]>> for &MultiVectorPoint {
     }
 }
 
-impl From<Vec<(f64, f64, f64)>> for MultiVectorPoint {
-    fn from(points: Vec<(f64, f64, f64)>) -> Self {
+impl From<&Vec<(f64, f64, f64)>> for MultiVectorPoint {
+    fn from(points: &Vec<(f64, f64, f64)>) -> Self {
         let mut xyz = Array2::uninit((points.len(), 2));
         for (index, tuple) in points.iter().enumerate() {
             array![tuple.0, tuple.1, tuple.2].assign_to(xyz.index_axis_mut(Axis(0), index));
@@ -717,10 +700,10 @@ impl From<Vec<(f64, f64, f64)>> for MultiVectorPoint {
     }
 }
 
-impl TryFrom<Vec<Vec<f64>>> for MultiVectorPoint {
+impl TryFrom<&Vec<Vec<f64>>> for MultiVectorPoint {
     type Error = String;
 
-    fn try_from(list: Vec<Vec<f64>>) -> Result<Self, Self::Error> {
+    fn try_from(list: &Vec<Vec<f64>>) -> Result<Self, Self::Error> {
         let mut xyz = Array2::<f64>::default((list.len(), 3));
         for (i, mut point) in xyz.axis_iter_mut(Axis(0)).enumerate() {
             for (j, value) in point.iter_mut().enumerate() {
@@ -779,6 +762,15 @@ impl MultiVectorPoint {
     /// normalize the given xyz vectors
     pub fn normalize(xyz: &ArrayView2<f64>) -> Self {
         Self::try_from(normalize_vectors(xyz)).unwrap()
+    }
+
+    pub fn recreate_tree(&mut self) {
+        self.kdtree = ImmutableKdTree::<f64, 3>::from(
+            Zip::from(self.xyz.rows())
+                .par_map_collect(|row| [row[0], row[1], row[2]])
+                .as_slice()
+                .unwrap(),
+        )
     }
 
     /// from the given coordinates, build xyz vectors representing points on the sphere
@@ -950,33 +942,28 @@ impl ToString for MultiVectorPoint {
 
 impl PartialEq for MultiVectorPoint {
     fn eq(&self, other: &MultiVectorPoint) -> bool {
-        if self.len() != other.len() {
-            return false;
-        }
+        let tolerance = 1e-11;
+        if self.len() == other.len() {
+            if self.xyz.sum() == other.xyz.sum() {
+                let mut rows: Vec<ArrayView1<f64>> = self.xyz.rows().into_iter().collect();
+                let mut other_rows: Vec<ArrayView1<f64>> = self.xyz.rows().into_iter().collect();
 
-        for point in other.iter() {
-            if !self.contains(&point) {
-                return false;
+                rows.sort_by(|a, b| a.sum().partial_cmp(&b.sum()).unwrap());
+                other_rows.sort_by(|a, b| a.sum().partial_cmp(&b.sum()).unwrap());
+
+                return Zip::from(stack(Axis(0), rows.as_slice()).unwrap().rows())
+                    .and(stack(Axis(0), other_rows.as_slice()).unwrap().rows())
+                    .all(|a, b| (&a - &b).abs().sum() < tolerance);
             }
         }
 
-        true
+        return true;
     }
 }
 
 impl PartialEq<Vec<VectorPoint>> for MultiVectorPoint {
     fn eq(&self, other: &Vec<VectorPoint>) -> bool {
-        if self.len() != other.len() {
-            return false;
-        }
-
-        for point in other {
-            if !self.contains(point) {
-                return false;
-            }
-        }
-
-        true
+        self.kdtree == MultiVectorPoint::from(other).kdtree
     }
 }
 
@@ -1114,6 +1101,7 @@ impl MultiGeometry for MultiVectorPoint {
 impl ExtendMultiGeometry<VectorPoint> for MultiVectorPoint {
     fn extend(&mut self, other: MultiVectorPoint) {
         self.xyz = concatenate(Axis(0), &[self.xyz.view(), other.xyz.view()]).unwrap();
+        self.recreate_tree();
     }
 
     fn push(&mut self, other: VectorPoint) {
@@ -1125,6 +1113,7 @@ impl ExtendMultiGeometry<VectorPoint> for MultiVectorPoint {
             ],
         )
         .unwrap();
+        self.recreate_tree();
     }
 }
 
@@ -1684,6 +1673,8 @@ mod tests {
         let reference_abc = MultiVectorPoint::try_from(xyz.slice(s![..3, ..]).to_owned()).unwrap();
         let reference_abcd = MultiVectorPoint::try_from(xyz).unwrap();
 
+        assert_eq!(&reference_ab + &c, &(&a + &b) + &c);
+        assert_eq!(&(&a + &b) + &c, reference_abc);
         assert_eq!(&reference_ab + &c, reference_abc);
 
         let mut abc = reference_ab.to_owned();

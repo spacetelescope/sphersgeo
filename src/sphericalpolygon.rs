@@ -8,7 +8,6 @@ use crate::{
     geometrycollection::GeometryCollection,
     vectorpoint::{MultiVectorPoint, VectorPoint},
 };
-use kiddo::ImmutableKdTree;
 use ndarray::{s, Array1, Array2, ArrayView1, ArrayView2};
 use pyo3::prelude::*;
 use std::collections::VecDeque;
@@ -282,7 +281,6 @@ impl GeometricOperations<&MultiSphericalPolygon> for &SphericalPolygon {
 #[derive(Clone, Debug)]
 pub struct MultiSphericalPolygon {
     pub polygons: VecDeque<SphericalPolygon>,
-    pub kdtree: ImmutableKdTree<f64, 3>,
 }
 
 impl From<Vec<SphericalPolygon>> for MultiSphericalPolygon {
@@ -302,7 +300,6 @@ impl From<Vec<SphericalPolygon>> for MultiSphericalPolygon {
 
         Self {
             polygons: polygons.into(),
-            kdtree: points.as_slice().into(),
         }
     }
 }
@@ -319,13 +316,13 @@ impl PartialEq<MultiSphericalPolygon> for MultiSphericalPolygon {
             return false;
         }
 
-        for polygon in other.iter() {
-            if !self.contains(polygon) {
+        for polygon in &self.polygons {
+            if !other.polygons.contains(polygon) {
                 return false;
             }
         }
 
-        true
+        return true;
     }
 }
 
@@ -335,8 +332,8 @@ impl PartialEq<Vec<SphericalPolygon>> for MultiSphericalPolygon {
             return false;
         }
 
-        for polygon in other {
-            if !self.contains(polygon) {
+        for polygon in &self.polygons {
+            if !other.contains(polygon) {
                 return false;
             }
         }

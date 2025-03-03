@@ -8,7 +8,6 @@ use crate::{
     sphericalpolygon::{spherical_triangle_area, MultiSphericalPolygon, SphericalPolygon},
     vectorpoint::{cross_vectors, MultiVectorPoint, VectorPoint},
 };
-use kiddo::ImmutableKdTree;
 use numpy::ndarray::{concatenate, s, stack, Array1, Array2, ArrayView1, ArrayView2, Axis, Zip};
 use pyo3::prelude::*;
 use std::collections::VecDeque;
@@ -474,14 +473,25 @@ impl GeometricOperations<&MultiSphericalPolygon> for &ArcString {
 #[derive(Debug, Clone)]
 pub struct MultiArcString {
     pub arcstrings: VecDeque<ArcString>,
-    pub kdtree: ImmutableKdTree<f64, 3>,
+}
+
+impl From<Vec<ArcString>> for MultiArcString {
+    fn from(arcstrings: Vec<ArcString>) -> Self {
+        Self {
+            arcstrings: VecDeque::<ArcString>::from(arcstrings),
+        }
+    }
 }
 
 impl TryFrom<Vec<MultiVectorPoint>> for MultiArcString {
     type Error = String;
 
     fn try_from(points: Vec<MultiVectorPoint>) -> Result<Self, Self::Error> {
-        todo!()
+        let arcstrings: Vec<ArcString> = points
+            .iter()
+            .map(|points| ArcString::try_from(points.to_owned()).unwrap())
+            .collect();
+        Ok(Self::from(arcstrings))
     }
 }
 
@@ -525,13 +535,13 @@ impl PartialEq<MultiArcString> for MultiArcString {
             return false;
         }
 
-        for arcstring in other.iter() {
-            if !self.contains(arcstring) {
+        for arcstring in &self.arcstrings {
+            if !other.arcstrings.contains(arcstring) {
                 return false;
             }
         }
 
-        true
+        return true;
     }
 }
 
@@ -541,13 +551,13 @@ impl PartialEq<Vec<ArcString>> for MultiArcString {
             return false;
         }
 
-        for arcstring in other {
-            if !self.contains(arcstring) {
+        for arcstring in &self.arcstrings {
+            if !other.contains(arcstring) {
                 return false;
             }
         }
 
-        true
+        return true;
     }
 }
 
