@@ -4,20 +4,12 @@ from numpy.typing import NDArray
 
 class VectorPoint:
     def __init__(
-        self,
-        point: NDArray[float64]
-        | tuple[float, float, float]
-        | list[float]
-        | VectorPoint,
+        self, point: NDArray[float64] | tuple[float, float, float] | list[float]
     ): ...
 
     @classmethod
     def normalize(
-        cls,
-        point: NDArray[float64]
-        | tuple[float, float, float]
-        | list[float]
-        | VectorPoint,
+        cls, point: NDArray[float64] | tuple[float, float, float] | list[float]
     ) -> VectorPoint: ...
 
     @classmethod
@@ -40,7 +32,7 @@ class VectorPoint:
     def collinear(self, a: VectorPoint, b: VectorPoint) -> bool: ...
 
     @property
-    def vector_radius(self) -> float: ...
+    def vector_length(self) -> float: ...
 
     def vector_rotate_around(
         self, other: VectorPoint, theta: float, degrees: bool
@@ -126,8 +118,7 @@ class MultiVectorPoint:
         points: NDArray[float64]
         | list[tuple[float, float, float]]
         | list[list[float]]
-        | list[float]
-        | MultiVectorPoint,
+        | list[float],
     ): ...
 
     @classmethod
@@ -136,8 +127,7 @@ class MultiVectorPoint:
         points: NDArray[float64]
         | list[tuple[float, float, float]]
         | list[list[float]]
-        | list[float]
-        | MultiVectorPoint,
+        | list[float],
     ) -> MultiVectorPoint: ...
 
     @classmethod
@@ -165,7 +155,7 @@ class MultiVectorPoint:
     def collinear(self, a: MultiVectorPoint, b: MultiVectorPoint) -> NDArray[bool]: ...
 
     @property
-    def vector_radii(self) -> NDArray[float64]: ...
+    def vector_lengths(self) -> NDArray[float64]: ...
 
     def vector_rotate_around(
         self, other: MultiVectorPoint, theta: float, degrees: bool
@@ -256,8 +246,7 @@ class ArcString:
         | MultiVectorPoint
         | list[tuple[float, float, float]]
         | list[list[float]]
-        | list[float]
-        | ArcString,
+        | list[float],
     ): ...
 
     @classmethod
@@ -267,8 +256,7 @@ class ArcString:
         | MultiVectorPoint
         | list[tuple[float, float, float]]
         | list[list[float]]
-        | list[float]
-        | ArcString,
+        | list[float],
     ) -> ArcString: ...
 
     @classmethod
@@ -363,8 +351,7 @@ class MultiArcString:
         arcstrings: list[NDArray[float64]]
         | list[MultiVectorPoint]
         | list[list[tuple[float64, float64, float64]]]
-        | list[list[list[float64]]]
-        | MultiArcString,
+        | list[list[list[float64]]],
     ): ...
 
     @property
@@ -520,23 +507,9 @@ class AngularBounds:
 class AngularPolygon:
     def __init__(
         self,
-        arcstring: ArcString
-        | NDArray[float64]
-        | MultiVectorPoint
-        | list[tuple[float, float, float]]
-        | list[list[float]]
-        | list[float],
-        interior: None
-        | VectorPoint
-        | NDArray[float64]
-        | tuple[float, float, float]
-        | list[float],
-        holes: None
-        | MultiArcString
-        | list[NDArray[float64]]
-        | list[MultiVectorPoint]
-        | list[list[tuple[float64, float64, float64]]]
-        | list[list[list[float64]]],
+        arcstring: ArcString,
+        interior: None | VectorPoint,
+        holes: None | MultiArcString,
     ): ...
 
     @property
@@ -610,7 +583,7 @@ class AngularPolygon:
 
 
 class MultiAngularPolygon:
-    def __init__(self, polygons: list[AngularPolygon] | MultiAngularPolygon): ...
+    def __init__(self, polygons: list[AngularPolygon]): ...
 
     @property
     def area(self) -> float: ...

@@ -9,7 +9,7 @@ use std::{
 
 /// collection of assorted geometries
 #[pyclass]
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct GeometryCollection {
     // TODO: figure out how to make this dyn Geometry
     pub geometries: Vec<AnyGeometry>,
@@ -201,5 +201,11 @@ impl Add<&GeometryCollection> for &GeometryCollection {
 impl AddAssign<&GeometryCollection> for GeometryCollection {
     fn add_assign(&mut self, other: &GeometryCollection) {
         self.geometries.extend(other.geometries.to_owned());
+    }
+}
+
+impl ToString for GeometryCollection {
+    fn to_string(&self) -> String {
+        format!("GeometryCollection({:?})", self.geometries)
     }
 }
