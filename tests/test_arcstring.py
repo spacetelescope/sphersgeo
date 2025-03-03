@@ -65,7 +65,7 @@ def test_interpolate():
 
     a_lonlat = np.array([60.0, 0.0])
     b_lonlat = np.array([60.0, 30.0])
-    lonlats = sphersgeo.array.interpolate(a_lonlat, b_lonlat, n=10)
+    lonlats = sphersgeo.array.arc_interpolate_points(a_lonlat, b_lonlat, n=10)
 
     a = VectorPoint.from_lonlat(a_lonlat, degrees=True)
     b = VectorPoint.from_lonlat(b_lonlat, degrees=True)
