@@ -107,7 +107,9 @@ impl TryFrom<Array1<f64>> for VectorPoint {
         if xyz.len() != 3 {
             Err(format!("array should have length 3, not {:?}", xyz.len()))
         } else {
-            Ok(Self { xyz })
+            Ok(Self {
+                xyz: normalize_vector(&xyz.view()),
+            })
         }
     }
 }
@@ -1133,20 +1135,8 @@ impl GeometricOperations<&VectorPoint> for &MultiVectorPoint {
     }
 
     fn contains(self, other: &VectorPoint) -> bool {
-        // find the nearest point in 3D space
-        let nearest = self.kdtree.nearest_one::<SquaredEuclidean>(&[
-            other.xyz[0],
-            other.xyz[1],
-            other.xyz[2],
-        ]);
-
         let tolerance = 1e-10;
-
-        // use distance from k-d tree
-        nearest.distance < tolerance
-
-        // // compare point coordinates
-        // (&other.xyz.view() - &self.xyz.slice(s![nearest.item as usize, ..])).sum() < tolerance
+        self.distance(other) < tolerance
     }
 
     fn within(self, _: &VectorPoint) -> bool {
