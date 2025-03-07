@@ -36,7 +36,7 @@ def test_contains():
         )
     )
     assert arc.contains(
-        VectorPoint.from_lonlat(np.array([349.10660535, -12.30998866])), degrees=True
+        VectorPoint.from_lonlat(np.array([349.10660535, -12.30998866]), degrees=True)
     )
 
     vertical_arc = ArcString(
