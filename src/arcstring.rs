@@ -1,18 +1,20 @@
 use crate::{
     angularbounds::AngularBounds,
     geometry::{
-        AnyGeometry, ExtendMultiGeometry, GeometricOperations, Geometry, MultiGeometry,
+        ExtendMultiGeometry, GeometricOperations, Geometry, MultiGeometry,
         MultiGeometryIntoIterator, MultiGeometryIterator,
     },
-    geometrycollection::GeometryCollection,
     sphericalpolygon::{spherical_triangle_area, MultiSphericalPolygon, SphericalPolygon},
-    vectorpoint::{cross_vectors, MultiVectorPoint, VectorPoint},
+    vectorpoint::{cross_vector, cross_vectors, MultiVectorPoint, VectorPoint},
 };
-use numpy::ndarray::{concatenate, s, stack, Array1, Array2, ArrayView1, ArrayView2, Axis, Zip};
+use numpy::ndarray::{
+    array, concatenate, s, stack, Array1, Array2, ArrayView1, ArrayView2, Axis, Zip,
+};
 use pyo3::prelude::*;
-use std::collections::VecDeque;
+use rayon::prelude::*;
+use std::{collections::VecDeque, iter::Sum};
 
-pub fn arc_interpolate_points(
+pub fn interpolate_points_along_vector_arc(
     a: &ArrayView1<f64>,
     b: &ArrayView1<f64>,
     n: usize,
@@ -20,7 +22,7 @@ pub fn arc_interpolate_points(
     let n = if n < 2 { 2 } else { n };
     let t = Array1::<f64>::linspace(0.0, 1.0, n);
     let t = t.to_shape((n, 1)).unwrap();
-    let omega = arc_length_from_vectors(a, b);
+    let omega = vector_arc_length(a, b);
 
     if a.len() == b.len() {
         if a.len() == 3 && b.len() == 3 {
@@ -64,7 +66,7 @@ pub fn arc_interpolate_points(
 ///
 /// References:
 /// - Miller, Robert D. Computing the area of a spherical polygon. Graphics Gems IV. 1994. Academic Press. doi:10.5555/180895.180907
-pub fn arc_angle(
+pub fn vector_arc_angle(
     a: &ArrayView1<f64>,
     b: &ArrayView1<f64>,
     c: &ArrayView1<f64>,
@@ -72,9 +74,9 @@ pub fn arc_angle(
 ) -> f64 {
     let tolerance = 3e-11;
 
-    let ab = arc_length_from_vectors(a, b);
-    let bc = arc_length_from_vectors(b, c);
-    let ca = arc_length_from_vectors(c, a);
+    let ab = vector_arc_length(a, b);
+    let bc = vector_arc_length(b, c);
+    let ca = vector_arc_length(c, a);
 
     let angle = if ab > tolerance && bc > tolerance {
         (ca.cos() - bc.cos() * ab.cos()) / (bc.sin() * ab.sin()).acos()
@@ -93,7 +95,7 @@ pub fn arc_angle(
 ///
 /// References:
 /// - Miller, Robert D. Computing the area of a spherical polygon. Graphics Gems IV. 1994. Academic Press. doi:10.5555/180895.180907
-pub fn arc_angles(
+pub fn vector_arc_angles(
     a: &ArrayView2<f64>,
     b: &ArrayView2<f64>,
     c: &ArrayView2<f64>,
@@ -130,12 +132,12 @@ pub fn arc_angles(
 ///    The length is computed using the following:
 ///
 ///       l = arccos(A ⋅ B) / r^2
-pub fn arc_length_from_vectors(a: &ArrayView1<f64>, b: &ArrayView1<f64>) -> f64 {
+pub fn vector_arc_length(a: &ArrayView1<f64>, b: &ArrayView1<f64>) -> f64 {
     a.dot(b).acos()
 }
 
 /// whether the three points exist on the same line
-pub fn collinear(a: &ArrayView1<f64>, b: &ArrayView1<f64>, c: &ArrayView1<f64>) -> bool {
+pub fn vectors_collinear(a: &ArrayView1<f64>, b: &ArrayView1<f64>, c: &ArrayView1<f64>) -> bool {
     let tolerance = 3e-11;
     spherical_triangle_area(a, b, c) < tolerance
 
@@ -152,6 +154,44 @@ pub fn collinear(a: &ArrayView1<f64>, b: &ArrayView1<f64>, c: &ArrayView1<f64>) 
     // }
 }
 
+/// Given the xyz vectors of the endpoints of two great circle arcs, find an intersecting point if it exists
+///
+/// References
+/// ----------
+/// - Method explained in an `e-mail
+///     <http://www.mathworks.com/matlabcentral/newsreader/view_thread/276271>`_
+///     by Roger Stafford.
+/// - https://spherical-geometry.readthedocs.io/en/latest/api/spherical_geometry.great_circle_arc.intersection.html#rb82e4e1c8654-1
+/// - Spinielli, Enrico. 2014. “Understanding Great Circle Arcs Intersection Algorithm.” October 19, 2014. https://enrico.spinielli.net/posts/2014-10-19-understanding-great-circle-arcs.
+pub fn vector_arcs_intersection(
+    a_0: &ArrayView1<f64>,
+    a_1: &ArrayView1<f64>,
+    b_0: &ArrayView1<f64>,
+    b_1: &ArrayView1<f64>,
+) -> Option<Array1<f64>> {
+    let p = cross_vector(a_0, a_1);
+    let q = cross_vector(b_0, b_1);
+
+    let t = cross_vector(&p.view(), &q.view());
+
+    let signs = array![
+        -cross_vector(&a_0, &p.view()).dot(&t.view()),
+        cross_vector(&a_1, &p.view()).dot(&t.view()),
+        -cross_vector(&b_0, &q.view()).dot(&t.view()),
+        cross_vector(&b_1, &q.view()).dot(&t.view()),
+    ]
+    .signum();
+
+    let epsilon = 1e-6;
+    if signs.iter().all(|sign| sign > &epsilon) {
+        Some(t)
+    } else if signs.iter().all(|sign| sign > &epsilon) {
+        Some(-t)
+    } else {
+        None
+    }
+}
+
 /// series of great circle arcs along the sphere
 #[pyclass]
 #[derive(Clone, Debug, PartialEq)]
@@ -159,16 +199,9 @@ pub struct ArcString {
     pub points: MultiVectorPoint,
 }
 
-impl TryFrom<MultiVectorPoint> for ArcString {
-    type Error = String;
-
-    fn try_from(points: MultiVectorPoint) -> Result<Self, Self::Error> {
-        let arcstring = Self { points };
-        if arcstring.intersects(&arcstring) {
-            Err(String::from("arcstring intersects itself"))
-        } else {
-            Ok(arcstring)
-        }
+impl From<MultiVectorPoint> for ArcString {
+    fn from(points: MultiVectorPoint) -> Self {
+        Self { points }
     }
 }
 
@@ -204,10 +237,81 @@ impl ArcString {
         .unwrap()
     }
 
+    /// expanded list of 2x3 arrays representing the endpoints of each individual arc
+    pub fn arcs(&self) -> Vec<ArcString> {
+        Zip::from(self.points.xyz.slice(s![..-1, ..]).view().rows())
+            .and(self.points.xyz.slice(s![1.., ..]).rows())
+            .par_map_collect(|a, b| {
+                ArcString::from(unsafe {
+                    MultiVectorPoint::try_from(stack(Axis(0), &[a, b]).unwrap_unchecked())
+                        .unwrap_unchecked()
+                })
+            })
+            .to_vec()
+    }
+
+    /// whether this arcstring intersects itself
+    pub fn intersects_self(&self) -> bool {
+        self.points.len() > 3 && self.intersection_with_self().is_some()
+    }
+
+    /// points of intersection with itself
+    pub fn intersection_with_self(&self) -> Option<MultiVectorPoint> {
+        if self.points.len() < 4 {
+            return None;
+        }
+
+        let mut intersections = vec![];
+
+        // we can't use the Bentley-Ottmann sweep-line algorithm here :/
+        // because a sphere is an enclosed infinite space so there's no good way to sort by longitude
+        // so instead we use brute-force and skip visited arcs
+        for arc_index in 0..self.points.len() - 1 {
+            let a_0 = self.points.xyz.slice(s![arc_index, ..]);
+            let a_1 = self.points.xyz.slice(s![arc_index + 1, ..]);
+
+            for other_arc_index in arc_index..self.points.len() - 1 {
+                let b_0 = self.points.xyz.slice(s![other_arc_index, ..]);
+                let b_1 = self.points.xyz.slice(s![other_arc_index + 1, ..]);
+
+                if let Some(point) = vector_arcs_intersection(&a_0, &a_1, &b_0, &b_1) {
+                    intersections.push(point);
+                }
+            }
+        }
+
+        if intersections.len() > 0 {
+            Some(unsafe { MultiVectorPoint::try_from(intersections).unwrap_unchecked() })
+        } else {
+            None
+        }
+    }
+
     pub fn lengths(&self) -> Array1<f64> {
         Zip::from(self.points.xyz.slice(s![..-1, ..]).rows())
             .and(self.points.xyz.slice(s![1.., ..]).rows())
-            .par_map_collect(|a, b| arc_length_from_vectors(&a, &b))
+            .par_map_collect(|a, b| vector_arc_length(&a, &b))
+    }
+
+    pub fn closed(&self) -> Self {
+        let mut owned = self.to_owned();
+        owned.close();
+        owned
+    }
+
+    pub fn close(&mut self) {
+        let tolerance = 1e-10;
+        if (&self.points.xyz.slice(s![0, ..])
+            - &self.points.xyz.slice(s![self.points.xyz.nrows(), ..]))
+            .abs()
+            .sum()
+            > tolerance
+        {
+            self.points.push(unsafe {
+                VectorPoint::try_from(self.points.xyz.slice(s![0, ..]).to_owned())
+                    .unwrap_unchecked()
+            });
+        }
     }
 }
 
@@ -258,21 +362,21 @@ impl GeometricOperations<&VectorPoint> for &ArcString {
         todo!()
     }
 
-    fn contains(self, point: &VectorPoint) -> bool {
+    fn contains(self, other: &VectorPoint) -> bool {
         // check if point is one of the vertices of this linestring
-        if (&self.points).contains(point) {
+        if (&self.points).contains(other) {
             return true;
         }
 
         // check if point is within the bounding box
-        if self.bounds(false).contains(point) {
+        if self.bounds(false).contains(other) {
             // compare lengths to endpoints with the arc length
             for index in 0..self.points.xyz.nrows() - 1 {
                 let a = self.points.xyz.slice(s![index, ..]);
                 let b = self.points.xyz.slice(s![index + 1, ..]);
-                let p = point.xyz.view();
+                let p = other.xyz.view();
 
-                if collinear(&a.view(), &p.view(), &b.view()) {
+                if vectors_collinear(&a.view(), &p.view(), &b.view()) {
                     return true;
                 }
             }
@@ -286,16 +390,15 @@ impl GeometricOperations<&VectorPoint> for &ArcString {
     }
 
     fn intersects(self, other: &VectorPoint) -> bool {
-        self.intersection(other).len() > 0
+        self.intersection(other).is_some()
     }
 
-    fn intersection(self, other: &VectorPoint) -> GeometryCollection {
+    #[allow(refining_impl_trait)]
+    fn intersection(self, other: &VectorPoint) -> Option<VectorPoint> {
         if self.contains(other) {
-            GeometryCollection {
-                geometries: vec![AnyGeometry::VectorPoint(other.to_owned())],
-            }
+            Some(other.to_owned())
         } else {
-            GeometryCollection::empty()
+            None
         }
     }
 }
@@ -306,7 +409,30 @@ impl GeometricOperations<&MultiVectorPoint> for &ArcString {
     }
 
     fn contains(self, other: &MultiVectorPoint) -> bool {
-        todo!()
+        // check if points are vertices of this linestring
+        if (&self.points).contains(other) {
+            return true;
+        }
+
+        Zip::from(other.xyz.rows())
+            .and(other.to_lonlats(false).rows())
+            .any(|vector, lonlat| {
+                // check if point is within the bounding box
+                if self.bounds(false).contains_lonlat(lonlat[0], lonlat[1]) {
+                    // compare lengths to endpoints with the arc length
+                    for index in 0..self.points.xyz.nrows() - 1 {
+                        let a = self.points.xyz.slice(s![index, ..]);
+                        let b = self.points.xyz.slice(s![index + 1, ..]);
+                        let p = vector.view();
+
+                        if vectors_collinear(&a.view(), &p.view(), &b.view()) {
+                            return true;
+                        }
+                    }
+                }
+
+                return false;
+            })
     }
 
     fn within(self, _: &MultiVectorPoint) -> bool {
@@ -314,70 +440,78 @@ impl GeometricOperations<&MultiVectorPoint> for &ArcString {
     }
 
     fn intersects(self, other: &MultiVectorPoint) -> bool {
-        todo!()
+        other.intersects(self)
     }
 
-    fn intersection(self, other: &MultiVectorPoint) -> GeometryCollection {
-        todo!()
+    #[allow(refining_impl_trait)]
+    fn intersection(self, other: &MultiVectorPoint) -> Option<MultiVectorPoint> {
+        other.intersection(self)
     }
 }
 
 impl GeometricOperations<&ArcString> for &ArcString {
     fn distance(self, other: &ArcString) -> f64 {
-        todo!();
+        todo!()
     }
 
     fn contains(self, other: &ArcString) -> bool {
-        todo!();
+        other.within(self)
     }
 
     fn within(self, other: &ArcString) -> bool {
-        other.contains(self)
+        self.points
+            .to_owned()
+            .into_iter()
+            .all(|point| point.within(other))
     }
 
     fn intersects(self, other: &ArcString) -> bool {
-        // TODO: write an intersects algorithm
-        self.intersection(other).len() > 0
+        // we can't use the Bentley-Ottmann sweep-line algorithm here :/
+        // because a sphere is an enclosed infinite space so there's no good way to sort by longitude
+        // so instead we use brute-force
+        for arc_index in 0..self.points.len() - 1 {
+            let a_0 = self.points.xyz.slice(s![arc_index, ..]);
+            let a_1 = self.points.xyz.slice(s![arc_index + 1, ..]);
+
+            for other_arc_index in 0..other.points.len() - 1 {
+                let b_0 = other.points.xyz.slice(s![other_arc_index, ..]);
+                let b_1 = other.points.xyz.slice(s![other_arc_index + 1, ..]);
+
+                if vector_arcs_intersection(&a_0, &a_1, &b_0, &b_1).is_some() {
+                    return true;
+                }
+            }
+        }
+
+        return false;
     }
 
-    /// Returns the point of intersection between two great circle arcs.
-    ///
-    /// Notes
-    /// -----
-    /// The basic intersection is computed using linear algebra as follows
-    /// [1]_:
-    ///
-    /// .. math::
-    ///
-    ///     T = \lVert(A × B) × (C × D)\rVert
-    ///
-    /// To determine the correct sign (i.e. hemisphere) of the
-    /// intersection, the following four values are computed:
-    ///
-    /// .. math::
-    ///
-    ///     s_1 = ((A × B) × A) \cdot T
-    ///
-    ///     s_2 = (B × (A × B)) \cdot T
-    ///
-    ///     s_3 = ((C × D) × C) \cdot T
-    ///
-    ///     s_4 = (D × (C × D)) \cdot T
-    ///
-    /// For :math:`s_n`, if all positive :math:`T` is returned as-is.  If
-    /// all negative, :math:`T` is multiplied by :math:`-1`.  Otherwise
-    /// the intersection does not exist and is undefined.
-    ///
-    /// References
-    /// ----------
-    ///
-    /// .. [1] Method explained in an `e-mail
-    ///     <http://www.mathworks.com/matlabcentral/newsreader/view_thread/276271>`_
-    ///     by Roger Stafford.
-    ///
-    /// https://spherical-geometry.readthedocs.io/en/latest/api/spherical_geometry.great_circle_arc.intersection.html#rb82e4e1c8654-1
-    fn intersection(self, other: &ArcString) -> GeometryCollection {
-        todo!();
+    #[allow(refining_impl_trait)]
+    fn intersection(self, other: &ArcString) -> Option<MultiVectorPoint> {
+        let mut intersections = vec![];
+
+        // we can't use the Bentley-Ottmann sweep-line algorithm here :/
+        // because a sphere is an enclosed infinite space so there's no good way to sort by longitude
+        // so instead we use brute-force
+        for arc_index in 0..self.points.len() - 1 {
+            let a_0 = self.points.xyz.slice(s![arc_index, ..]);
+            let a_1 = self.points.xyz.slice(s![arc_index + 1, ..]);
+
+            for other_arc_index in 0..other.points.len() - 1 {
+                let b_0 = other.points.xyz.slice(s![other_arc_index, ..]);
+                let b_1 = other.points.xyz.slice(s![other_arc_index + 1, ..]);
+
+                if let Some(point) = vector_arcs_intersection(&a_0, &a_1, &b_0, &b_1) {
+                    intersections.push(point);
+                }
+            }
+        }
+
+        if intersections.len() > 0 {
+            Some(MultiVectorPoint::try_from(intersections).unwrap())
+        } else {
+            None
+        }
     }
 }
 
@@ -398,7 +532,8 @@ impl GeometricOperations<&MultiArcString> for &ArcString {
         other.intersects(self)
     }
 
-    fn intersection(self, other: &MultiArcString) -> crate::geometrycollection::GeometryCollection {
+    #[allow(refining_impl_trait)]
+    fn intersection(self, other: &MultiArcString) -> Option<MultiVectorPoint> {
         other.intersection(self)
     }
 }
@@ -413,15 +548,24 @@ impl GeometricOperations<&AngularBounds> for &ArcString {
     }
 
     fn within(self, other: &AngularBounds) -> bool {
-        other.contains(self)
+        self.points.within(other)
     }
 
     fn intersects(self, other: &AngularBounds) -> bool {
-        other.intersects(self)
+        // TODO: this could probably just be a clip by bounds
+        other
+            .convex_hull()
+            .map_or(false, |convex_hull| convex_hull.intersects(self))
     }
 
-    fn intersection(self, other: &AngularBounds) -> crate::geometrycollection::GeometryCollection {
-        other.intersection(self)
+    #[allow(refining_impl_trait)]
+    fn intersection(self, other: &AngularBounds) -> Option<MultiArcString> {
+        // TODO: this could probably just be a clip by bounds
+        if let Some(convex_hull) = other.convex_hull() {
+            convex_hull.intersection(self)
+        } else {
+            None
+        }
     }
 }
 
@@ -442,7 +586,8 @@ impl GeometricOperations<&SphericalPolygon> for &ArcString {
         other.intersects(self)
     }
 
-    fn intersection(self, other: &SphericalPolygon) -> GeometryCollection {
+    #[allow(refining_impl_trait)]
+    fn intersection(self, other: &SphericalPolygon) -> Option<MultiArcString> {
         other.intersection(self)
     }
 }
@@ -464,7 +609,8 @@ impl GeometricOperations<&MultiSphericalPolygon> for &ArcString {
         other.intersects(self)
     }
 
-    fn intersection(self, other: &MultiSphericalPolygon) -> GeometryCollection {
+    #[allow(refining_impl_trait)]
+    fn intersection(self, other: &MultiSphericalPolygon) -> Option<MultiArcString> {
         other.intersection(self)
     }
 }
@@ -488,7 +634,7 @@ impl TryFrom<Vec<MultiVectorPoint>> for MultiArcString {
 
     fn try_from(points: Vec<MultiVectorPoint>) -> Result<Self, Self::Error> {
         let arcstrings: Vec<ArcString> = points
-            .iter()
+            .par_iter()
             .map(|points| ArcString::try_from(points.to_owned()).unwrap())
             .collect();
         Ok(Self::from(arcstrings))
@@ -497,7 +643,10 @@ impl TryFrom<Vec<MultiVectorPoint>> for MultiArcString {
 
 impl Into<Vec<MultiVectorPoint>> for MultiArcString {
     fn into(self) -> Vec<MultiVectorPoint> {
-        todo!()
+        self.arcstrings
+            .into_par_iter()
+            .map(|arcstring| arcstring.points)
+            .collect()
     }
 }
 
@@ -510,16 +659,18 @@ impl Into<Vec<ArcString>> for MultiArcString {
 impl MultiArcString {
     pub fn midpoints(&self) -> MultiVectorPoint {
         self.arcstrings
-            .iter()
+            .par_iter()
             .map(|arcstring| arcstring.midpoints())
             .sum()
     }
 
     pub fn lengths(&self) -> Array1<f64> {
-        self.arcstrings
-            .iter()
-            .map(|arcstring| arcstring.length())
-            .collect()
+        Array1::from_vec(
+            self.arcstrings
+                .par_iter()
+                .map(|arcstring| arcstring.length())
+                .collect(),
+        )
     }
 }
 
@@ -568,18 +719,18 @@ impl Geometry for &MultiArcString {
 
     fn length(&self) -> f64 {
         self.arcstrings
-            .iter()
+            .par_iter()
             .map(|arcstring| arcstring.length())
             .sum()
     }
 
     fn convex_hull(&self) -> Option<crate::sphericalpolygon::SphericalPolygon> {
-        todo!()
+        self.points().convex_hull()
     }
 
     fn points(&self) -> crate::vectorpoint::MultiVectorPoint {
         self.arcstrings
-            .iter()
+            .par_iter()
             .map(|arcstring| arcstring.to_owned().points)
             .sum()
     }
@@ -619,6 +770,16 @@ impl MultiGeometry for MultiArcString {
     }
 }
 
+impl Sum for MultiArcString {
+    fn sum<I: Iterator<Item = Self>>(iter: I) -> Self {
+        let mut arcstrings = vec![];
+        for multiarcstring in iter {
+            arcstrings.extend(multiarcstring.arcstrings);
+        }
+        MultiArcString::from(arcstrings)
+    }
+}
+
 impl ExtendMultiGeometry<ArcString> for MultiArcString {
     fn extend(&mut self, other: Self) {
         self.arcstrings.extend(other.arcstrings);
@@ -632,7 +793,7 @@ impl ExtendMultiGeometry<ArcString> for MultiArcString {
 impl GeometricOperations<&VectorPoint> for &MultiArcString {
     fn distance(self, other: &VectorPoint) -> f64 {
         self.arcstrings
-            .iter()
+            .par_iter()
             .map(|arcstring| arcstring.distance(other))
             .min_by(|a, b| a.partial_cmp(b).unwrap())
             .unwrap()
@@ -640,7 +801,7 @@ impl GeometricOperations<&VectorPoint> for &MultiArcString {
 
     fn contains(self, other: &VectorPoint) -> bool {
         self.arcstrings
-            .iter()
+            .par_iter()
             .any(|arcstring| arcstring.contains(other))
     }
 
@@ -652,7 +813,8 @@ impl GeometricOperations<&VectorPoint> for &MultiArcString {
         self.contains(other)
     }
 
-    fn intersection(self, other: &VectorPoint) -> crate::geometrycollection::GeometryCollection {
+    #[allow(refining_impl_trait)]
+    fn intersection(self, other: &VectorPoint) -> Option<VectorPoint> {
         other.intersection(self)
     }
 }
@@ -660,7 +822,7 @@ impl GeometricOperations<&VectorPoint> for &MultiArcString {
 impl GeometricOperations<&MultiVectorPoint> for &MultiArcString {
     fn distance(self, other: &MultiVectorPoint) -> f64 {
         self.arcstrings
-            .iter()
+            .par_iter()
             .map(|arcstring| arcstring.distance(other))
             .min_by(|a, b| a.partial_cmp(b).unwrap())
             .unwrap()
@@ -668,8 +830,8 @@ impl GeometricOperations<&MultiVectorPoint> for &MultiArcString {
 
     fn contains(self, other: &MultiVectorPoint) -> bool {
         self.arcstrings
-            .iter()
-            .any(|arcstring| arcstring.contains(other))
+            .par_iter()
+            .all(|arcstring| arcstring.contains(other))
     }
 
     fn within(self, _: &MultiVectorPoint) -> bool {
@@ -677,21 +839,29 @@ impl GeometricOperations<&MultiVectorPoint> for &MultiArcString {
     }
 
     fn intersects(self, other: &MultiVectorPoint) -> bool {
-        todo!()
+        self.intersection(other).is_some()
     }
 
-    fn intersection(
-        self,
-        other: &MultiVectorPoint,
-    ) -> crate::geometrycollection::GeometryCollection {
-        todo!()
+    #[allow(refining_impl_trait)]
+    fn intersection(self, other: &MultiVectorPoint) -> Option<MultiVectorPoint> {
+        let intersections: Vec<MultiVectorPoint> = self
+            .arcstrings
+            .par_iter()
+            .filter_map(|arcstring| arcstring.intersection(other))
+            .collect();
+
+        if intersections.len() > 0 {
+            Some(MultiVectorPoint::from(&intersections))
+        } else {
+            None
+        }
     }
 }
 
 impl GeometricOperations<&ArcString> for &MultiArcString {
     fn distance(self, other: &ArcString) -> f64 {
         self.arcstrings
-            .iter()
+            .par_iter()
             .map(|arcstring| arcstring.distance(other))
             .min_by(|a, b| a.partial_cmp(b).unwrap())
             .unwrap()
@@ -699,29 +869,42 @@ impl GeometricOperations<&ArcString> for &MultiArcString {
 
     fn contains(self, other: &ArcString) -> bool {
         self.arcstrings
-            .iter()
+            .par_iter()
             .any(|arcstring| arcstring.contains(other))
     }
 
     fn within(self, other: &ArcString) -> bool {
         self.arcstrings
-            .iter()
+            .par_iter()
             .all(|arcstring| arcstring.within(other))
     }
 
     fn intersects(self, other: &ArcString) -> bool {
-        todo!()
+        self.arcstrings
+            .iter()
+            .any(|arcstring| arcstring.intersects(other))
     }
 
-    fn intersection(self, other: &ArcString) -> crate::geometrycollection::GeometryCollection {
-        todo!()
+    #[allow(refining_impl_trait)]
+    fn intersection(self, other: &ArcString) -> Option<MultiVectorPoint> {
+        let intersections: Vec<MultiVectorPoint> = self
+            .arcstrings
+            .iter()
+            .filter_map(|arcstring| arcstring.intersection(other))
+            .collect();
+
+        if intersections.len() > 0 {
+            Some(intersections.into_iter().sum())
+        } else {
+            None
+        }
     }
 }
 
 impl GeometricOperations<&MultiArcString> for &MultiArcString {
     fn distance(self, other: &MultiArcString) -> f64 {
         self.arcstrings
-            .iter()
+            .par_iter()
             .map(|arcstring| arcstring.distance(other))
             .min_by(|a, b| a.partial_cmp(b).unwrap())
             .unwrap()
@@ -729,29 +912,42 @@ impl GeometricOperations<&MultiArcString> for &MultiArcString {
 
     fn contains(self, other: &MultiArcString) -> bool {
         self.arcstrings
-            .iter()
+            .par_iter()
             .any(|arcstring| arcstring.contains(other))
     }
 
     fn within(self, other: &MultiArcString) -> bool {
         self.arcstrings
-            .iter()
+            .par_iter()
             .all(|arcstring| arcstring.within(other))
     }
 
     fn intersects(self, other: &MultiArcString) -> bool {
-        todo!()
+        self.arcstrings
+            .iter()
+            .any(|arcstring| arcstring.intersects(other))
     }
 
-    fn intersection(self, other: &MultiArcString) -> crate::geometrycollection::GeometryCollection {
-        todo!()
+    #[allow(refining_impl_trait)]
+    fn intersection(self, other: &MultiArcString) -> Option<MultiVectorPoint> {
+        let intersections: Vec<MultiVectorPoint> = self
+            .arcstrings
+            .iter()
+            .filter_map(|arcstring| arcstring.intersection(other))
+            .collect();
+
+        if intersections.len() > 0 {
+            Some(intersections.into_iter().sum())
+        } else {
+            None
+        }
     }
 }
 
 impl GeometricOperations<&AngularBounds> for &MultiArcString {
     fn distance(self, other: &AngularBounds) -> f64 {
         self.arcstrings
-            .iter()
+            .par_iter()
             .map(|arcstring| arcstring.distance(other))
             .min_by(|a, b| a.partial_cmp(b).unwrap())
             .unwrap()
@@ -763,23 +959,29 @@ impl GeometricOperations<&AngularBounds> for &MultiArcString {
 
     fn within(self, other: &AngularBounds) -> bool {
         self.arcstrings
-            .iter()
+            .par_iter()
             .all(|arcstring| arcstring.within(other))
     }
 
     fn intersects(self, other: &AngularBounds) -> bool {
-        todo!()
+        self.arcstrings
+            .par_iter()
+            .any(|arcstring| arcstring.intersects(other))
     }
 
-    fn intersection(self, other: &AngularBounds) -> crate::geometrycollection::GeometryCollection {
-        todo!()
+    #[allow(refining_impl_trait)]
+    fn intersection(self, other: &AngularBounds) -> Option<MultiArcString> {
+        self.arcstrings
+            .par_iter()
+            .map(|arcstring| arcstring.intersection(other))
+            .sum()
     }
 }
 
 impl GeometricOperations<&SphericalPolygon> for &MultiArcString {
     fn distance(self, other: &SphericalPolygon) -> f64 {
         self.arcstrings
-            .iter()
+            .par_iter()
             .map(|arcstring| arcstring.distance(other))
             .min_by(|a, b| a.partial_cmp(b).unwrap())
             .unwrap()
@@ -791,22 +993,20 @@ impl GeometricOperations<&SphericalPolygon> for &MultiArcString {
 
     fn within(self, other: &SphericalPolygon) -> bool {
         self.arcstrings
-            .iter()
+            .par_iter()
             .all(|arcstring| arcstring.within(other))
     }
 
     fn intersects(self, other: &SphericalPolygon) -> bool {
         self.arcstrings
-            .iter()
+            .par_iter()
             .any(|arcstring| arcstring.intersects(other))
     }
 
-    fn intersection(
-        self,
-        other: &SphericalPolygon,
-    ) -> crate::geometrycollection::GeometryCollection {
+    #[allow(refining_impl_trait)]
+    fn intersection(self, other: &SphericalPolygon) -> Option<MultiArcString> {
         self.arcstrings
-            .iter()
+            .par_iter()
             .map(|arcstring| arcstring.intersection(other))
             .sum()
     }
@@ -815,7 +1015,7 @@ impl GeometricOperations<&SphericalPolygon> for &MultiArcString {
 impl GeometricOperations<&MultiSphericalPolygon> for &MultiArcString {
     fn distance(self, other: &MultiSphericalPolygon) -> f64 {
         self.arcstrings
-            .iter()
+            .par_iter()
             .map(|arcstring| arcstring.distance(other))
             .min_by(|a, b| a.partial_cmp(b).unwrap())
             .unwrap()
@@ -827,22 +1027,20 @@ impl GeometricOperations<&MultiSphericalPolygon> for &MultiArcString {
 
     fn within(self, other: &MultiSphericalPolygon) -> bool {
         self.arcstrings
-            .iter()
+            .par_iter()
             .all(|arcstring| arcstring.within(other))
     }
 
     fn intersects(self, other: &MultiSphericalPolygon) -> bool {
         self.arcstrings
-            .iter()
+            .par_iter()
             .any(|arcstring| arcstring.intersects(other))
     }
 
-    fn intersection(
-        self,
-        other: &MultiSphericalPolygon,
-    ) -> crate::geometrycollection::GeometryCollection {
+    #[allow(refining_impl_trait)]
+    fn intersection(self, other: &MultiSphericalPolygon) -> Option<MultiArcString> {
         self.arcstrings
-            .iter()
+            .par_iter()
             .map(|arcstring| arcstring.intersection(other))
             .sum()
     }
@@ -861,6 +1059,7 @@ impl<'a> Iterator for MultiGeometryIterator<'a, MultiArcString> {
 }
 
 impl MultiArcString {
+    #[allow(dead_code)]
     fn iter(&self) -> MultiGeometryIterator<MultiArcString> {
         MultiGeometryIterator::<MultiArcString> {
             multi: self,
@@ -969,7 +1168,8 @@ mod tests {
 
         let a_lonlat = array![60.0, 0.0];
         let b_lonlat = array![60.0, 30.0];
-        let lonlats = arc_interpolate_points(&a_lonlat.view(), &b_lonlat.view(), 10).unwrap();
+        let lonlats =
+            interpolate_points_along_vector_arc(&a_lonlat.view(), &b_lonlat.view(), 10).unwrap();
 
         let a = VectorPoint::try_from_lonlat(&a_lonlat.view(), true).unwrap();
         let b = VectorPoint::try_from_lonlat(&b_lonlat.view(), true).unwrap();
@@ -981,7 +1181,7 @@ mod tests {
             .and(&b_lonlat.view())
             .all(|test, reference| (test - reference).abs() < tolerance));
 
-        let xyzs = arc_interpolate_points(&a.xyz.view(), &b.xyz.view(), 10).unwrap();
+        let xyzs = interpolate_points_along_vector_arc(&a.xyz.view(), &b.xyz.view(), 10).unwrap();
 
         assert!(Zip::from(&xyzs.slice(s![0, ..]))
             .and(&a.xyz.view())
@@ -1030,12 +1230,11 @@ mod tests {
         let cd = ArcString { points: &c + &d };
         assert!((&ab).intersects(&cd));
         let r = (&ab).intersection(&cd);
+        assert!(r.is_some());
+        let r = r.unwrap();
         assert!(r.len() == 3);
-        assert!(Zip::from(r.points().xyz.rows()).all(|point| (&point
-            - &reference_intersection.view())
-            .abs()
-            .sum()
-            < tolerance));
+        assert!(Zip::from(r.xyz.rows())
+            .all(|point| (&point - &reference_intersection.view()).abs().sum() < tolerance));
 
         // assert not np.all(great_circle_arc.intersects([A, E], [B, F], [C], [D]))
         // r = great_circle_arc.intersection([A, E], [B, F], [C], [D])
@@ -1045,7 +1244,8 @@ mod tests {
 
         // Test parallel arcs
         let r = (&ab).intersection(&ab);
-        assert!(r.points().xyz.is_all_nan());
+        assert!(r.is_some());
+        assert!(r.unwrap().xyz.is_all_nan());
     }
 
     #[test]

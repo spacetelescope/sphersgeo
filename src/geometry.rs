@@ -55,10 +55,13 @@ pub trait GeometricOperations<O: Geometry = Self> {
 
     fn intersects(self, other: O) -> bool;
 
-    fn intersection(self, other: O) -> crate::geometrycollection::GeometryCollection;
+    /// NOTE: this function is NOT rigorous;
+    /// it will only return the lower order of geometry being compared
+    /// and will NOT handle degenerate cases or cases of touching vertices
+    fn intersection(self, other: O) -> Option<impl Geometry>;
 }
 
-#[derive(FromPyObject, Debug, Clone, PartialEq)]
+#[derive(FromPyObject, IntoPyObject, Debug, Clone, PartialEq)]
 pub enum AnyGeometry {
     #[pyo3(transparent)]
     VectorPoint(crate::vectorpoint::VectorPoint),
@@ -183,17 +186,18 @@ impl From<crate::sphericalpolygon::MultiSphericalPolygon> for AnyGeometry {
 /// define angular separation between 3D vectors
 pub struct AngularSeparation {}
 
-#[inline]
-fn normalize(vector: &[f64; 3]) -> [f64; 3] {
-    let l = (vector[0].powi(2) + vector[1].powi(2) + vector[2].powi(2)).sqrt();
-    [vector[0] / l, vector[1] / l, vector[2] / l]
-}
-
 impl DistanceMetric<f64, 3> for AngularSeparation {
     #[inline]
     fn dist(a: &[f64; 3], b: &[f64; 3]) -> f64 {
+        #[inline]
+        fn normalize(vector: &[f64; 3]) -> [f64; 3] {
+            let l = (vector[0].powi(2) + vector[1].powi(2) + vector[2].powi(2)).sqrt();
+            [vector[0] / l, vector[1] / l, vector[2] / l]
+        }
+
         let a = normalize(a);
         let b = normalize(b);
+
         // radians subtended
         (a[0] * b[0] + a[1] * b[1] + a[2] * b[2]).acos()
     }
