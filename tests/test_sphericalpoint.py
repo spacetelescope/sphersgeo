@@ -1,12 +1,12 @@
 import numpy as np
 from numpy.testing import assert_allclose
-from sphersgeo import MultiVectorPoint, VectorPoint
+from sphersgeo import MultiSphericalPoint, SphericalPoint
 
 
 def test_normalize():
     x, y, z = np.ogrid[-100:100:11, -100:100:11, -100:100:11]
     xyz = np.dstack((x.flatten(), y.flatten(), z.flatten()))[0].astype(float)
-    points = MultiVectorPoint(xyz)
+    points = MultiSphericalPoint(xyz)
 
     assert np.all(points.vector_lengths != 1.0)
 
@@ -21,7 +21,7 @@ def test_already_normalized():
     for i in range(3):
         xyz = np.array([0.0, 0.0, 0.0])
         xyz[i] = 1.0
-        normalized = VectorPoint(xyz).normalized.xyz
+        normalized = SphericalPoint(xyz).normalized.xyz
         length = np.sqrt(np.sum(normalized**2, axis=-1))
         assert_allclose(length, 1.0)
 
@@ -32,8 +32,8 @@ def test_from_lonlat():
     a_lonlat = np.array([60.0, 0.0])
     b_lonlat = np.array([60.0, 30.0])
 
-    a = VectorPoint.from_lonlat(a_lonlat, degrees=True)
-    b = VectorPoint.from_lonlat(b_lonlat, degrees=True)
+    a = SphericalPoint.from_lonlat(a_lonlat, degrees=True)
+    b = SphericalPoint.from_lonlat(b_lonlat, degrees=True)
 
     assert_allclose(a.to_lonlat(degrees=True), a_lonlat)
     assert_allclose(b.to_lonlat(degrees=True), b_lonlat)
@@ -42,13 +42,13 @@ def test_from_lonlat():
 
     equator_lat = 0.0
     equators = [
-        VectorPoint.from_lonlat(np.array([lon, equator_lat]), degrees=True)
+        SphericalPoint.from_lonlat(np.array([lon, equator_lat]), degrees=True)
         for lon in lons
     ]
     for equator in equators:
         assert_allclose(equator.to_lonlat(degrees=True)[1], 0.0)
 
-    multi_equator = MultiVectorPoint.from_lonlats(
+    multi_equator = MultiSphericalPoint.from_lonlats(
         np.stack([lons, np.repeat(equator_lat, len(lons))], axis=1), degrees=True
     )
 
@@ -58,13 +58,13 @@ def test_from_lonlat():
 
     north_pole_lat = 90.0
     north_poles = [
-        VectorPoint.from_lonlat(np.array([lon, north_pole_lat]), degrees=True)
+        SphericalPoint.from_lonlat(np.array([lon, north_pole_lat]), degrees=True)
         for lon in lons
     ]
     for north_pole in north_poles:
         assert_allclose(north_pole.xyz, [0.0, 0.0, 1.0], atol=tolerance)
 
-    multi_north_pole = MultiVectorPoint.from_lonlats(
+    multi_north_pole = MultiSphericalPoint.from_lonlats(
         np.stack([lons, np.repeat(north_pole_lat, len(lons))], axis=1), degrees=True
     )
 
@@ -78,13 +78,13 @@ def test_from_lonlat():
 
     south_pole_lat = -90.0
     south_poles = [
-        VectorPoint.from_lonlat(np.array([lon, south_pole_lat]), degrees=True)
+        SphericalPoint.from_lonlat(np.array([lon, south_pole_lat]), degrees=True)
         for lon in lons
     ]
     for south_pole in south_poles:
         assert_allclose(south_pole.xyz, [0.0, 0.0, -1.0], atol=tolerance)
 
-    multi_south_pole = MultiVectorPoint.from_lonlats(
+    multi_south_pole = MultiSphericalPoint.from_lonlats(
         np.stack([lons, np.repeat(south_pole_lat, len(lons))], axis=1), degrees=True
     )
 
@@ -109,19 +109,19 @@ def test_to_lonlats():
 
     lonlats = np.array([[0, 90], [0, -90], [45, 0], [315, 0]])
 
-    a = VectorPoint(xyz[0])
+    a = SphericalPoint(xyz[0])
     assert_allclose(a.to_lonlat(degrees=True), lonlats[0])
 
-    b = VectorPoint(xyz[1])
+    b = SphericalPoint(xyz[1])
     assert_allclose(b.to_lonlat(degrees=True), lonlats[1])
 
-    c = VectorPoint(xyz[2])
+    c = SphericalPoint(xyz[2])
     assert_allclose(c.to_lonlat(degrees=True), lonlats[2])
 
-    d = VectorPoint(xyz[3])
+    d = SphericalPoint(xyz[3])
     assert_allclose(d.to_lonlat(degrees=True), lonlats[3])
 
-    abcd = MultiVectorPoint(xyz)
+    abcd = MultiSphericalPoint(xyz)
     assert_allclose(abcd.to_lonlats(degrees=True), lonlats)
 
 
@@ -137,14 +137,14 @@ def test_distance():
         ]
     )
 
-    a = VectorPoint(xyz[0, :])
-    b = VectorPoint(xyz[1, :])
-    c = VectorPoint(xyz[2, :])
-    d = VectorPoint(xyz[3, :])
+    a = SphericalPoint(xyz[0, :])
+    b = SphericalPoint(xyz[1, :])
+    c = SphericalPoint(xyz[2, :])
+    d = SphericalPoint(xyz[3, :])
 
-    ab = MultiVectorPoint(xyz[:2, :])
-    bc = MultiVectorPoint(xyz[1:3, :])
-    cd = MultiVectorPoint(xyz[2:, :])
+    ab = MultiSphericalPoint(xyz[:2, :])
+    bc = MultiSphericalPoint(xyz[1:3, :])
+    cd = MultiSphericalPoint(xyz[2:, :])
 
     assert a.distance(b) == np.pi
     assert b.distance(c) == np.pi / 2.0
@@ -167,12 +167,12 @@ def test_contains():
         ]
     )
 
-    a = VectorPoint(xyz[0, :])
-    b = VectorPoint(xyz[1, :])
-    c = VectorPoint(xyz[2, :])
-    d = VectorPoint(xyz[3, :])
+    a = SphericalPoint(xyz[0, :])
+    b = SphericalPoint(xyz[1, :])
+    c = SphericalPoint(xyz[2, :])
+    d = SphericalPoint(xyz[3, :])
 
-    abc = MultiVectorPoint(xyz[:3, :])
+    abc = MultiSphericalPoint(xyz[:3, :])
 
     assert abc.contains(a)
     assert abc.contains(b)
@@ -186,7 +186,7 @@ def test_contains():
 
 
 def test_str():
-    assert str(VectorPoint(np.array([0.0, 1.0, 2.0]))) == "VectorPoint([0, 1, 2])"
+    assert str(SphericalPoint(np.array([0.0, 1.0, 2.0]))) == "SphericalPoint([0, 1, 2])"
 
 
 def test_add():
@@ -199,15 +199,15 @@ def test_add():
         ]
     )
 
-    a = VectorPoint(xyz[0])
-    b = VectorPoint(xyz[1])
-    c = VectorPoint(xyz[2])
-    d = VectorPoint(xyz[3])
+    a = SphericalPoint(xyz[0])
+    b = SphericalPoint(xyz[1])
+    c = SphericalPoint(xyz[2])
+    d = SphericalPoint(xyz[3])
 
-    ab = MultiVectorPoint(xyz[0:2])
-    bc = MultiVectorPoint(xyz[1:3])
-    cd = MultiVectorPoint(xyz[2:4])
-    da = MultiVectorPoint(np.stack([xyz[-1], xyz[0]]))
+    ab = MultiSphericalPoint(xyz[0:2])
+    bc = MultiSphericalPoint(xyz[1:3])
+    cd = MultiSphericalPoint(xyz[2:4])
+    da = MultiSphericalPoint(np.stack([xyz[-1], xyz[0]]))
 
     assert a + b == ab
     assert b + c == bc

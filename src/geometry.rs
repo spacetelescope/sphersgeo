@@ -7,9 +7,11 @@ pub trait Geometry {
 
     fn length(&self) -> f64;
 
-    fn centroid(&self) -> crate::vectorpoint::VectorPoint {
-        crate::vectorpoint::VectorPoint::try_from(self.points().xyz.mean_axis(Axis(0)).unwrap())
-            .unwrap()
+    fn centroid(&self) -> crate::sphericalpoint::SphericalPoint {
+        crate::sphericalpoint::SphericalPoint::try_from(
+            self.points().xyz.mean_axis(Axis(0)).unwrap(),
+        )
+        .unwrap()
     }
 
     fn bounds(&self, degrees: bool) -> crate::angularbounds::AngularBounds {
@@ -20,7 +22,7 @@ pub trait Geometry {
         self.points().convex_hull()
     }
 
-    fn points(&self) -> crate::vectorpoint::MultiVectorPoint;
+    fn points(&self) -> crate::sphericalpoint::MultiSphericalPoint;
 }
 
 pub trait MultiGeometry {
@@ -64,9 +66,9 @@ pub trait GeometricOperations<O: Geometry = Self> {
 #[derive(FromPyObject, IntoPyObject, Debug, Clone, PartialEq)]
 pub enum AnyGeometry {
     #[pyo3(transparent)]
-    VectorPoint(crate::vectorpoint::VectorPoint),
+    SphericalPoint(crate::sphericalpoint::SphericalPoint),
     #[pyo3(transparent)]
-    MultiVectorPoint(crate::vectorpoint::MultiVectorPoint),
+    MultiSphericalPoint(crate::sphericalpoint::MultiSphericalPoint),
     #[pyo3(transparent)]
     ArcString(crate::arcstring::ArcString),
     #[pyo3(transparent)]
@@ -82,8 +84,8 @@ pub enum AnyGeometry {
 impl Geometry for AnyGeometry {
     fn area(&self) -> f64 {
         match self {
-            AnyGeometry::VectorPoint(point) => point.area(),
-            AnyGeometry::MultiVectorPoint(multipoint) => multipoint.area(),
+            AnyGeometry::SphericalPoint(point) => point.area(),
+            AnyGeometry::MultiSphericalPoint(multipoint) => multipoint.area(),
             AnyGeometry::ArcString(arcstring) => arcstring.area(),
             AnyGeometry::MultiArcString(multiarcstring) => multiarcstring.area(),
             AnyGeometry::AngularBounds(bounding_box) => bounding_box.area(),
@@ -94,8 +96,8 @@ impl Geometry for AnyGeometry {
 
     fn length(&self) -> f64 {
         match self {
-            AnyGeometry::VectorPoint(point) => point.length(),
-            AnyGeometry::MultiVectorPoint(multipoint) => multipoint.length(),
+            AnyGeometry::SphericalPoint(point) => point.length(),
+            AnyGeometry::MultiSphericalPoint(multipoint) => multipoint.length(),
             AnyGeometry::ArcString(arcstring) => arcstring.length(),
             AnyGeometry::MultiArcString(multiarcstring) => multiarcstring.length(),
             AnyGeometry::AngularBounds(bounding_box) => bounding_box.length(),
@@ -106,8 +108,8 @@ impl Geometry for AnyGeometry {
 
     fn bounds(&self, degrees: bool) -> crate::angularbounds::AngularBounds {
         match self {
-            AnyGeometry::VectorPoint(point) => point.bounds(degrees),
-            AnyGeometry::MultiVectorPoint(multipoint) => multipoint.bounds(degrees),
+            AnyGeometry::SphericalPoint(point) => point.bounds(degrees),
+            AnyGeometry::MultiSphericalPoint(multipoint) => multipoint.bounds(degrees),
             AnyGeometry::ArcString(arcstring) => arcstring.bounds(degrees),
             AnyGeometry::MultiArcString(multiarcstring) => multiarcstring.bounds(degrees),
             AnyGeometry::AngularBounds(bounding_box) => bounding_box.bounds(degrees),
@@ -118,8 +120,8 @@ impl Geometry for AnyGeometry {
 
     fn convex_hull(&self) -> Option<crate::sphericalpolygon::SphericalPolygon> {
         match self {
-            AnyGeometry::VectorPoint(point) => point.convex_hull(),
-            AnyGeometry::MultiVectorPoint(multipoint) => multipoint.convex_hull(),
+            AnyGeometry::SphericalPoint(point) => point.convex_hull(),
+            AnyGeometry::MultiSphericalPoint(multipoint) => multipoint.convex_hull(),
             AnyGeometry::ArcString(arcstring) => arcstring.convex_hull(),
             AnyGeometry::MultiArcString(multiarcstring) => multiarcstring.convex_hull(),
             AnyGeometry::AngularBounds(bounding_box) => bounding_box.convex_hull(),
@@ -128,10 +130,10 @@ impl Geometry for AnyGeometry {
         }
     }
 
-    fn points(&self) -> crate::vectorpoint::MultiVectorPoint {
+    fn points(&self) -> crate::sphericalpoint::MultiSphericalPoint {
         match self {
-            AnyGeometry::VectorPoint(point) => point.points(),
-            AnyGeometry::MultiVectorPoint(multipoint) => multipoint.points(),
+            AnyGeometry::SphericalPoint(point) => point.points(),
+            AnyGeometry::MultiSphericalPoint(multipoint) => multipoint.points(),
             AnyGeometry::ArcString(arcstring) => arcstring.points(),
             AnyGeometry::MultiArcString(multiarcstring) => multiarcstring.points(),
             AnyGeometry::AngularBounds(bounding_box) => bounding_box.points(),
@@ -141,15 +143,15 @@ impl Geometry for AnyGeometry {
     }
 }
 
-impl From<crate::vectorpoint::VectorPoint> for AnyGeometry {
-    fn from(value: crate::vectorpoint::VectorPoint) -> Self {
-        AnyGeometry::VectorPoint(value)
+impl From<crate::sphericalpoint::SphericalPoint> for AnyGeometry {
+    fn from(value: crate::sphericalpoint::SphericalPoint) -> Self {
+        AnyGeometry::SphericalPoint(value)
     }
 }
 
-impl From<crate::vectorpoint::MultiVectorPoint> for AnyGeometry {
-    fn from(value: crate::vectorpoint::MultiVectorPoint) -> Self {
-        AnyGeometry::MultiVectorPoint(value)
+impl From<crate::sphericalpoint::MultiSphericalPoint> for AnyGeometry {
+    fn from(value: crate::sphericalpoint::MultiSphericalPoint) -> Self {
+        AnyGeometry::MultiSphericalPoint(value)
     }
 }
 
