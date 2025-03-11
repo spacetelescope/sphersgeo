@@ -30,16 +30,6 @@ pub trait MultiGeometry {
     fn len(&self) -> usize;
 }
 
-pub struct MultiGeometryIterator<'a, M: MultiGeometry> {
-    pub multi: &'a M,
-    pub index: usize,
-}
-
-pub struct MultiGeometryIntoIterator<M: MultiGeometry> {
-    pub multi: M,
-    pub index: usize,
-}
-
 pub trait ExtendMultiGeometry<T: Geometry> {
     /// extend this collection with geometries from the other collection
     fn extend(&mut self, other: Self);

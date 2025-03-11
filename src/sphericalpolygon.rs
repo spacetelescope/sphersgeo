@@ -3,16 +3,13 @@ use crate::{
     arcstring::{
         vector_arc_angle, vector_arc_angles, vector_arcs_intersection, ArcString, MultiArcString,
     },
-    geometry::{
-        ExtendMultiGeometry, GeometricOperations, Geometry, MultiGeometry,
-        MultiGeometryIntoIterator, MultiGeometryIterator,
-    },
+    geometry::{ExtendMultiGeometry, GeometricOperations, Geometry, MultiGeometry},
     sphericalpoint::{min_1darray, shift_rows, MultiSphericalPoint, SphericalPoint},
 };
 use ndarray::{
     array, concatenate,
     parallel::prelude::{IntoParallelRefIterator, ParallelIterator},
-    s, stack, Array1, ArrayView1, ArrayView2, Axis, IntoNdProducer, Zip,
+    s, stack, Array1, ArrayView1, ArrayView2, Axis, Zip,
 };
 use pyo3::prelude::*;
 use rayon::iter::IntoParallelIterator;
@@ -881,48 +878,5 @@ impl GeometricOperations<&MultiSphericalPolygon> for &MultiSphericalPolygon {
             .par_iter()
             .map(|polygon| polygon.intersection(other))
             .sum()
-    }
-}
-
-impl<'a> Iterator for MultiGeometryIterator<'a, MultiSphericalPolygon> {
-    type Item = &'a SphericalPolygon;
-
-    fn next(&mut self) -> Option<Self::Item> {
-        if self.index < self.multi.len() {
-            Some(&self.multi.polygons[self.index])
-        } else {
-            None
-        }
-    }
-}
-
-impl MultiSphericalPolygon {
-    #[allow(dead_code)]
-    fn iter(&self) -> MultiGeometryIterator<MultiSphericalPolygon> {
-        MultiGeometryIterator::<MultiSphericalPolygon> {
-            multi: self,
-            index: 0,
-        }
-    }
-}
-
-impl Iterator for MultiGeometryIntoIterator<MultiSphericalPolygon> {
-    type Item = SphericalPolygon;
-
-    fn next(&mut self) -> Option<Self::Item> {
-        self.multi.polygons.pop_front()
-    }
-}
-
-impl IntoIterator for MultiSphericalPolygon {
-    type Item = SphericalPolygon;
-
-    type IntoIter = MultiGeometryIntoIterator<MultiSphericalPolygon>;
-
-    fn into_iter(self) -> Self::IntoIter {
-        Self::IntoIter {
-            multi: self,
-            index: 0,
-        }
     }
 }

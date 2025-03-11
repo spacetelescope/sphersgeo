@@ -1,9 +1,6 @@
 use crate::{
     angularbounds::AngularBounds,
-    geometry::{
-        ExtendMultiGeometry, GeometricOperations, Geometry, MultiGeometry,
-        MultiGeometryIntoIterator, MultiGeometryIterator,
-    },
+    geometry::{ExtendMultiGeometry, GeometricOperations, Geometry, MultiGeometry},
     sphericalpoint::{cross_vector, cross_vectors, MultiSphericalPoint, SphericalPoint},
     sphericalpolygon::{spherical_triangle_area, MultiSphericalPolygon, SphericalPolygon},
 };
@@ -62,10 +59,10 @@ pub fn interpolate_points_along_vector_arc(
     }
 }
 
-/// given points A, B, and C on the unit sphere, retrieve the angle at B between arc AB and arc BC
+/// given three XYZ vectors on the unit sphere (A, B, and C), retrieve the angle at B between arc AB and arc BC
 ///
 /// References:
-/// - Miller, Robert D. Computing the area of a spherical polygon. Graphics Gems IV. 1994. Academic Press. doi:10.5555/180895.180907
+/// - Miller, Robert D. Computing the area of a spherical polygon. Graphics Gems IV. p132. 1994. Academic Press. doi:10.5555/180895.180907
 pub fn vector_arc_angle(
     a: &ArrayView1<f64>,
     b: &ArrayView1<f64>,
@@ -79,7 +76,7 @@ pub fn vector_arc_angle(
     let ca = vector_arc_length(c, a);
 
     let angle = if ab > tolerance && bc > tolerance {
-        (ca.cos() - bc.cos() * ab.cos()) / (bc.sin() * ab.sin()).acos()
+        ((ca.cos() - bc.cos() * ab.cos()) / (bc.sin() * ab.sin())).acos()
     } else {
         (1.0 - ca.powi(2) / 2.0).acos()
     };
@@ -91,7 +88,7 @@ pub fn vector_arc_angle(
     }
 }
 
-/// given points A, B, and C on the unit sphere, retrieve the angle at B between arc AB and arc BC
+/// given three arrays of XYZ vectors on the unit sphere (A, B, and C), element-wise retrieve the angles at B between arcs AB and arcs BC
 ///
 /// References:
 /// - Miller, Robert D. Computing the area of a spherical polygon. Graphics Gems IV. 1994. Academic Press. doi:10.5555/180895.180907
@@ -139,7 +136,8 @@ pub fn vector_arc_length(a: &ArrayView1<f64>, b: &ArrayView1<f64>) -> f64 {
 /// whether the three points exist on the same line
 pub fn vectors_collinear(a: &ArrayView1<f64>, b: &ArrayView1<f64>, c: &ArrayView1<f64>) -> bool {
     let tolerance = 3e-11;
-    spherical_triangle_area(a, b, c) < tolerance
+    let area = spherical_triangle_area(a, b, c);
+    area.is_nan() || area < tolerance
 
     // let left = arc_length(&a, &p);
     // let right = arc_length(&p, &b);
@@ -455,10 +453,9 @@ impl GeometricOperations<&ArcString> for &ArcString {
     }
 
     fn within(self, other: &ArcString) -> bool {
-        self.points
-            .to_owned()
-            .into_iter()
-            .all(|point| point.within(other))
+        self.points.xyz.rows().into_iter().all(|point| {
+            unsafe { SphericalPoint::try_from(point.to_owned()).unwrap_unchecked() }.within(other)
+        })
     }
 
     fn intersects(self, other: &ArcString) -> bool {
@@ -1042,49 +1039,6 @@ impl GeometricOperations<&MultiSphericalPolygon> for &MultiArcString {
     }
 }
 
-impl<'a> Iterator for MultiGeometryIterator<'a, MultiArcString> {
-    type Item = &'a ArcString;
-
-    fn next(&mut self) -> Option<Self::Item> {
-        if self.index < self.multi.len() {
-            Some(&self.multi.arcstrings[self.index])
-        } else {
-            None
-        }
-    }
-}
-
-impl MultiArcString {
-    #[allow(dead_code)]
-    fn iter(&self) -> MultiGeometryIterator<MultiArcString> {
-        MultiGeometryIterator::<MultiArcString> {
-            multi: self,
-            index: 0,
-        }
-    }
-}
-
-impl Iterator for MultiGeometryIntoIterator<MultiArcString> {
-    type Item = ArcString;
-
-    fn next(&mut self) -> Option<Self::Item> {
-        self.multi.arcstrings.pop_front()
-    }
-}
-
-impl IntoIterator for MultiArcString {
-    type Item = ArcString;
-
-    type IntoIter = MultiGeometryIntoIterator<MultiArcString>;
-
-    fn into_iter(self) -> Self::IntoIter {
-        Self::IntoIter {
-            multi: self,
-            index: 0,
-        }
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1279,63 +1233,5 @@ mod tests {
         };
         assert_eq!(ab.length(), (&a).distance(&b));
         assert!((ab.length() - std::f64::consts::PI / 2.0).abs() < tolerance);
-    }
-
-    #[test]
-    fn test_angle() {
-        let a = SphericalPoint::try_from(array![0.0, 0.0, 1.0]).unwrap();
-        let b = SphericalPoint::try_from(array![0.0, 0.0, 1.0]).unwrap();
-        let c = SphericalPoint::try_from(array![0.0, 0.0, 1.0]).unwrap();
-        assert_eq!(b.angle(&a, &c, false), (3.0 / 2.0) * std::f64::consts::PI);
-
-        // TODO: More angle tests
-    }
-
-    #[test]
-    fn test_angle_domain() {
-        let a = SphericalPoint::try_from(array![0.0, 0.0, 0.0]).unwrap();
-        let b = SphericalPoint::try_from(array![0.0, 0.0, 0.0]).unwrap();
-        let c = SphericalPoint::try_from(array![0.0, 0.0, 0.0]).unwrap();
-        assert_eq!(b.angle(&a, &c, false), (3.0 / 2.0) * std::f64::consts::PI);
-        assert!(!(b.angle(&a, &c, false)).is_infinite());
-    }
-
-    #[test]
-    fn test_length_domain() {
-        let a = SphericalPoint::try_from(array![std::f64::NAN, 0.0, 0.0]).unwrap();
-        let b = SphericalPoint::try_from(array![0.0, 0.0, std::f64::INFINITY]).unwrap();
-        assert!((&a).distance(&b).is_nan());
-    }
-
-    #[test]
-    fn test_angle_nearly_coplanar_vec() {
-        // test from issue #222 + extra values
-        let a = MultiSphericalPoint::try_from(
-            array![1.0, 1.0, 1.0].broadcast((5, 3)).unwrap().to_owned(),
-        )
-        .unwrap();
-        let b = MultiSphericalPoint::try_from(
-            array![1.0, 0.9999999, 1.0]
-                .broadcast((5, 3))
-                .unwrap()
-                .to_owned(),
-        )
-        .unwrap();
-        let c = MultiSphericalPoint::try_from(array![
-            [1.0, 0.5, 1.0],
-            [1.0, 0.15, 1.0],
-            [1.0, 0.001, 1.0],
-            [1.0, 0.15, 1.0],
-            [-1.0, 0.1, -1.0],
-        ])
-        .unwrap();
-        // vectors = np.stack([A, B, C], axis=0)
-        let angles = b.angles(&a, &c, false);
-
-        assert!(
-            Zip::from(&angles.slice(s![..-1]).abs_sub(std::f64::consts::PI))
-                .all(|value| value < &1e-16)
-        );
-        assert!(Zip::from(&angles.slice(s![-1]).abs()).all(|value| value < &1e-32));
     }
 }

@@ -114,7 +114,7 @@ mod py_sphersgeo {
         /// angle on the sphere between this point and two other points
         #[pyo3(name = "angle", signature=(a, b, degrees=true))]
         fn py_angle(&self, a: &SphericalPoint, b: &SphericalPoint, degrees: bool) -> f64 {
-            self.angle(a, b, degrees)
+            self.angle_between(a, b, degrees)
         }
 
         /// whether this point lies exactly between the given points
@@ -424,7 +424,7 @@ mod py_sphersgeo {
             b: &MultiSphericalPoint,
             degrees: bool,
         ) -> Bound<'py, PyArray1<f64>> {
-            self.angles(a, b, degrees).to_pyarray(py)
+            self.angles_between(a, b, degrees).to_pyarray(py)
         }
 
         /// whether these points share a line with the given points

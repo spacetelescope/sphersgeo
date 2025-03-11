@@ -1,12 +1,7 @@
 use crate::{
     angularbounds::AngularBounds,
-    arcstring::{
-        vector_arc_angle, vector_arc_length, vectors_collinear, ArcString, MultiArcString,
-    },
-    geometry::{
-        ExtendMultiGeometry, GeometricOperations, Geometry, MultiGeometry,
-        MultiGeometryIntoIterator,
-    },
+    arcstring::{vector_arc_angle, vector_arc_angles, vector_arc_length, vectors_collinear},
+    geometry::{ExtendMultiGeometry, GeometricOperations, Geometry, MultiGeometry},
     sphericalpolygon::{MultiSphericalPolygon, SphericalPolygon},
 };
 use kiddo::{ImmutableKdTree, SquaredEuclidean};
@@ -239,6 +234,12 @@ impl From<[f64; 3]> for SphericalPoint {
     }
 }
 
+impl From<(f64, f64, f64)> for SphericalPoint {
+    fn from(xyz: (f64, f64, f64)) -> Self {
+        Self::try_from(array![xyz.0, xyz.1, xyz.2]).unwrap()
+    }
+}
+
 impl Into<[f64; 3]> for SphericalPoint {
     fn into(self) -> [f64; 3] {
         self.xyz.to_vec().try_into().unwrap()
@@ -313,7 +314,7 @@ impl SphericalPoint {
     }
 
     /// angle on the sphere between this point and two other points
-    pub fn angle(&self, a: &SphericalPoint, b: &SphericalPoint, degrees: bool) -> f64 {
+    pub fn angle_between(&self, a: &SphericalPoint, b: &SphericalPoint, degrees: bool) -> f64 {
         vector_arc_angle(&a.into(), &self.into(), &b.into(), degrees)
     }
 
@@ -516,25 +517,25 @@ impl GeometricOperations<&MultiSphericalPoint> for &SphericalPoint {
     }
 }
 
-impl GeometricOperations<&ArcString> for &SphericalPoint {
-    fn distance(self, other: &ArcString) -> f64 {
+impl GeometricOperations<&crate::arcstring::ArcString> for &SphericalPoint {
+    fn distance(self, other: &crate::arcstring::ArcString) -> f64 {
         other.distance(self)
     }
 
-    fn contains(self, _: &ArcString) -> bool {
+    fn contains(self, _: &crate::arcstring::ArcString) -> bool {
         false
     }
 
-    fn within(self, other: &ArcString) -> bool {
+    fn within(self, other: &crate::arcstring::ArcString) -> bool {
         other.contains(self)
     }
 
-    fn intersects(self, other: &ArcString) -> bool {
+    fn intersects(self, other: &crate::arcstring::ArcString) -> bool {
         self.within(other)
     }
 
     #[allow(refining_impl_trait)]
-    fn intersection(self, other: &ArcString) -> Option<SphericalPoint> {
+    fn intersection(self, other: &crate::arcstring::ArcString) -> Option<SphericalPoint> {
         if self.within(other) {
             Some(self.to_owned())
         } else {
@@ -543,25 +544,25 @@ impl GeometricOperations<&ArcString> for &SphericalPoint {
     }
 }
 
-impl GeometricOperations<&MultiArcString> for &SphericalPoint {
-    fn distance(self, other: &MultiArcString) -> f64 {
+impl GeometricOperations<&crate::arcstring::MultiArcString> for &SphericalPoint {
+    fn distance(self, other: &crate::arcstring::MultiArcString) -> f64 {
         other.distance(self)
     }
 
-    fn contains(self, _: &MultiArcString) -> bool {
+    fn contains(self, _: &crate::arcstring::MultiArcString) -> bool {
         false
     }
 
-    fn within(self, other: &MultiArcString) -> bool {
+    fn within(self, other: &crate::arcstring::MultiArcString) -> bool {
         other.contains(self)
     }
 
-    fn intersects(self, other: &MultiArcString) -> bool {
+    fn intersects(self, other: &crate::arcstring::MultiArcString) -> bool {
         self.within(other)
     }
 
     #[allow(refining_impl_trait)]
-    fn intersection(self, other: &MultiArcString) -> Option<SphericalPoint> {
+    fn intersection(self, other: &crate::arcstring::MultiArcString) -> Option<SphericalPoint> {
         if self.within(other) {
             Some(self.to_owned())
         } else {
@@ -681,34 +682,6 @@ impl From<&Vec<MultiSphericalPoint>> for MultiSphericalPoint {
     }
 }
 
-impl Iterator for MultiGeometryIntoIterator<MultiSphericalPoint> {
-    type Item = SphericalPoint;
-
-    fn next(&mut self) -> Option<Self::Item> {
-        if self.index < self.multi.len() {
-            Some(
-                SphericalPoint::try_from(self.multi.xyz.slice(s![self.index, ..]).to_owned())
-                    .unwrap(),
-            )
-        } else {
-            None
-        }
-    }
-}
-
-impl IntoIterator for MultiSphericalPoint {
-    type Item = SphericalPoint;
-
-    type IntoIter = MultiGeometryIntoIterator<MultiSphericalPoint>;
-
-    fn into_iter(self) -> Self::IntoIter {
-        Self::IntoIter {
-            multi: self,
-            index: 0,
-        }
-    }
-}
-
 impl Into<Array1<SphericalPoint>> for &MultiSphericalPoint {
     fn into(self) -> Array1<SphericalPoint> {
         Zip::from(self.xyz.rows())
@@ -770,7 +743,7 @@ impl Into<Vec<[f64; 3]>> for &MultiSphericalPoint {
 
 impl From<&Vec<(f64, f64, f64)>> for MultiSphericalPoint {
     fn from(points: &Vec<(f64, f64, f64)>) -> Self {
-        let mut xyz = Array2::uninit((points.len(), 2));
+        let mut xyz = Array2::uninit((points.len(), 3));
         for (index, tuple) in points.iter().enumerate() {
             array![tuple.0, tuple.1, tuple.2].assign_to(xyz.index_axis_mut(Axis(0), index));
         }
@@ -815,7 +788,8 @@ impl TryFrom<Vec<f64>> for MultiSphericalPoint {
 
     fn try_from(list: Vec<f64>) -> Result<Self, Self::Error> {
         Self::try_from(
-            Array2::from_shape_vec((list.len(), 3), list).map_err(|err| format!("{:?}", err))?,
+            Array2::from_shape_vec((list.len() / 3, 3), list)
+                .map_err(|err| format!("{:?}", err))?,
         )
     }
 }
@@ -979,12 +953,13 @@ impl MultiSphericalPoint {
         .unwrap()
     }
 
-    pub fn angles(
+    pub fn angles_between(
         &self,
         a: &MultiSphericalPoint,
         b: &MultiSphericalPoint,
         degrees: bool,
     ) -> Array1<f64> {
+        // vector_arc_angles(&a.xyz.view(), &self.xyz.view(), &b.xyz.view(), degrees)
         Zip::from(self.xyz.rows())
             .and(a.xyz.rows())
             .and(b.xyz.rows())
@@ -1011,7 +986,7 @@ impl Sum for MultiSphericalPoint {
 
 impl ToString for MultiSphericalPoint {
     fn to_string(&self) -> String {
-        format!("MultiVectorPoint({})", self.xyz)
+        format!("MultiSphericalPoint({})", self.xyz)
     }
 }
 
@@ -1315,27 +1290,27 @@ impl GeometricOperations<&MultiSphericalPoint> for &MultiSphericalPoint {
     }
 }
 
-impl GeometricOperations<&ArcString> for &MultiSphericalPoint {
-    fn distance(self, other: &ArcString) -> f64 {
+impl GeometricOperations<&crate::arcstring::ArcString> for &MultiSphericalPoint {
+    fn distance(self, other: &crate::arcstring::ArcString) -> f64 {
         other.distance(self)
     }
 
-    fn contains(self, _: &ArcString) -> bool {
+    fn contains(self, _: &crate::arcstring::ArcString) -> bool {
         false
     }
 
-    fn within(self, other: &ArcString) -> bool {
+    fn within(self, other: &crate::arcstring::ArcString) -> bool {
         other.contains(self)
     }
 
-    fn intersects(self, other: &ArcString) -> bool {
+    fn intersects(self, other: &crate::arcstring::ArcString) -> bool {
         // TODO: vectorize this across xyz array
         let points: Vec<SphericalPoint> = self.into();
         points.par_iter().any(|point| point.within(other))
     }
 
     #[allow(refining_impl_trait)]
-    fn intersection(self, other: &ArcString) -> Option<MultiSphericalPoint> {
+    fn intersection(self, other: &crate::arcstring::ArcString) -> Option<MultiSphericalPoint> {
         // TODO: vectorize this across xyz array
         let points: Vec<SphericalPoint> = self.into();
         Some(MultiSphericalPoint::from(
@@ -1353,29 +1328,29 @@ impl GeometricOperations<&ArcString> for &MultiSphericalPoint {
     }
 }
 
-impl GeometricOperations<&MultiArcString> for &MultiSphericalPoint {
-    fn distance(self, other: &MultiArcString) -> f64 {
+impl GeometricOperations<&crate::arcstring::MultiArcString> for &MultiSphericalPoint {
+    fn distance(self, other: &crate::arcstring::MultiArcString) -> f64 {
         other.distance(self)
     }
 
-    fn contains(self, other: &MultiArcString) -> bool {
+    fn contains(self, other: &crate::arcstring::MultiArcString) -> bool {
         other.within(self)
     }
 
-    fn within(self, other: &MultiArcString) -> bool {
+    fn within(self, other: &crate::arcstring::MultiArcString) -> bool {
         // TODO: vectorize this across xyz array
         let points: Vec<SphericalPoint> = self.into();
         points.par_iter().all(|point| point.within(other))
     }
 
-    fn intersects(self, other: &MultiArcString) -> bool {
+    fn intersects(self, other: &crate::arcstring::MultiArcString) -> bool {
         // TODO: vectorize this across xyz array
         let points: Vec<SphericalPoint> = self.into();
         points.par_iter().any(|point| point.within(other))
     }
 
     #[allow(refining_impl_trait)]
-    fn intersection(self, other: &MultiArcString) -> Option<MultiSphericalPoint> {
+    fn intersection(self, other: &crate::arcstring::MultiArcString) -> Option<MultiSphericalPoint> {
         // TODO: vectorize this across xyz array
         let points: Vec<SphericalPoint> = self.into();
         Some(MultiSphericalPoint::from(
@@ -1620,7 +1595,19 @@ mod tests {
             )
             .all(|test, reference| (test - reference).abs() < tolerance));
     }
+    #[test]
+    fn test_from_lonlat_domain() {
+        let tolerance = 3e-8;
 
+        let a_lonlat = array![420.0, 0.0];
+        let b_lonlat = array![60.0, 110.0];
+
+        let a = SphericalPoint::try_from_lonlat(&a_lonlat.view(), true).unwrap();
+        let b = SphericalPoint::try_from_lonlat(&b_lonlat.view(), true).unwrap();
+
+        assert!((a.to_lonlat(true) - array![60.0, 0.0]).abs().sum() < tolerance);
+        assert!((b.to_lonlat(true) - array![240.0, 70.0]).abs().sum() < tolerance);
+    }
     #[test]
     fn test_to_lonlat() {
         let xyz = array![
@@ -1694,13 +1681,13 @@ mod tests {
             SphericalPoint::try_from(array![0.0, 1.0, 2.0])
                 .unwrap()
                 .to_string(),
-            "VectorPoint([0, 1, 2])"
+            "SphericalPoint([0, 1, 2])"
         );
         assert_eq!(
             MultiSphericalPoint::try_from(array![[0.0, 1.0, 2.0]])
                 .unwrap()
                 .to_string(),
-            "MultiVectorPoint([[0, 1, 2]])"
+            "MultiSphericalPoint([[0, 1, 2]])"
         );
     }
 
@@ -1754,5 +1741,128 @@ mod tests {
         let mut abcd = reference_ab.to_owned();
         abcd.extend(reference_bc);
         assert_eq!(abcd, reference_abcd);
+    }
+
+    #[test]
+    fn test_angle() {
+        let a = SphericalPoint::try_from(array![1.0, 0.0, 0.0]).unwrap();
+        let b = SphericalPoint::try_from(array![0.0, 1.0, 0.0]).unwrap();
+        let c = SphericalPoint::try_from(array![0.0, 0.0, 1.0]).unwrap();
+        assert_eq!(b.angle_between(&a, &c, false), std::f64::consts::FRAC_PI_2);
+
+        let a = SphericalPoint::try_from_lonlat(&array![1.0, 0.0].view(), true).unwrap();
+        let b = SphericalPoint::try_from_lonlat(&array![0.0, 1.0].view(), true).unwrap();
+        let c = SphericalPoint::try_from_lonlat(&array![0.0, 0.0].view(), true).unwrap();
+        assert_eq!(b.angle_between(&a, &c, false), std::f64::consts::FRAC_PI_2);
+
+        let a =
+            MultiSphericalPoint::try_from_lonlats(&array![[45.0, 0.0], [0.0, 45.0]].view(), true)
+                .unwrap();
+        let b =
+            MultiSphericalPoint::try_from_lonlats(&array![[90.0, 0.0], [0.0, 90.0]].view(), true)
+                .unwrap();
+        let c = MultiSphericalPoint::try_from_lonlats(
+            &array![[225.0, 0.0], [180.0, 45.0]].view(),
+            true,
+        )
+        .unwrap();
+
+        let angles = b.angles_between(&a, &c, false);
+
+        assert!(!angles.is_any_nan());
+        // TODO: More angle tests
+    }
+
+    #[test]
+    fn test_collinear() {
+        let a = SphericalPoint::try_from_lonlat(&array![0.0, 0.0].view(), true).unwrap();
+        let b = SphericalPoint::try_from(array![1.25, 0.25, 0.35355339059327373]).unwrap();
+        let c = SphericalPoint::try_from_lonlat(&array![45.0, 45.0].view(), true).unwrap();
+        let d = SphericalPoint::try_from_lonlat(&array![0.0, 45.0].view(), true).unwrap();
+        let e = SphericalPoint::try_from_lonlat(&array![0.0, 90.0].view(), true).unwrap();
+        let f = SphericalPoint::try_from_lonlat(&array![180.0, 45.0].view(), true).unwrap();
+
+        assert!(b.collinear(&a, &c));
+        assert!(e.collinear(&d, &f));
+
+        assert!(!b.collinear(&c, &f));
+    }
+
+    #[test]
+    fn test_angle_domain() {
+        let a = SphericalPoint::try_from(array![0.0, 0.0, 0.0]).unwrap();
+        let b = SphericalPoint::try_from(array![0.0, 0.0, 0.0]).unwrap();
+        let c = SphericalPoint::try_from(array![0.0, 0.0, 0.0]).unwrap();
+        assert!(!(b.angle_between(&a, &c, false)).is_infinite());
+    }
+
+    #[test]
+    fn test_distance_domain() {
+        let a = SphericalPoint::try_from(array![std::f64::NAN, 0.0, 0.0]).unwrap();
+        let b = SphericalPoint::try_from(array![0.0, 0.0, std::f64::INFINITY]).unwrap();
+        assert!((&a).distance(&b).is_nan());
+
+        let a = MultiSphericalPoint::try_from(array![
+            [std::f64::NAN, 0.0, 0.0],
+            [std::f64::NAN, 0.0, 0.0],
+            [std::f64::NAN, std::f64::NAN, std::f64::NAN],
+            [0.0, 0.0, 0.0],
+            [0.0, 0.0, 0.0],
+            [0.0, 0.0, std::f64::NAN],
+            [0.0, 0.0, 0.0],
+        ])
+        .unwrap();
+        let b = MultiSphericalPoint::try_from(array![
+            [0.0, 0.0, std::f64::INFINITY],
+            [0.0, 0.0, std::f64::INFINITY],
+            [0.0, 0.0, 0.0],
+            [std::f64::INFINITY, std::f64::INFINITY, std::f64::INFINITY],
+            [0.0, 0.0, std::f64::INFINITY],
+            [0.0, 0.0, 0.0],
+            [0.0, 0.0, 0.0],
+        ])
+        .unwrap();
+
+        assert!(a.distance(&b).is_nan());
+    }
+
+    #[test]
+    fn test_angle_nearly_coplanar_vec() {
+        // test from issue #222 + extra values
+        let a = MultiSphericalPoint::try_from(
+            array![1.0, 1.0, 1.0].broadcast((5, 3)).unwrap().to_owned(),
+        )
+        .unwrap();
+        let b = MultiSphericalPoint::try_from(
+            array![1.0, 0.9999999, 1.0]
+                .broadcast((5, 3))
+                .unwrap()
+                .to_owned(),
+        )
+        .unwrap();
+        let c = MultiSphericalPoint::try_from(array![
+            [1.0, 0.5, 1.0],
+            [1.0, 0.15, 1.0],
+            [1.0, 0.001, 1.0],
+            [1.0, 0.15, 1.0],
+            [-1.0, 0.1, -1.0],
+        ])
+        .unwrap();
+        // vectors = np.stack([A, B, C], axis=0)
+        let a_points: Vec<SphericalPoint> = (&a).into();
+        let b_points: Vec<SphericalPoint> = (&b).into();
+        let c_points: Vec<SphericalPoint> = (&c).into();
+        let angles: Vec<f64> = b_points
+            .iter()
+            .zip(a_points.iter().zip(c_points.iter()))
+            .map(|(b, (a, c))| b.angle_between(&a, &c, false))
+            .collect();
+        let angles = b.angles_between(&a, &c, false);
+
+        assert!(
+            Zip::from(&angles.slice(s![..-1]).abs_sub(std::f64::consts::PI))
+                .all(|value| value < &1e-16)
+        );
+        assert!(Zip::from(&angles.slice(s![-1]).abs()).all(|value| value < &1e-32));
     }
 }
