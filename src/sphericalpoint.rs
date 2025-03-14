@@ -1,6 +1,6 @@
 use crate::{
     angularbounds::AngularBounds,
-    arcstring::{vector_arc_angle, vector_arc_angles, vector_arc_length, vectors_collinear},
+    arcstring::{vector_arcs_angle_between, vectors_collinear},
     geometry::{ExtendMultiGeometry, GeometricOperations, Geometry, MultiGeometry},
     sphericalpolygon::{MultiSphericalPolygon, SphericalPolygon},
 };
@@ -8,9 +8,8 @@ use kiddo::{ImmutableKdTree, SquaredEuclidean};
 use numpy::ndarray::{
     array, concatenate, s, stack, Array1, Array2, ArrayView1, ArrayView2, Axis, Zip,
 };
-use rayon::prelude::*;
-
 use pyo3::prelude::*;
+use rayon::prelude::*;
 use std::{
     iter::Sum,
     num::NonZero,
@@ -57,18 +56,12 @@ pub fn shift_rows(from: &ArrayView2<f64>, by: i32) -> Array2<f64> {
 
 /// normalize the given vector to length 1 (the unit sphere) while preserving direction
 pub fn normalize_vector(xyz: &ArrayView1<f64>) -> Array1<f64> {
-    xyz / xyz.pow2().sum().sqrt()
+    xyz / vector_length(xyz)
 }
 
 /// normalize the given vectors to length 1 (the unit sphere) while preserving direction
 pub fn normalize_vectors(xyz: &ArrayView2<f64>) -> Array2<f64> {
-    xyz / xyz
-        .pow2()
-        .sum_axis(Axis(1))
-        .sqrt()
-        .to_shape((xyz.shape()[0], 1))
-        .unwrap()
-        .to_owned()
+    xyz / &vector_lengths(xyz).broadcast((1, xyz.nrows())).unwrap().t()
 }
 
 fn vector_kdtree(xyz: &ArrayView2<f64>) -> ImmutableKdTree<f64, 3> {
@@ -123,6 +116,22 @@ pub fn cross_vectors(a: &ArrayView2<f64>, b: &ArrayView2<f64>) -> Array2<f64> {
     result.unwrap()
 }
 
+/// radians subtended by this arc on the sphere
+///    Notes
+///    -----
+///    The length is computed using the following:
+///
+///       l = arccos(A ⋅ B) / r^2
+pub fn vector_arc_length(a: &ArrayView1<f64>, b: &ArrayView1<f64>) -> f64 {
+    // avoid domain issues of a.dot(b).acos()
+    cross_vector(a, b)
+        .view()
+        .pow2()
+        .sum()
+        .sqrt()
+        .atan2(a.dot(b))
+}
+
 /// convert the given xyz vector to angular coordinates on the sphere
 ///
 /// With radius *r*, longitude *l*, and latitude *b*:
@@ -134,19 +143,23 @@ pub fn cross_vectors(a: &ArrayView2<f64>, b: &ArrayView2<f64>) -> Array2<f64> {
 /// References
 /// ----------
 /// - Miller, Robert D. Computing the area of a spherical polygon. Graphics Gems IV. 1994. Academic Press. doi:10.5555/180895.180907
-pub fn vector_to_lonlat(vector: &ArrayView1<f64>, degrees: bool) -> Array1<f64> {
-    let mut lon = vector[1].atan2(vector[0]);
+pub fn vector_to_lonlat(xyz: &ArrayView1<f64>, degrees: bool) -> Array1<f64> {
+    if xyz.abs().sum() == 0.0 {
+        // directionless vector
+        return array![std::f64::NAN, 0.0];
+    }
+
+    let mut lon = xyz[1].atan2(xyz[0]);
     let full_rotation = 2.0 * std::f64::consts::PI;
     if lon < 0.0 {
         lon += full_rotation;
-    }
-    if lon > full_rotation {
+    } else if lon > full_rotation {
         lon -= full_rotation;
     }
-    let radians = array![
-        lon,
-        vector[2].atan2((vector[0].powi(2) + vector[1].powi(2)).sqrt())
-    ];
+
+    let lat = xyz[2].atan2((xyz[0].powi(2) + xyz[1].powi(2)).sqrt());
+
+    let radians = array![lon, lat,];
     return if degrees {
         radians.to_degrees()
     } else {
@@ -154,8 +167,15 @@ pub fn vector_to_lonlat(vector: &ArrayView1<f64>, degrees: bool) -> Array1<f64> 
     };
 }
 
-pub fn vectors_to_lonlats(vectors: &ArrayView2<f64>, degrees: bool) -> Array2<f64> {
-    let mut lons = Zip::from(vectors.rows()).par_map_collect(|xyz| xyz[1].atan2(xyz[0]));
+pub fn vectors_to_lonlats(xyzs: &ArrayView2<f64>, degrees: bool) -> Array2<f64> {
+    let mut lons = Zip::from(xyzs.rows()).par_map_collect(|xyz| {
+        if xyz.abs().sum() == 0.0 {
+            // directionless vector
+            std::f64::NAN
+        } else {
+            xyz[1].atan2(xyz[0])
+        }
+    });
 
     // mod longitudes past a full rotation
     let full_rotation = 2.0 * std::f64::consts::PI;
@@ -169,11 +189,11 @@ pub fn vectors_to_lonlats(vectors: &ArrayView2<f64>, degrees: bool) -> Array2<f6
         }
     });
 
-    let lats = Zip::from(vectors.slice(s![.., 2]))
-        .and(&vector_lengths(vectors))
-        .par_map_collect(|z, r| (z / r).asin());
-    // let lats = Zip::from(self.xyz.rows())
-    //     .par_map_collect(|xyz| xyz[2].atan2((xyz[0].powi(2) + xyz[1].powi(2)).sqrt()));
+    // let lats = Zip::from(xyzs.slice(s![.., 2]))
+    //     .and(&vector_lengths(xyzs))
+    //     .par_map_collect(|z, r| (z / r).asin());
+    let lats = Zip::from(xyzs.rows())
+        .par_map_collect(|xyz| xyz[2].atan2((xyz[0].powi(2) + xyz[1].powi(2)).sqrt()));
 
     let radians = stack(Axis(1), &[lons.view(), lats.view()]).unwrap();
     if degrees {
@@ -230,13 +250,17 @@ impl Into<Vec<f64>> for SphericalPoint {
 
 impl From<[f64; 3]> for SphericalPoint {
     fn from(xyz: [f64; 3]) -> Self {
-        Self::try_from(xyz.to_vec()).unwrap()
+        Self {
+            xyz: Array1::<f64>::from_vec(xyz.to_vec()),
+        }
     }
 }
 
 impl From<(f64, f64, f64)> for SphericalPoint {
     fn from(xyz: (f64, f64, f64)) -> Self {
-        Self::try_from(array![xyz.0, xyz.1, xyz.2]).unwrap()
+        Self {
+            xyz: array![xyz.0, xyz.1, xyz.2],
+        }
     }
 }
 
@@ -313,9 +337,22 @@ impl SphericalPoint {
         Self::try_from(normalize_vector(&self.xyz.view())).unwrap()
     }
 
+    /// create n number of points equally spaced on an arc between this point and another point
+    pub fn interpolate_between(
+        &self,
+        other: &Self,
+        n: usize,
+    ) -> Result<MultiSphericalPoint, String> {
+        MultiSphericalPoint::try_from(crate::arcstring::interpolate_points_along_vector_arc(
+            &self.xyz.view(),
+            &other.xyz.view(),
+            n,
+        )?)
+    }
+
     /// angle on the sphere between this point and two other points
     pub fn angle_between(&self, a: &SphericalPoint, b: &SphericalPoint, degrees: bool) -> f64 {
-        vector_arc_angle(&a.into(), &self.into(), &b.into(), degrees)
+        vector_arcs_angle_between(&a.into(), &self.into(), &b.into(), degrees)
     }
 
     /// whether this point lies exactly between the given points
@@ -387,18 +424,18 @@ impl AddAssign<&SphericalPoint> for SphericalPoint {
     }
 }
 
-impl Add<&Array1<f64>> for &SphericalPoint {
+impl<'a> Add<&ArrayView1<'a, f64>> for &SphericalPoint {
     type Output = SphericalPoint;
 
-    fn add(self, rhs: &Array1<f64>) -> Self::Output {
+    fn add(self, rhs: &ArrayView1<'a, f64>) -> Self::Output {
         let mut owned = self.to_owned();
         owned.xyz = owned.xyz + rhs;
         owned
     }
 }
 
-impl AddAssign<&Array1<f64>> for SphericalPoint {
-    fn add_assign(&mut self, rhs: &Array1<f64>) {
+impl<'a> AddAssign<&ArrayView1<'a, f64>> for SphericalPoint {
+    fn add_assign(&mut self, rhs: &ArrayView1<'a, f64>) {
         self.xyz += rhs;
     }
 }
@@ -664,10 +701,10 @@ pub struct MultiSphericalPoint {
 impl From<&Vec<SphericalPoint>> for MultiSphericalPoint {
     fn from(points: &Vec<SphericalPoint>) -> Self {
         let mut xyz = Array2::uninit((points.len(), 3));
-        for (index, point) in points.iter().enumerate() {
-            point.xyz.assign_to(xyz.index_axis_mut(Axis(0), index));
+        for (index, row) in xyz.axis_iter_mut(Axis(0)).enumerate() {
+            points[index].xyz.assign_to(row);
         }
-        Self::try_from(unsafe { xyz.assume_init() }).unwrap()
+        unsafe { Self::try_from(xyz.assume_init()).unwrap_unchecked() }
     }
 }
 
@@ -722,10 +759,10 @@ impl<'p> Into<ArrayView2<'p, f64>> for &'p MultiSphericalPoint {
 }
 
 impl From<Vec<[f64; 3]>> for MultiSphericalPoint {
-    fn from(xyz: Vec<[f64; 3]>) -> Self {
-        let kdtree = ImmutableKdTree::<f64, 3>::from(xyz.as_slice());
+    fn from(xyzs: Vec<[f64; 3]>) -> Self {
+        let kdtree = ImmutableKdTree::<f64, 3>::from(xyzs.as_slice());
         Self {
-            xyz: xyz.into(),
+            xyz: xyzs.into(),
             kdtree,
         }
     }
@@ -742,9 +779,9 @@ impl Into<Vec<[f64; 3]>> for &MultiSphericalPoint {
 }
 
 impl From<&Vec<(f64, f64, f64)>> for MultiSphericalPoint {
-    fn from(points: &Vec<(f64, f64, f64)>) -> Self {
-        let mut xyz = Array2::uninit((points.len(), 3));
-        for (index, tuple) in points.iter().enumerate() {
+    fn from(xyzs: &Vec<(f64, f64, f64)>) -> Self {
+        let mut xyz = Array2::uninit((xyzs.len(), 3));
+        for (index, tuple) in xyzs.iter().enumerate() {
             array![tuple.0, tuple.1, tuple.2].assign_to(xyz.index_axis_mut(Axis(0), index));
         }
         Self::try_from(unsafe { xyz.assume_init() }).unwrap()
@@ -755,31 +792,42 @@ impl TryFrom<&Vec<Vec<f64>>> for MultiSphericalPoint {
     type Error = String;
 
     fn try_from(list: &Vec<Vec<f64>>) -> Result<Self, Self::Error> {
-        let mut xyz = Array2::<f64>::default((list.len(), 3));
-        for (i, mut point) in xyz.axis_iter_mut(Axis(0)).enumerate() {
-            for (j, value) in point.iter_mut().enumerate() {
-                *value = list[i][j];
+        let mut xyz = Array2::<f64>::uninit((list.len(), 3));
+        for (index, row) in xyz.axis_iter_mut(Axis(0)).enumerate() {
+            let point = &list[index];
+            if point.len() == 3 {
+                Array1::<f64>::from_vec(point.to_owned()).assign_to(row)
+            } else {
+                return Err(format!("invalid shape {}", point.len()));
             }
         }
-
-        Self::try_from(xyz)
+        Self::try_from(unsafe { xyz.assume_init() })
     }
 }
 
-impl TryFrom<Vec<Array1<f64>>> for MultiSphericalPoint {
+impl<'a> TryFrom<&Vec<ArrayView1<'a, f64>>> for MultiSphericalPoint {
     type Error = String;
 
-    fn try_from(xyzs: Vec<Array1<f64>>) -> Result<Self, Self::Error> {
-        let mut points = Array2::uninit((xyzs.len(), 3));
-        for (index, xyz) in xyzs.iter().enumerate() {
-            if xyz.len() == 3 {
-                xyz.assign_to(points.index_axis_mut(Axis(0), index));
+    fn try_from(list: &Vec<ArrayView1<'a, f64>>) -> Result<Self, Self::Error> {
+        let mut xyz = Array2::<f64>::uninit((list.len(), 3));
+        for (index, row) in xyz.axis_iter_mut(Axis(0)).enumerate() {
+            let point = &list[index];
+            if point.len() == 3 {
+                point.assign_to(row);
             } else {
-                return Err(format!("invalid shape {:?}", xyz.shape()));
+                return Err(format!("invalid shape {:?}", point.shape()));
             }
         }
+        Self::try_from(unsafe { xyz.assume_init() })
+    }
+}
 
-        Self::try_from(unsafe { points.assume_init() })
+impl TryFrom<&Vec<Array1<f64>>> for MultiSphericalPoint {
+    type Error = String;
+
+    fn try_from(list: &Vec<Array1<f64>>) -> Result<Self, Self::Error> {
+        let list: Vec<ArrayView1<f64>> = list.iter().map(|point| point.view()).collect();
+        Self::try_from(&list)
     }
 }
 
@@ -794,10 +842,10 @@ impl TryFrom<Vec<f64>> for MultiSphericalPoint {
     }
 }
 
-impl TryFrom<Array1<f64>> for MultiSphericalPoint {
+impl<'a> TryFrom<&ArrayView1<'a, f64>> for MultiSphericalPoint {
     type Error = String;
 
-    fn try_from(xyz: Array1<f64>) -> Result<Self, Self::Error> {
+    fn try_from(xyz: &ArrayView1<'a, f64>) -> Result<Self, Self::Error> {
         if xyz.len() % 3 == 0 {
             Ok(Self::try_from(
                 xyz.to_shape((xyz.len() / 3, 3))
@@ -963,7 +1011,7 @@ impl MultiSphericalPoint {
         Zip::from(self.xyz.rows())
             .and(a.xyz.rows())
             .and(b.xyz.rows())
-            .par_map_collect(|point, a, b| vector_arc_angle(&point, &a, &b, degrees))
+            .par_map_collect(|point, a, b| vector_arcs_angle_between(&point, &a, &b, degrees))
     }
 
     pub fn collinear(&self, a: &SphericalPoint, b: &SphericalPoint) -> Array1<bool> {
@@ -1033,18 +1081,18 @@ impl AddAssign<&MultiSphericalPoint> for MultiSphericalPoint {
     }
 }
 
-impl Add<&Array2<f64>> for &MultiSphericalPoint {
+impl<'a> Add<&ArrayView2<'a, f64>> for &MultiSphericalPoint {
     type Output = MultiSphericalPoint;
 
-    fn add(self, rhs: &Array2<f64>) -> Self::Output {
+    fn add(self, rhs: &ArrayView2<'a, f64>) -> Self::Output {
         let mut owned = self.to_owned();
         owned.xyz = owned.xyz + rhs;
         owned
     }
 }
 
-impl AddAssign<&Array2<f64>> for MultiSphericalPoint {
-    fn add_assign(&mut self, rhs: &Array2<f64>) {
+impl<'a> AddAssign<&ArrayView2<'a, f64>> for MultiSphericalPoint {
+    fn add_assign(&mut self, rhs: &ArrayView2<'a, f64>) {
         self.xyz += rhs;
     }
 }
@@ -1238,17 +1286,17 @@ impl GeometricOperations<&MultiSphericalPoint> for &MultiSphericalPoint {
         // TODO: write a more efficient algorithm than brute-force
         min_1darray(
             &Zip::from(self.xyz.rows())
-                .par_map_collect(|point| {
+                .par_map_collect(|xyz| {
                     min_1darray(
                         &Zip::from(other.xyz.rows())
-                            .par_map_collect(|other_point| vector_arc_length(&point, &other_point))
+                            .par_map_collect(|other_xyz| vector_arc_length(&xyz, &other_xyz))
                             .view(),
                     )
-                    .unwrap_or(0.)
+                    .unwrap_or(std::f64::NAN)
                 })
                 .view(),
         )
-        .unwrap_or(0.)
+        .unwrap_or(std::f64::NAN)
     }
 
     fn contains(self, other: &MultiSphericalPoint) -> bool {
@@ -1438,431 +1486,5 @@ impl GeometricOperations<&MultiSphericalPolygon> for &MultiSphericalPoint {
     #[allow(refining_impl_trait)]
     fn intersection(self, other: &MultiSphericalPolygon) -> Option<MultiSphericalPoint> {
         other.intersection(self)
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use crate::sphericalpoint::{MultiSphericalPoint, SphericalPoint};
-
-    #[test]
-    fn test_normalize() {
-        let xyz = Array1::<f64>::linspace(-100.0, 100.0, 18);
-        let points = MultiSphericalPoint::try_from(
-            stack(Axis(1), &[xyz.view(), xyz.view(), xyz.view()]).unwrap(),
-        )
-        .unwrap();
-
-        assert_ne!(
-            points.vector_lengths(),
-            array![1.0].broadcast(points.xyz.nrows()).unwrap()
-        );
-
-        let normalized = points.normalized();
-
-        assert!(Zip::from(&normalized.vector_lengths()).all(|length| length == &1.0));
-
-        assert!(Zip::from(&normalized.xyz.powi(2).sum_axis(Axis(1)).sqrt())
-            .all(|length| length == &1.0),);
-    }
-
-    #[test]
-    fn test_already_normalized() {
-        for i in 0..3 {
-            let mut xyz = array![0.0, 0.0, 0.0];
-            xyz[i] = 1.0;
-            let normalized = SphericalPoint { xyz }.normalized().xyz;
-            let length = normalized.powi(2).sum().sqrt();
-            assert_eq!(length, 1.0);
-        }
-    }
-
-    #[test]
-    fn test_from_lonlat() {
-        let tolerance = 3e-8;
-
-        let a_lonlat = array![60.0, 0.0];
-        let b_lonlat = array![60.0, 30.0];
-
-        let a = SphericalPoint::try_from_lonlat(&a_lonlat.view(), true).unwrap();
-        let b = SphericalPoint::try_from_lonlat(&b_lonlat.view(), true).unwrap();
-
-        assert!(Zip::from(&(a.to_lonlat(true) - a_lonlat).abs()).all(|point| point < &tolerance));
-        assert!(Zip::from(&(b.to_lonlat(true) - b_lonlat).abs()).all(|point| point < &tolerance));
-
-        let lons = Array1::<f64>::linspace(-360.0, 360.0, 360);
-
-        let equator_lat = array![0.0];
-        let equator_lats = equator_lat.broadcast(lons.len()).unwrap();
-        let equators = Zip::from(&lons)
-            .and(equator_lats)
-            .par_map_collect(|lon, lat| {
-                SphericalPoint::try_from_lonlat(
-                    &array![lon.to_owned(), lat.to_owned()].view(),
-                    true,
-                )
-                .unwrap()
-            });
-        let multi_equator = MultiSphericalPoint::try_from_lonlats(
-            &stack(Axis(1), &[lons.view(), equator_lats]).unwrap().view(),
-            true,
-        )
-        .unwrap();
-
-        assert!(Zip::from(multi_equator.xyz.rows())
-            .and(&equators)
-            .all(|multi, single| multi == single.xyz));
-
-        assert_eq!(
-            multi_equator.xyz.slice(s![.., 2]),
-            Array1::<f64>::zeros(multi_equator.xyz.nrows())
-        );
-
-        let north_pole_lat = array![90.0];
-        let north_pole_lats = north_pole_lat.broadcast(lons.len()).unwrap();
-        let north_poles = Zip::from(&lons)
-            .and(north_pole_lats)
-            .par_map_collect(|lon, lat| {
-                SphericalPoint::try_from_lonlat(
-                    &array![lon.to_owned(), lat.to_owned()].view(),
-                    true,
-                )
-                .unwrap()
-            });
-        let multi_north_pole = MultiSphericalPoint::try_from_lonlats(
-            &stack(Axis(1), &[lons.view(), north_pole_lats])
-                .unwrap()
-                .view(),
-            true,
-        )
-        .unwrap();
-
-        assert!(Zip::from(multi_north_pole.xyz.rows())
-            .and(&north_poles)
-            .all(|multi, single| multi == single.xyz));
-
-        assert!(Zip::from(multi_north_pole.xyz.view())
-            .and(
-                stack(
-                    Axis(1),
-                    &[
-                        Array1::<f64>::zeros(multi_north_pole.xyz.nrows()).view(),
-                        Array1::<f64>::zeros(multi_north_pole.xyz.nrows()).view(),
-                        Array1::<f64>::ones(multi_north_pole.xyz.nrows()).view()
-                    ]
-                )
-                .unwrap()
-                .view()
-            )
-            .all(|test, reference| (test - reference).abs() < tolerance));
-
-        let south_pole_lat = array![-90.0];
-        let south_pole_lats = south_pole_lat.broadcast(lons.len()).unwrap();
-        let south_poles = Zip::from(&lons)
-            .and(south_pole_lats)
-            .par_map_collect(|lon, lat| {
-                SphericalPoint::try_from_lonlat(
-                    &array![lon.to_owned(), lat.to_owned()].view(),
-                    true,
-                )
-                .unwrap()
-            });
-        let multi_south_pole = MultiSphericalPoint::try_from_lonlats(
-            &stack(Axis(1), &[lons.view(), south_pole_lats])
-                .unwrap()
-                .view(),
-            true,
-        )
-        .unwrap();
-
-        assert!(Zip::from(multi_south_pole.xyz.rows())
-            .and(&south_poles)
-            .all(|multi, single| multi == single.xyz));
-
-        assert!(Zip::from(multi_south_pole.xyz.view())
-            .and(
-                stack(
-                    Axis(1),
-                    &[
-                        Array1::<f64>::zeros(multi_north_pole.xyz.nrows()).view(),
-                        Array1::<f64>::zeros(multi_north_pole.xyz.nrows()).view(),
-                        (-1.0 * Array1::<f64>::ones(multi_north_pole.xyz.nrows())).view()
-                    ]
-                )
-                .unwrap()
-                .view()
-            )
-            .all(|test, reference| (test - reference).abs() < tolerance));
-    }
-    #[test]
-    fn test_from_lonlat_domain() {
-        let tolerance = 3e-8;
-
-        let a_lonlat = array![420.0, 0.0];
-        let b_lonlat = array![60.0, 110.0];
-
-        let a = SphericalPoint::try_from_lonlat(&a_lonlat.view(), true).unwrap();
-        let b = SphericalPoint::try_from_lonlat(&b_lonlat.view(), true).unwrap();
-
-        assert!((a.to_lonlat(true) - array![60.0, 0.0]).abs().sum() < tolerance);
-        assert!((b.to_lonlat(true) - array![240.0, 70.0]).abs().sum() < tolerance);
-    }
-    #[test]
-    fn test_to_lonlat() {
-        let xyz = array![
-            [0.0, 0.0, 1.0],
-            [0.0, 0.0, -1.0],
-            [1.0, 1.0, 0.0],
-            [1.0, -1.0, 0.0],
-        ];
-
-        let lonlats = array![[0., 90.], [0., -90.], [45., 0.], [315., 0.]];
-
-        let a = SphericalPoint::try_from(xyz.slice(s![0, ..]).to_owned()).unwrap();
-        let ac = a.to_lonlat(true);
-        assert_eq!(ac, lonlats.slice(s![0, ..]).to_owned());
-
-        let b = SphericalPoint::try_from(xyz.slice(s![1, ..]).to_owned()).unwrap();
-        let bc = b.to_lonlat(true);
-        assert_eq!(bc, lonlats.slice(s![1, ..]).to_owned());
-
-        let c = SphericalPoint::try_from(xyz.slice(s![2, ..]).to_owned()).unwrap();
-        let cc = c.to_lonlat(true);
-        assert_eq!(cc, lonlats.slice(s![2, ..]).to_owned());
-
-        let d = SphericalPoint::try_from(xyz.slice(s![3, ..]).to_owned()).unwrap();
-        let dc = d.to_lonlat(true);
-        assert_eq!(dc, lonlats.slice(s![3, ..]).to_owned());
-
-        let abcd = MultiSphericalPoint::try_from(xyz).unwrap();
-        let abcdc = abcd.to_lonlats(true);
-        assert_eq!(abcdc, lonlats);
-        assert_eq!(
-            abcdc,
-            stack(Axis(0), &[ac.view(), bc.view(), cc.view(), dc.view()]).unwrap()
-        )
-    }
-
-    #[test]
-    fn test_distance() {
-        let tolerance = 3e-8;
-
-        let xyz = array![
-            [0.0, 0.0, 1.0],
-            [0.0, 0.0, -1.0],
-            [1.0, 1.0, 0.0],
-            [1.0, -1.0, 0.0],
-        ];
-
-        let a = SphericalPoint::try_from(xyz.slice(s![0, ..]).to_owned()).unwrap();
-        let b = SphericalPoint::try_from(xyz.slice(s![1, ..]).to_owned()).unwrap();
-        let c = SphericalPoint::try_from(xyz.slice(s![2, ..]).to_owned()).unwrap();
-        let d = SphericalPoint::try_from(xyz.slice(s![3, ..]).to_owned()).unwrap();
-
-        let ab = MultiSphericalPoint::try_from(xyz.slice(s![..2, ..]).to_owned()).unwrap();
-        let bc = MultiSphericalPoint::try_from(xyz.slice(s![1..3, ..]).to_owned()).unwrap();
-        let cd = MultiSphericalPoint::try_from(xyz.slice(s![2.., ..]).to_owned()).unwrap();
-
-        assert_eq!((&a).distance(&b), std::f64::consts::PI);
-        assert_eq!((&b).distance(&c), std::f64::consts::PI / 2.);
-        assert_eq!((&c).distance(&d), std::f64::consts::PI / 2.);
-
-        assert!((&a).distance(&a) < tolerance);
-
-        assert!((&ab).distance(&bc) < tolerance);
-        assert!((&bc).distance(&cd) < tolerance);
-        assert_eq!((&ab).distance(&cd), std::f64::consts::PI / 2.);
-    }
-
-    #[test]
-    fn test_str() {
-        assert_eq!(
-            SphericalPoint::try_from(array![0.0, 1.0, 2.0])
-                .unwrap()
-                .to_string(),
-            "SphericalPoint([0, 1, 2])"
-        );
-        assert_eq!(
-            MultiSphericalPoint::try_from(array![[0.0, 1.0, 2.0]])
-                .unwrap()
-                .to_string(),
-            "MultiSphericalPoint([[0, 1, 2]])"
-        );
-    }
-
-    #[test]
-    fn test_add() {
-        let xyz = array![
-            [0.0, 0.0, 1.0],
-            [0.0, 0.0, -1.0],
-            [1.0, 1.0, 0.0],
-            [1.0, -1.0, 0.0],
-        ];
-
-        let a = SphericalPoint::try_from(xyz.slice(s![0, ..]).to_owned()).unwrap();
-        let b = SphericalPoint::try_from(xyz.slice(s![1, ..]).to_owned()).unwrap();
-        let c = SphericalPoint::try_from(xyz.slice(s![2, ..]).to_owned()).unwrap();
-        let d = SphericalPoint::try_from(xyz.slice(s![3, ..]).to_owned()).unwrap();
-
-        let reference_ab =
-            MultiSphericalPoint::try_from(xyz.slice(s![0..2, ..]).to_owned()).unwrap();
-        let reference_bc =
-            MultiSphericalPoint::try_from(xyz.slice(s![1..3, ..]).to_owned()).unwrap();
-        let reference_cd =
-            MultiSphericalPoint::try_from(xyz.slice(s![2..4, ..]).to_owned()).unwrap();
-        let reference_da = MultiSphericalPoint::try_from(
-            stack(Axis(0), &[xyz.slice(s![3, ..]), xyz.slice(s![0, ..])]).unwrap(),
-        )
-        .unwrap();
-
-        assert_eq!(a.combine(&b), reference_ab);
-
-        assert_eq!(b.combine(&c), reference_bc);
-
-        assert_eq!(c.combine(&d), reference_cd);
-
-        assert_eq!(d.combine(&a), reference_da);
-
-        let reference_abc =
-            MultiSphericalPoint::try_from(xyz.slice(s![..3, ..]).to_owned()).unwrap();
-        let reference_abcd = MultiSphericalPoint::try_from(xyz).unwrap();
-
-        assert_eq!(&reference_ab + &c, &a.combine(&b) + &c);
-        assert_eq!(&a.combine(&b) + &c, reference_abc);
-        assert_eq!(&reference_ab + &c, reference_abc);
-
-        let mut abc = reference_ab.to_owned();
-        abc.push(c);
-        assert_eq!(abc, reference_abc);
-
-        assert_eq!(&reference_ab + &reference_bc, reference_abcd);
-
-        let mut abcd = reference_ab.to_owned();
-        abcd.extend(reference_bc);
-        assert_eq!(abcd, reference_abcd);
-    }
-
-    #[test]
-    fn test_angle() {
-        let a = SphericalPoint::try_from(array![1.0, 0.0, 0.0]).unwrap();
-        let b = SphericalPoint::try_from(array![0.0, 1.0, 0.0]).unwrap();
-        let c = SphericalPoint::try_from(array![0.0, 0.0, 1.0]).unwrap();
-        assert_eq!(b.angle_between(&a, &c, false), std::f64::consts::FRAC_PI_2);
-
-        let a = SphericalPoint::try_from_lonlat(&array![1.0, 0.0].view(), true).unwrap();
-        let b = SphericalPoint::try_from_lonlat(&array![0.0, 1.0].view(), true).unwrap();
-        let c = SphericalPoint::try_from_lonlat(&array![0.0, 0.0].view(), true).unwrap();
-        assert_eq!(b.angle_between(&a, &c, false), std::f64::consts::FRAC_PI_2);
-
-        let a =
-            MultiSphericalPoint::try_from_lonlats(&array![[45.0, 0.0], [0.0, 45.0]].view(), true)
-                .unwrap();
-        let b =
-            MultiSphericalPoint::try_from_lonlats(&array![[90.0, 0.0], [0.0, 90.0]].view(), true)
-                .unwrap();
-        let c = MultiSphericalPoint::try_from_lonlats(
-            &array![[225.0, 0.0], [180.0, 45.0]].view(),
-            true,
-        )
-        .unwrap();
-
-        let angles = b.angles_between(&a, &c, false);
-
-        assert!(!angles.is_any_nan());
-        // TODO: More angle tests
-    }
-
-    #[test]
-    fn test_collinear() {
-        let a = SphericalPoint::try_from_lonlat(&array![0.0, 0.0].view(), true).unwrap();
-        let b = SphericalPoint::try_from(array![1.25, 0.25, 0.35355339059327373]).unwrap();
-        let c = SphericalPoint::try_from_lonlat(&array![45.0, 45.0].view(), true).unwrap();
-        let d = SphericalPoint::try_from_lonlat(&array![0.0, 45.0].view(), true).unwrap();
-        let e = SphericalPoint::try_from_lonlat(&array![0.0, 90.0].view(), true).unwrap();
-        let f = SphericalPoint::try_from_lonlat(&array![180.0, 45.0].view(), true).unwrap();
-
-        assert!(b.collinear(&a, &c));
-        assert!(e.collinear(&d, &f));
-
-        assert!(!b.collinear(&c, &f));
-    }
-
-    #[test]
-    fn test_angle_domain() {
-        let a = SphericalPoint::try_from(array![0.0, 0.0, 0.0]).unwrap();
-        let b = SphericalPoint::try_from(array![0.0, 0.0, 0.0]).unwrap();
-        let c = SphericalPoint::try_from(array![0.0, 0.0, 0.0]).unwrap();
-        assert!(!(b.angle_between(&a, &c, false)).is_infinite());
-    }
-
-    #[test]
-    fn test_distance_domain() {
-        let a = SphericalPoint::try_from(array![std::f64::NAN, 0.0, 0.0]).unwrap();
-        let b = SphericalPoint::try_from(array![0.0, 0.0, std::f64::INFINITY]).unwrap();
-        assert!((&a).distance(&b).is_nan());
-
-        let a = MultiSphericalPoint::try_from(array![
-            [std::f64::NAN, 0.0, 0.0],
-            [std::f64::NAN, 0.0, 0.0],
-            [std::f64::NAN, std::f64::NAN, std::f64::NAN],
-            [0.0, 0.0, 0.0],
-            [0.0, 0.0, 0.0],
-            [0.0, 0.0, std::f64::NAN],
-            [0.0, 0.0, 0.0],
-        ])
-        .unwrap();
-        let b = MultiSphericalPoint::try_from(array![
-            [0.0, 0.0, std::f64::INFINITY],
-            [0.0, 0.0, std::f64::INFINITY],
-            [0.0, 0.0, 0.0],
-            [std::f64::INFINITY, std::f64::INFINITY, std::f64::INFINITY],
-            [0.0, 0.0, std::f64::INFINITY],
-            [0.0, 0.0, 0.0],
-            [0.0, 0.0, 0.0],
-        ])
-        .unwrap();
-
-        assert!(a.distance(&b).is_nan());
-    }
-
-    #[test]
-    fn test_angle_nearly_coplanar_vec() {
-        // test from issue #222 + extra values
-        let a = MultiSphericalPoint::try_from(
-            array![1.0, 1.0, 1.0].broadcast((5, 3)).unwrap().to_owned(),
-        )
-        .unwrap();
-        let b = MultiSphericalPoint::try_from(
-            array![1.0, 0.9999999, 1.0]
-                .broadcast((5, 3))
-                .unwrap()
-                .to_owned(),
-        )
-        .unwrap();
-        let c = MultiSphericalPoint::try_from(array![
-            [1.0, 0.5, 1.0],
-            [1.0, 0.15, 1.0],
-            [1.0, 0.001, 1.0],
-            [1.0, 0.15, 1.0],
-            [-1.0, 0.1, -1.0],
-        ])
-        .unwrap();
-        // vectors = np.stack([A, B, C], axis=0)
-        let a_points: Vec<SphericalPoint> = (&a).into();
-        let b_points: Vec<SphericalPoint> = (&b).into();
-        let c_points: Vec<SphericalPoint> = (&c).into();
-        let angles: Vec<f64> = b_points
-            .iter()
-            .zip(a_points.iter().zip(c_points.iter()))
-            .map(|(b, (a, c))| b.angle_between(&a, &c, false))
-            .collect();
-        let angles = b.angles_between(&a, &c, false);
-
-        assert!(
-            Zip::from(&angles.slice(s![..-1]).abs_sub(std::f64::consts::PI))
-                .all(|value| value < &1e-16)
-        );
-        assert!(Zip::from(&angles.slice(s![-1]).abs()).all(|value| value < &1e-32));
     }
 }

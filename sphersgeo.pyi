@@ -6,7 +6,8 @@ from numpy.typing import NDArray
 
 class SphericalPoint:
     def __init__(
-        self, point: NDArray[float64] | tuple[float, float, float] | list[float]
+        self,
+        point: tuple[float, float, float] | list[float] | NDArray[float],
     ): ...
 
     @classmethod
@@ -29,7 +30,7 @@ class SphericalPoint:
     @property
     def normalized(self) -> SphericalPoint: ...
 
-    def angle(
+    def angle_between(
         self, a: SphericalPoint, b: SphericalPoint, degrees: bool = True
     ) -> float: ...
 
@@ -125,10 +126,10 @@ class SphericalPoint:
 class MultiSphericalPoint:
     def __init__(
         self,
-        points: NDArray[float64]
-        | list[tuple[float, float, float]]
+        points: list[tuple[float, float, float]]
         | list[list[float]]
-        | list[float],
+        | list[float]
+        | NDArray[float],
     ): ...
 
     @classmethod
@@ -158,7 +159,7 @@ class MultiSphericalPoint:
     @property
     def normalized(self) -> MultiSphericalPoint: ...
 
-    def angles(
+    def angles_between(
         self, a: MultiSphericalPoint, b: MultiSphericalPoint, degrees: bool = True
     ) -> NDArray[float64]: ...
 
@@ -256,11 +257,11 @@ class MultiSphericalPoint:
 class ArcString:
     def __init__(
         self,
-        points: NDArray[float64]
-        | MultiSphericalPoint
+        points: MultiSphericalPoint
         | list[tuple[float, float, float]]
         | list[list[float]]
-        | list[float],
+        | list[float]
+        | NDArray[float],
     ): ...
 
     @classmethod
@@ -362,10 +363,11 @@ class ArcString:
 class MultiArcString:
     def __init__(
         self,
-        arcstrings: list[NDArray[float64]]
+        arcstrings: list[ArcString]
         | list[MultiSphericalPoint]
-        | list[list[tuple[float64, float64, float64]]]
-        | list[list[list[float64]]],
+        | list[list[tuple[float, float, float]]]
+        | list[list[list[float]]]
+        | list[NDArray[float]],
     ): ...
 
     @property
@@ -521,9 +523,23 @@ class AngularBounds:
 class SphericalPolygon:
     def __init__(
         self,
-        arcstring: ArcString,
-        interior: None | SphericalPoint,
-        holes: None | MultiArcString,
+        arcstring: ArcString
+        | MultiSphericalPoint
+        | list[tuple[float, float, float]]
+        | list[list[float]]
+        | list[float]
+        | NDArray[float],
+        interior: None
+        | SphericalPoint
+        | tuple[float, float, float]
+        | list[float]
+        | NDArray[float],
+        holes: None
+        | MultiArcString
+        | list[MultiSphericalPoint]
+        | list[list[tuple[float, float, float]]]
+        | list[list[list[float]]]
+        | list[NDArray[float]],
     ): ...
 
     @property

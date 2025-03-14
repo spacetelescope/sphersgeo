@@ -1,7 +1,8 @@
 use crate::{
     angularbounds::AngularBounds,
     arcstring::{
-        vector_arc_angle, vector_arc_angles, vector_arcs_intersection, ArcString, MultiArcString,
+        vector_arcs_angle_between, vector_arcs_angles_between, vector_arcs_intersection, ArcString,
+        MultiArcString,
     },
     geometry::{ExtendMultiGeometry, GeometricOperations, Geometry, MultiGeometry},
     sphericalpoint::{min_1darray, shift_rows, MultiSphericalPoint, SphericalPoint},
@@ -16,20 +17,26 @@ use rayon::iter::IntoParallelIterator;
 use std::{cmp::Ordering, collections::VecDeque, iter::Sum};
 
 /// surface area of a spherical triangle via Girard's theorum
+///
+///     θ_1 + θ_2 + θ_3 − π
+///
+/// References
+/// ----------
+/// - Klain, D. A. (2019). A probabilistic proof of the spherical excess formula (No. arXiv:1909.04505). arXiv. https://doi.org/10.48550/arXiv.1909.04505
 pub fn spherical_triangle_area(
     a: &ArrayView1<f64>,
     b: &ArrayView1<f64>,
     c: &ArrayView1<f64>,
 ) -> f64 {
-    vector_arc_angle(c, a, b, false)
-        + vector_arc_angle(a, b, c, false)
-        + vector_arc_angle(b, c, a, false)
+    vector_arcs_angle_between(c, a, b, false)
+        + vector_arcs_angle_between(a, b, c, false)
+        + vector_arcs_angle_between(b, c, a, false)
         - std::f64::consts::PI
 }
 
 // calculate the interior angles of the polygon comprised of the given points
 pub fn spherical_polygon_interior_angles(points: &ArrayView2<f64>, degrees: bool) -> Array1<f64> {
-    vector_arc_angles(
+    vector_arcs_angles_between(
         &points.slice(s![-2..-2, ..]),
         &shift_rows(points, -2).view(),
         &shift_rows(points, -1).view(),
@@ -196,7 +203,7 @@ impl SphericalPolygon {
             .to_vec();
 
         Self::new(
-            ArcString::from(MultiSphericalPoint::try_from(vertices).unwrap()),
+            ArcString::from(MultiSphericalPoint::try_from(&vertices).unwrap()),
             center.to_owned(),
             None,
         )
