@@ -101,7 +101,7 @@ impl PartialEq for AngularBounds {
 
 impl Geometry for &AngularBounds {
     fn area(&self) -> f64 {
-        let xyz = self.points().xyz;
+        let xyz = self.coords().xyz;
         crate::sphericalpolygon::spherical_triangle_area(
             &xyz.slice(s![0, ..]),
             &xyz.slice(s![1, ..]),
@@ -133,7 +133,7 @@ impl Geometry for &AngularBounds {
     fn convex_hull(&self) -> Option<crate::sphericalpolygon::SphericalPolygon> {
         crate::sphericalpolygon::SphericalPolygon::new(
             crate::arcstring::ArcString {
-                points: self.points(),
+                points: self.coords(),
             },
             self.centroid(),
             None,
@@ -141,7 +141,7 @@ impl Geometry for &AngularBounds {
         .ok()
     }
 
-    fn points(&self) -> crate::sphericalpoint::MultiSphericalPoint {
+    fn coords(&self) -> crate::sphericalpoint::MultiSphericalPoint {
         crate::sphericalpoint::MultiSphericalPoint::try_from_lonlats(
             &array![
                 [self.min_x, self.min_y],
@@ -153,6 +153,18 @@ impl Geometry for &AngularBounds {
             self.degrees,
         )
         .unwrap()
+    }
+
+    fn boundary(&self) -> Option<crate::arcstring::ArcString> {
+        let mut boundary = crate::arcstring::ArcString {
+            points: self.coords(),
+        };
+        boundary.close();
+        Some(boundary)
+    }
+
+    fn representative_point(&self) -> crate::sphericalpoint::SphericalPoint {
+        self.centroid()
     }
 }
 
@@ -169,12 +181,20 @@ impl Geometry for AngularBounds {
         (&self).bounds(degrees)
     }
 
-    fn points(&self) -> crate::sphericalpoint::MultiSphericalPoint {
-        (&self).points()
+    fn coords(&self) -> crate::sphericalpoint::MultiSphericalPoint {
+        (&self).coords()
     }
 
     fn convex_hull(&self) -> Option<crate::sphericalpolygon::SphericalPolygon> {
         (&self).convex_hull()
+    }
+
+    fn boundary(&self) -> Option<crate::arcstring::ArcString> {
+        (&self).boundary()
+    }
+
+    fn representative_point(&self) -> crate::sphericalpoint::SphericalPoint {
+        (&self).representative_point()
     }
 }
 
@@ -182,7 +202,7 @@ impl GeometricOperations<&crate::sphericalpoint::SphericalPoint> for &AngularBou
     fn distance(self, other: &crate::sphericalpoint::SphericalPoint) -> f64 {
         match self.convex_hull() {
             Some(hull) => hull.distance(other),
-            None => self.points().distance(other),
+            None => self.coords().distance(other),
         }
     }
 
@@ -200,12 +220,15 @@ impl GeometricOperations<&crate::sphericalpoint::SphericalPoint> for &AngularBou
         other.intersects(self)
     }
 
-    #[allow(refining_impl_trait)]
     fn intersection(
         self,
         other: &crate::sphericalpoint::SphericalPoint,
     ) -> Option<crate::sphericalpoint::SphericalPoint> {
         other.intersection(self)
+    }
+
+    fn touches(self, other: &crate::sphericalpoint::SphericalPoint) -> bool {
+        self.intersects(other) || self.boundary().unwrap().intersects(other)
     }
 }
 
@@ -244,7 +267,6 @@ impl GeometricOperations<&crate::sphericalpoint::MultiSphericalPoint> for &Angul
             })
     }
 
-    #[allow(refining_impl_trait)]
     fn intersection(
         self,
         other: &crate::sphericalpoint::MultiSphericalPoint,
@@ -283,6 +305,10 @@ impl GeometricOperations<&crate::sphericalpoint::MultiSphericalPoint> for &Angul
             None
         }
     }
+
+    fn touches(self, other: &crate::sphericalpoint::MultiSphericalPoint) -> bool {
+        self.intersects(other) || self.boundary().unwrap().intersects(other)
+    }
 }
 
 impl GeometricOperations<&crate::arcstring::ArcString> for &AngularBounds {
@@ -302,12 +328,15 @@ impl GeometricOperations<&crate::arcstring::ArcString> for &AngularBounds {
         other.intersects(self)
     }
 
-    #[allow(refining_impl_trait)]
     fn intersection(
         self,
         other: &crate::arcstring::ArcString,
     ) -> Option<crate::arcstring::MultiArcString> {
         other.intersection(self)
+    }
+
+    fn touches(self, other: &crate::arcstring::ArcString) -> bool {
+        self.boundary().unwrap().intersects(other)
     }
 }
 
@@ -328,18 +357,21 @@ impl GeometricOperations<&crate::arcstring::MultiArcString> for &AngularBounds {
         other.intersects(self)
     }
 
-    #[allow(refining_impl_trait)]
     fn intersection(
         self,
         other: &crate::arcstring::MultiArcString,
     ) -> Option<crate::arcstring::MultiArcString> {
         other.intersection(self)
     }
+
+    fn touches(self, other: &crate::arcstring::MultiArcString) -> bool {
+        self.boundary().unwrap().intersects(other)
+    }
 }
 
 impl GeometricOperations<&AngularBounds> for &AngularBounds {
     fn distance(self, other: &AngularBounds) -> f64 {
-        self.points().distance(&other.points())
+        self.coords().distance(&other.coords())
     }
 
     fn contains(self, other: &AngularBounds) -> bool {
@@ -368,7 +400,6 @@ impl GeometricOperations<&AngularBounds> for &AngularBounds {
             || other.max_y > self.min_y
     }
 
-    #[allow(refining_impl_trait)]
     fn intersection(self, other: &AngularBounds) -> Option<AngularBounds> {
         let other = if self.degrees == other.degrees {
             other
@@ -411,6 +442,10 @@ impl GeometricOperations<&AngularBounds> for &AngularBounds {
             None
         }
     }
+
+    fn touches(self, other: &AngularBounds) -> bool {
+        self.boundary().unwrap().intersects(other)
+    }
 }
 
 impl GeometricOperations<&crate::sphericalpolygon::SphericalPolygon> for &AngularBounds {
@@ -423,7 +458,7 @@ impl GeometricOperations<&crate::sphericalpolygon::SphericalPolygon> for &Angula
     }
 
     fn within(self, other: &crate::sphericalpolygon::SphericalPolygon) -> bool {
-        self.points().within(other)
+        self.coords().within(other)
     }
 
     fn intersects(self, other: &crate::sphericalpolygon::SphericalPolygon) -> bool {
@@ -431,7 +466,6 @@ impl GeometricOperations<&crate::sphericalpolygon::SphericalPolygon> for &Angula
             .map_or(false, |convex_hull| convex_hull.intersects(other))
     }
 
-    #[allow(refining_impl_trait)]
     fn intersection(
         self,
         other: &crate::sphericalpolygon::SphericalPolygon,
@@ -441,6 +475,10 @@ impl GeometricOperations<&crate::sphericalpolygon::SphericalPolygon> for &Angula
         } else {
             None
         }
+    }
+
+    fn touches(self, other: &crate::sphericalpolygon::SphericalPolygon) -> bool {
+        self.boundary().unwrap().intersects(other)
     }
 }
 
@@ -470,7 +508,6 @@ impl GeometricOperations<&crate::sphericalpolygon::MultiSphericalPolygon> for &A
             .any(|polygon| self.intersects(polygon))
     }
 
-    #[allow(refining_impl_trait)]
     fn intersection(
         self,
         other: &crate::sphericalpolygon::MultiSphericalPolygon,
@@ -480,5 +517,9 @@ impl GeometricOperations<&crate::sphericalpolygon::MultiSphericalPolygon> for &A
             .par_iter()
             .map(|polygon| self.intersection(polygon))
             .sum()
+    }
+
+    fn touches(self, other: &crate::sphericalpolygon::MultiSphericalPolygon) -> bool {
+        self.boundary().unwrap().intersects(other)
     }
 }

@@ -9,20 +9,27 @@ pub trait Geometry {
 
     fn centroid(&self) -> crate::sphericalpoint::SphericalPoint {
         crate::sphericalpoint::SphericalPoint::try_from(
-            self.points().xyz.mean_axis(Axis(0)).unwrap(),
+            self.coords().xyz.mean_axis(Axis(0)).unwrap(),
         )
         .unwrap()
     }
 
     fn bounds(&self, degrees: bool) -> crate::angularbounds::AngularBounds {
-        self.points().bounds(degrees)
+        self.coords().bounds(degrees)
     }
+
+    /// lower dimension geometry that bounds the object
+    /// The boundary of a polygon is a line, the boundary of a line is a collection of points. The boundary of a point is an empty (null) collection.
+    fn boundary(&self) -> Option<impl Geometry>;
 
     fn convex_hull(&self) -> Option<crate::sphericalpolygon::SphericalPolygon> {
-        self.points().convex_hull()
+        self.coords().convex_hull()
     }
 
-    fn points(&self) -> crate::sphericalpoint::MultiSphericalPoint;
+    fn coords(&self) -> crate::sphericalpoint::MultiSphericalPoint;
+
+    /// point guaranteed to be within the object
+    fn representative_point(&self) -> crate::sphericalpoint::SphericalPoint;
 }
 
 pub trait MultiGeometry {
@@ -39,18 +46,27 @@ pub trait ExtendMultiGeometry<T: Geometry> {
 }
 
 pub trait GeometricOperations<O: Geometry = Self> {
+    /// shortest great-circle distance over the sphere from any part of this geometry to another
     fn distance(self, other: O) -> f64;
 
+    /// if this geometry completely envelops another
     fn contains(self, other: O) -> bool;
 
+    /// if this entire geometry is completely within another
     fn within(self, other: O) -> bool;
 
+    /// if any part of this geometry is within another
     fn intersects(self, other: O) -> bool;
 
+    /// any part of this geometry that is within another
+    ///
     /// NOTE: this function is NOT rigorous;
     /// it will only return the lower order of geometry being compared
     /// and will NOT handle degenerate cases or cases of touching vertices
     fn intersection(self, other: O) -> Option<impl Geometry>;
+
+    /// if any part of this geometry (including the boundary) overlaps another
+    fn touches(self, other: O) -> bool;
 }
 
 #[derive(FromPyObject, IntoPyObject, Debug, Clone, PartialEq)]
@@ -120,16 +136,24 @@ impl Geometry for AnyGeometry {
         }
     }
 
-    fn points(&self) -> crate::sphericalpoint::MultiSphericalPoint {
+    fn coords(&self) -> crate::sphericalpoint::MultiSphericalPoint {
         match self {
-            AnyGeometry::SphericalPoint(point) => point.points(),
-            AnyGeometry::MultiSphericalPoint(multipoint) => multipoint.points(),
-            AnyGeometry::ArcString(arcstring) => arcstring.points(),
-            AnyGeometry::MultiArcString(multiarcstring) => multiarcstring.points(),
-            AnyGeometry::AngularBounds(bounding_box) => bounding_box.points(),
-            AnyGeometry::SphericalPolygon(polygon) => polygon.points(),
-            AnyGeometry::MultiSphericalPolygon(multipolygon) => multipolygon.points(),
+            AnyGeometry::SphericalPoint(point) => point.coords(),
+            AnyGeometry::MultiSphericalPoint(multipoint) => multipoint.coords(),
+            AnyGeometry::ArcString(arcstring) => arcstring.coords(),
+            AnyGeometry::MultiArcString(multiarcstring) => multiarcstring.coords(),
+            AnyGeometry::AngularBounds(bounding_box) => bounding_box.coords(),
+            AnyGeometry::SphericalPolygon(polygon) => polygon.coords(),
+            AnyGeometry::MultiSphericalPolygon(multipolygon) => multipolygon.coords(),
         }
+    }
+
+    fn boundary(&self) -> Option<AnyGeometry> {
+        todo!()
+    }
+
+    fn representative_point(&self) -> crate::sphericalpoint::SphericalPoint {
+        todo!()
     }
 }
 

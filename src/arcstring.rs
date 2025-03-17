@@ -2,17 +2,17 @@ use crate::{
     angularbounds::AngularBounds,
     geometry::{ExtendMultiGeometry, GeometricOperations, Geometry, MultiGeometry},
     sphericalpoint::{
-        cross_vector, cross_vectors, normalize_vector, vector_arc_length, MultiSphericalPoint,
-        SphericalPoint,
+        cross_vector, cross_vectors, multipoint_contains_point, normalize_vector,
+        vector_arc_length, vector_length, MultiSphericalPoint, SphericalPoint,
     },
-    sphericalpolygon::{spherical_triangle_area, MultiSphericalPolygon, SphericalPolygon},
+    sphericalpolygon::{MultiSphericalPolygon, SphericalPolygon},
 };
 use numpy::ndarray::{
     array, concatenate, s, stack, Array1, Array2, ArrayView1, ArrayView2, Axis, Zip,
 };
 use pyo3::prelude::*;
 use rayon::prelude::*;
-use std::{collections::VecDeque, iter::Sum, ops::Sub};
+use std::{collections::VecDeque, iter::Sum};
 
 pub fn interpolate_points_along_vector_arc(
     a: &ArrayView1<f64>,
@@ -77,40 +77,49 @@ pub fn vector_arcs_angle_between(
     let abx = normalize_vector(&cross_vector(&a.view(), &b.view()).view());
     let bcx = normalize_vector(&cross_vector(&b.view(), &c.view()).view());
 
-    let x = normalize_vector(&cross_vector(&abx.view(), &bcx.view()).view());
-
-    let diff = (b * x).sum();
-    let inner = (abx * bcx).sum();
-    let mut angle = inner.acos();
-    if diff < 0.0 {
-        angle = (2.0 * std::f64::consts::PI) - angle;
-    }
-
     let tolerance = 3e-11;
-
-    let ab = vector_arc_length(a, b);
-    let bc = vector_arc_length(b, c);
-    let ca = vector_arc_length(c, a);
-
-    let mut angle = if ca < tolerance {
-        // if the opposite side of the triangle is negligibly small
+    let angle = if vector_length(&abx.view()) < tolerance || vector_length(&bcx.view()) < tolerance
+    {
         0.0
-    } else if ab < tolerance || bc < tolerance {
-        (1.0 - ca.powi(2) / 2.0).acos()
+    } else if vectors_collinear(a, b, c) {
+        std::f64::consts::PI
     } else {
-        ((ca.cos() - bc.cos() * ab.cos()) / (bc.sin() * ab.sin())).acos()
+        let x = normalize_vector(&cross_vector(&abx.view(), &bcx.view()).view());
+
+        let diff = (b * x).sum();
+        let inner = (abx * bcx).sum();
+        let mut angle = inner.acos();
+        if diff < 0.0 {
+            angle = (2.0 * std::f64::consts::PI) - angle;
+        }
+        angle
     };
 
-    // if all three points are collinear, the result will be NaN
-    if angle.is_nan() {
-        angle = std::f64::consts::PI;
-    }
+    angle
 
-    if degrees {
-        angle.to_degrees()
-    } else {
-        angle
-    }
+    // let ab = vector_arc_length(a, b);
+    // let bc = vector_arc_length(b, c);
+    // let ca = vector_arc_length(c, a);
+
+    // let mut angle = if ca < tolerance {
+    //     // if the opposite side of the triangle is negligibly small
+    //     0.0
+    // } else if ab < tolerance || bc < tolerance {
+    //     (1.0 - ca.powi(2) / 2.0).acos()
+    // } else {
+    //     ((ca.cos() - bc.cos() * ab.cos()) / (bc.sin() * ab.sin())).acos()
+    // };
+
+    // // if all three points are collinear, the result will be NaN
+    // if angle.is_nan() {
+    //     angle = std::f64::consts::PI;
+    // }
+
+    // if degrees {
+    //     angle.to_degrees()
+    // } else {
+    //     angle
+    // }
 }
 
 /// given three arrays of XYZ vectors on the unit sphere (A, B, and C), element-wise retrieve the angles at B between arcs AB and arcs BC
@@ -214,6 +223,36 @@ pub fn vector_arcs_intersection(
     } else {
         None
     }
+}
+
+fn arcstring_contains_point(arcstring: &ArcString, point: &ArrayView1<f64>) -> bool {
+    // check if point is one of the vertices of this linestring
+    if multipoint_contains_point(
+        &arcstring.points.xyz.view(),
+        point,
+        &arcstring.points.kdtree,
+    ) {
+        return true;
+    }
+
+    let lonlat = crate::sphericalpoint::vector_to_lonlat(point, false);
+    // check if point is within the bounding box
+    if arcstring
+        .bounds(false)
+        .contains_lonlat(lonlat[0], lonlat[1])
+    {
+        // compare lengths to endpoints with the arc length
+        for index in 0..arcstring.points.xyz.nrows() - 1 {
+            let a = arcstring.points.xyz.slice(s![index, ..]);
+            let b = arcstring.points.xyz.slice(s![index + 1, ..]);
+
+            if vectors_collinear(&a.view(), &point, &b.view()) {
+                return true;
+            }
+        }
+    }
+
+    return false;
 }
 
 /// series of great circle arcs along the sphere
@@ -354,8 +393,16 @@ impl Geometry for &ArcString {
         (&self.points).convex_hull()
     }
 
-    fn points(&self) -> MultiSphericalPoint {
+    fn coords(&self) -> MultiSphericalPoint {
         self.points.to_owned()
+    }
+
+    fn boundary(&self) -> Option<MultiSphericalPoint> {
+        Some(self.points.to_owned())
+    }
+
+    fn representative_point(&self) -> crate::sphericalpoint::SphericalPoint {
+        self.points.representative_point()
     }
 }
 
@@ -372,8 +419,16 @@ impl Geometry for ArcString {
         (&self).convex_hull()
     }
 
-    fn points(&self) -> MultiSphericalPoint {
-        (&self).points()
+    fn coords(&self) -> MultiSphericalPoint {
+        (&self).coords()
+    }
+
+    fn boundary(&self) -> Option<MultiSphericalPoint> {
+        (&self).boundary()
+    }
+
+    fn representative_point(&self) -> crate::sphericalpoint::SphericalPoint {
+        (&self).representative_point()
     }
 }
 
@@ -383,26 +438,7 @@ impl GeometricOperations<&SphericalPoint> for &ArcString {
     }
 
     fn contains(self, other: &SphericalPoint) -> bool {
-        // check if point is one of the vertices of this linestring
-        if (&self.points).contains(other) {
-            return true;
-        }
-
-        // check if point is within the bounding box
-        if self.bounds(false).contains(other) {
-            // compare lengths to endpoints with the arc length
-            for index in 0..self.points.xyz.nrows() - 1 {
-                let a = self.points.xyz.slice(s![index, ..]);
-                let b = self.points.xyz.slice(s![index + 1, ..]);
-                let p = other.xyz.view();
-
-                if vectors_collinear(&a.view(), &p.view(), &b.view()) {
-                    return true;
-                }
-            }
-        }
-
-        return false;
+        arcstring_contains_point(self, &other.xyz.view())
     }
 
     fn within(self, _: &SphericalPoint) -> bool {
@@ -410,16 +446,19 @@ impl GeometricOperations<&SphericalPoint> for &ArcString {
     }
 
     fn intersects(self, other: &SphericalPoint) -> bool {
-        self.intersection(other).is_some()
+        self.contains(other)
     }
 
-    #[allow(refining_impl_trait)]
     fn intersection(self, other: &SphericalPoint) -> Option<SphericalPoint> {
         if self.contains(other) {
             Some(other.to_owned())
         } else {
             None
         }
+    }
+
+    fn touches(self, other: &SphericalPoint) -> bool {
+        self.intersects(other)
     }
 }
 
@@ -439,13 +478,14 @@ impl GeometricOperations<&MultiSphericalPoint> for &ArcString {
             .any(|vector, lonlat| {
                 // check if point is within the bounding box
                 if self.bounds(false).contains_lonlat(lonlat[0], lonlat[1]) {
+                    let p = vector.view();
+
                     // compare lengths to endpoints with the arc length
                     for index in 0..self.points.xyz.nrows() - 1 {
                         let a = self.points.xyz.slice(s![index, ..]);
                         let b = self.points.xyz.slice(s![index + 1, ..]);
-                        let p = vector.view();
 
-                        if vectors_collinear(&a.view(), &p.view(), &b.view()) {
+                        if vectors_collinear(&a.view(), &p, &b.view()) {
                             return true;
                         }
                     }
@@ -463,9 +503,14 @@ impl GeometricOperations<&MultiSphericalPoint> for &ArcString {
         other.intersects(self)
     }
 
-    #[allow(refining_impl_trait)]
     fn intersection(self, other: &MultiSphericalPoint) -> Option<MultiSphericalPoint> {
         other.intersection(self)
+    }
+
+    fn touches(self, other: &MultiSphericalPoint) -> bool {
+        self.intersects(other)
+            || Zip::from(other.xyz.rows())
+                .any(|point| arcstring_contains_point(self, &point.view()))
     }
 }
 
@@ -479,20 +524,18 @@ impl GeometricOperations<&ArcString> for &ArcString {
     }
 
     fn within(self, other: &ArcString) -> bool {
-        self.points.xyz.rows().into_iter().all(|point| {
-            unsafe { SphericalPoint::try_from(point.to_owned()).unwrap_unchecked() }.within(other)
-        })
+        Zip::from(self.points.xyz.rows()).all(|xyz| arcstring_contains_point(other, &xyz))
     }
 
     fn intersects(self, other: &ArcString) -> bool {
         // we can't use the Bentley-Ottmann sweep-line algorithm here :/
         // because a sphere is an enclosed infinite space so there's no good way to sort by longitude
         // so instead we use brute-force
-        for arc_index in 0..self.points.len() - 1 {
+        for arc_index in 0..self.points.xyz.nrows() - 1 {
             let a_0 = self.points.xyz.slice(s![arc_index, ..]);
             let a_1 = self.points.xyz.slice(s![arc_index + 1, ..]);
 
-            for other_arc_index in 0..other.points.len() - 1 {
+            for other_arc_index in 0..other.points.xyz.nrows() - 1 {
                 let b_0 = other.points.xyz.slice(s![other_arc_index, ..]);
                 let b_1 = other.points.xyz.slice(s![other_arc_index + 1, ..]);
 
@@ -505,18 +548,17 @@ impl GeometricOperations<&ArcString> for &ArcString {
         return false;
     }
 
-    #[allow(refining_impl_trait)]
     fn intersection(self, other: &ArcString) -> Option<MultiSphericalPoint> {
         let mut intersections = vec![];
 
         // we can't use the Bentley-Ottmann sweep-line algorithm here :/
         // because a sphere is an enclosed infinite space so there's no good way to sort by longitude
         // so instead we use brute-force
-        for arc_index in 0..self.points.len() - 1 {
+        for arc_index in 0..self.points.xyz.nrows() - 1 {
             let a_0 = self.points.xyz.slice(s![arc_index, ..]);
             let a_1 = self.points.xyz.slice(s![arc_index + 1, ..]);
 
-            for other_arc_index in 0..other.points.len() - 1 {
+            for other_arc_index in 0..other.points.xyz.nrows() - 1 {
                 let b_0 = other.points.xyz.slice(s![other_arc_index, ..]);
                 let b_1 = other.points.xyz.slice(s![other_arc_index + 1, ..]);
 
@@ -531,6 +573,12 @@ impl GeometricOperations<&ArcString> for &ArcString {
         } else {
             None
         }
+    }
+
+    fn touches(self, other: &ArcString) -> bool {
+        self.intersects(other)
+            || Zip::from(other.points.xyz.rows())
+                .any(|point| arcstring_contains_point(self, &point.view()))
     }
 }
 
@@ -551,9 +599,14 @@ impl GeometricOperations<&MultiArcString> for &ArcString {
         other.intersects(self)
     }
 
-    #[allow(refining_impl_trait)]
     fn intersection(self, other: &MultiArcString) -> Option<MultiSphericalPoint> {
         other.intersection(self)
+    }
+
+    fn touches(self, other: &MultiArcString) -> bool {
+        self.intersects(other)
+            || Zip::from(other.coords().xyz.rows())
+                .any(|point| arcstring_contains_point(self, &point.view()))
     }
 }
 
@@ -577,7 +630,6 @@ impl GeometricOperations<&AngularBounds> for &ArcString {
             .map_or(false, |convex_hull| convex_hull.intersects(self))
     }
 
-    #[allow(refining_impl_trait)]
     fn intersection(self, other: &AngularBounds) -> Option<MultiArcString> {
         // TODO: this could probably just be a clip by bounds
         if let Some(convex_hull) = other.convex_hull() {
@@ -585,6 +637,12 @@ impl GeometricOperations<&AngularBounds> for &ArcString {
         } else {
             None
         }
+    }
+
+    fn touches(self, other: &AngularBounds) -> bool {
+        self.intersects(other)
+            || Zip::from(other.coords().xyz.rows())
+                .any(|point| arcstring_contains_point(self, &point.view()))
     }
 }
 
@@ -605,9 +663,12 @@ impl GeometricOperations<&SphericalPolygon> for &ArcString {
         other.intersects(self)
     }
 
-    #[allow(refining_impl_trait)]
     fn intersection(self, other: &SphericalPolygon) -> Option<MultiArcString> {
         other.intersection(self)
+    }
+
+    fn touches(self, other: &SphericalPolygon) -> bool {
+        self.intersects(other)
     }
 }
 
@@ -628,9 +689,12 @@ impl GeometricOperations<&MultiSphericalPolygon> for &ArcString {
         other.intersects(self)
     }
 
-    #[allow(refining_impl_trait)]
     fn intersection(self, other: &MultiSphericalPolygon) -> Option<MultiArcString> {
         other.intersection(self)
+    }
+
+    fn touches(self, other: &MultiSphericalPolygon) -> bool {
+        self.intersects(other)
     }
 }
 
@@ -756,14 +820,22 @@ impl Geometry for &MultiArcString {
     }
 
     fn convex_hull(&self) -> Option<crate::sphericalpolygon::SphericalPolygon> {
-        self.points().convex_hull()
+        self.coords().convex_hull()
     }
 
-    fn points(&self) -> crate::sphericalpoint::MultiSphericalPoint {
+    fn coords(&self) -> crate::sphericalpoint::MultiSphericalPoint {
         self.arcstrings
             .par_iter()
             .map(|arcstring| arcstring.to_owned().points)
             .sum()
+    }
+
+    fn boundary(&self) -> Option<MultiSphericalPoint> {
+        Some(self.coords())
+    }
+
+    fn representative_point(&self) -> crate::sphericalpoint::SphericalPoint {
+        self.arcstrings[0].representative_point()
     }
 }
 
@@ -780,12 +852,20 @@ impl Geometry for MultiArcString {
         (&self).bounds(degrees)
     }
 
-    fn points(&self) -> crate::sphericalpoint::MultiSphericalPoint {
-        (&self).points()
+    fn coords(&self) -> crate::sphericalpoint::MultiSphericalPoint {
+        (&self).coords()
     }
 
     fn convex_hull(&self) -> Option<crate::sphericalpolygon::SphericalPolygon> {
         (&self).convex_hull()
+    }
+
+    fn boundary(&self) -> Option<MultiSphericalPoint> {
+        (&self).boundary()
+    }
+
+    fn representative_point(&self) -> crate::sphericalpoint::SphericalPoint {
+        (&self).representative_point()
     }
 }
 
@@ -844,9 +924,12 @@ impl GeometricOperations<&SphericalPoint> for &MultiArcString {
         self.contains(other)
     }
 
-    #[allow(refining_impl_trait)]
     fn intersection(self, other: &SphericalPoint) -> Option<SphericalPoint> {
         other.intersection(self)
+    }
+
+    fn touches(self, other: &SphericalPoint) -> bool {
+        self.intersects(other)
     }
 }
 
@@ -873,7 +956,6 @@ impl GeometricOperations<&MultiSphericalPoint> for &MultiArcString {
         self.intersection(other).is_some()
     }
 
-    #[allow(refining_impl_trait)]
     fn intersection(self, other: &MultiSphericalPoint) -> Option<MultiSphericalPoint> {
         let intersections: Vec<MultiSphericalPoint> = self
             .arcstrings
@@ -886,6 +968,10 @@ impl GeometricOperations<&MultiSphericalPoint> for &MultiArcString {
         } else {
             None
         }
+    }
+
+    fn touches(self, other: &MultiSphericalPoint) -> bool {
+        self.intersects(other)
     }
 }
 
@@ -916,7 +1002,6 @@ impl GeometricOperations<&ArcString> for &MultiArcString {
             .any(|arcstring| arcstring.intersects(other))
     }
 
-    #[allow(refining_impl_trait)]
     fn intersection(self, other: &ArcString) -> Option<MultiSphericalPoint> {
         let intersections: Vec<MultiSphericalPoint> = self
             .arcstrings
@@ -929,6 +1014,10 @@ impl GeometricOperations<&ArcString> for &MultiArcString {
         } else {
             None
         }
+    }
+
+    fn touches(self, other: &ArcString) -> bool {
+        self.intersects(other)
     }
 }
 
@@ -959,7 +1048,6 @@ impl GeometricOperations<&MultiArcString> for &MultiArcString {
             .any(|arcstring| arcstring.intersects(other))
     }
 
-    #[allow(refining_impl_trait)]
     fn intersection(self, other: &MultiArcString) -> Option<MultiSphericalPoint> {
         let intersections: Vec<MultiSphericalPoint> = self
             .arcstrings
@@ -972,6 +1060,10 @@ impl GeometricOperations<&MultiArcString> for &MultiArcString {
         } else {
             None
         }
+    }
+
+    fn touches(self, other: &MultiArcString) -> bool {
+        self.intersects(other)
     }
 }
 
@@ -1000,12 +1092,15 @@ impl GeometricOperations<&AngularBounds> for &MultiArcString {
             .any(|arcstring| arcstring.intersects(other))
     }
 
-    #[allow(refining_impl_trait)]
     fn intersection(self, other: &AngularBounds) -> Option<MultiArcString> {
         self.arcstrings
             .par_iter()
             .map(|arcstring| arcstring.intersection(other))
             .sum()
+    }
+
+    fn touches(self, other: &AngularBounds) -> bool {
+        self.intersects(other)
     }
 }
 
@@ -1034,12 +1129,15 @@ impl GeometricOperations<&SphericalPolygon> for &MultiArcString {
             .any(|arcstring| arcstring.intersects(other))
     }
 
-    #[allow(refining_impl_trait)]
     fn intersection(self, other: &SphericalPolygon) -> Option<MultiArcString> {
         self.arcstrings
             .par_iter()
             .map(|arcstring| arcstring.intersection(other))
             .sum()
+    }
+
+    fn touches(self, other: &SphericalPolygon) -> bool {
+        self.intersects(other)
     }
 }
 
@@ -1068,11 +1166,14 @@ impl GeometricOperations<&MultiSphericalPolygon> for &MultiArcString {
             .any(|arcstring| arcstring.intersects(other))
     }
 
-    #[allow(refining_impl_trait)]
     fn intersection(self, other: &MultiSphericalPolygon) -> Option<MultiArcString> {
         self.arcstrings
             .par_iter()
             .map(|arcstring| arcstring.intersection(other))
             .sum()
+    }
+
+    fn touches(self, other: &MultiSphericalPolygon) -> bool {
+        self.intersects(other)
     }
 }

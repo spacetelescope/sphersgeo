@@ -1,4 +1,4 @@
-#![allow(unused_variables)]
+#![allow(unused_variables, refining_impl_trait)]
 mod angularbounds;
 mod arcstring;
 mod geometry;
@@ -174,9 +174,21 @@ mod py_sphersgeo {
         }
 
         #[getter]
-        #[pyo3(name = "points")]
-        fn py_points(&self) -> MultiSphericalPoint {
-            self.points()
+        #[pyo3(name = "coords")]
+        fn py_coords(&self) -> MultiSphericalPoint {
+            self.coords()
+        }
+
+        #[getter]
+        #[pyo3(name = "boundary")]
+        fn py_boundary(&self) -> Option<SphericalPoint> {
+            self.boundary()
+        }
+
+        #[getter]
+        #[pyo3(name = "representative_point")]
+        fn py_representative_point(&self) -> SphericalPoint {
+            self.representative_point()
         }
 
         #[pyo3(name = "distance")]
@@ -258,28 +270,21 @@ mod py_sphersgeo {
             }
         }
 
-        fn __add__(&self, other: PySphericalPointInputs) -> PyResult<SphericalPoint> {
-            Ok(match other {
-                PySphericalPointInputs::Point(point) => self + &point,
-                PySphericalPointInputs::NumpyArray(array) => self + &array.as_array(),
-                PySphericalPointInputs::Tuple((x, y, z)) => self + &array![x, y, z].view(),
-                PySphericalPointInputs::List(items) => {
-                    self + &Self::try_from(items)
-                        .map_err(|err| PyValueError::new_err(format!("{:?}", err)))?
-                }
-            })
+        #[pyo3(name = "touches")]
+        fn py_touches(&self, other: AnyGeometry) -> bool {
+            match other {
+                AnyGeometry::SphericalPoint(point) => self.touches(&point),
+                AnyGeometry::MultiSphericalPoint(multipoint) => self.touches(&multipoint),
+                AnyGeometry::ArcString(arcstring) => self.touches(&arcstring),
+                AnyGeometry::MultiArcString(multiarcstring) => self.touches(&multiarcstring),
+                AnyGeometry::AngularBounds(bounds) => self.touches(&bounds),
+                AnyGeometry::SphericalPolygon(polygon) => self.touches(&polygon),
+                AnyGeometry::MultiSphericalPolygon(multipolygon) => self.touches(&multipolygon),
+            }
         }
 
-        fn __iadd__(&mut self, other: PySphericalPointInputs) -> PyResult<()> {
-            Ok(match other {
-                PySphericalPointInputs::Point(point) => *self += &point,
-                PySphericalPointInputs::NumpyArray(array) => *self += &array.as_array(),
-                PySphericalPointInputs::Tuple((x, y, z)) => *self += &array![x, y, z].view(),
-                PySphericalPointInputs::List(items) => {
-                    *self += &Self::try_from(items)
-                        .map_err(|err| PyValueError::new_err(format!("{:?}", err)))?
-                }
-            })
+        fn __add__(&self, other: &Self) -> MultiSphericalPoint {
+            self + other
         }
 
         fn __eq__(&self, other: &Self) -> bool {
@@ -471,9 +476,21 @@ mod py_sphersgeo {
         }
 
         #[getter]
-        #[pyo3(name = "points")]
-        fn py_points(&self) -> MultiSphericalPoint {
-            self.points()
+        #[pyo3(name = "coords")]
+        fn py_coords(&self) -> MultiSphericalPoint {
+            self.coords()
+        }
+
+        #[getter]
+        #[pyo3(name = "boundary")]
+        fn py_boundary(&self) -> Option<MultiSphericalPoint> {
+            self.boundary()
+        }
+
+        #[getter]
+        #[pyo3(name = "representative_point")]
+        fn py_representative_point(&self) -> SphericalPoint {
+            self.representative_point()
         }
 
         /// closest angular distance on the sphere between this geometry and another
@@ -553,6 +570,19 @@ mod py_sphersgeo {
                 AnyGeometry::MultiSphericalPolygon(multipolygon) => self
                     .intersection(&multipolygon)
                     .map(|geometry| AnyGeometry::MultiSphericalPoint(geometry)),
+            }
+        }
+
+        #[pyo3(name = "touches")]
+        fn py_touches(&self, other: AnyGeometry) -> bool {
+            match other {
+                AnyGeometry::SphericalPoint(point) => self.touches(&point),
+                AnyGeometry::MultiSphericalPoint(multipoint) => self.touches(&multipoint),
+                AnyGeometry::ArcString(arcstring) => self.touches(&arcstring),
+                AnyGeometry::MultiArcString(multiarcstring) => self.touches(&multiarcstring),
+                AnyGeometry::AngularBounds(bounds) => self.touches(&bounds),
+                AnyGeometry::SphericalPolygon(polygon) => self.touches(&polygon),
+                AnyGeometry::MultiSphericalPolygon(multipolygon) => self.touches(&multipolygon),
             }
         }
 
@@ -689,9 +719,21 @@ mod py_sphersgeo {
         }
 
         #[getter]
-        #[pyo3(name = "points")]
-        fn py_points(&self) -> MultiSphericalPoint {
-            self.points()
+        #[pyo3(name = "coords")]
+        fn py_coords(&self) -> MultiSphericalPoint {
+            self.coords()
+        }
+
+        #[getter]
+        #[pyo3(name = "boundary")]
+        fn py_boundary(&self) -> Option<MultiSphericalPoint> {
+            self.boundary()
+        }
+
+        #[getter]
+        #[pyo3(name = "representative_point")]
+        fn py_representative_point(&self) -> SphericalPoint {
+            self.representative_point()
         }
 
         /// closest angular distance on the sphere between this geometry and another
@@ -771,6 +813,19 @@ mod py_sphersgeo {
                 AnyGeometry::MultiSphericalPolygon(multipolygon) => self
                     .intersection(&multipolygon)
                     .map(|geometry| AnyGeometry::MultiArcString(geometry)),
+            }
+        }
+
+        #[pyo3(name = "touches")]
+        fn py_touches(&self, other: AnyGeometry) -> bool {
+            match other {
+                AnyGeometry::SphericalPoint(point) => self.touches(&point),
+                AnyGeometry::MultiSphericalPoint(multipoint) => self.touches(&multipoint),
+                AnyGeometry::ArcString(arcstring) => self.touches(&arcstring),
+                AnyGeometry::MultiArcString(multiarcstring) => self.touches(&multiarcstring),
+                AnyGeometry::AngularBounds(bounds) => self.touches(&bounds),
+                AnyGeometry::SphericalPolygon(polygon) => self.touches(&polygon),
+                AnyGeometry::MultiSphericalPolygon(multipolygon) => self.touches(&multipolygon),
             }
         }
 
@@ -853,9 +908,21 @@ mod py_sphersgeo {
         }
 
         #[getter]
-        #[pyo3(name = "points")]
-        fn py_points(&self) -> MultiSphericalPoint {
-            self.points()
+        #[pyo3(name = "coords")]
+        fn py_coords(&self) -> MultiSphericalPoint {
+            self.coords()
+        }
+
+        #[getter]
+        #[pyo3(name = "boundary")]
+        fn py_boundary(&self) -> Option<MultiSphericalPoint> {
+            self.boundary()
+        }
+
+        #[getter]
+        #[pyo3(name = "representative_point")]
+        fn py_representative_point(&self) -> SphericalPoint {
+            self.representative_point()
         }
 
         /// closest angular distance on the sphere between this geometry and another
@@ -938,6 +1005,19 @@ mod py_sphersgeo {
             }
         }
 
+        #[pyo3(name = "touches")]
+        fn py_touches(&self, other: AnyGeometry) -> bool {
+            match other {
+                AnyGeometry::SphericalPoint(point) => self.touches(&point),
+                AnyGeometry::MultiSphericalPoint(multipoint) => self.touches(&multipoint),
+                AnyGeometry::ArcString(arcstring) => self.touches(&arcstring),
+                AnyGeometry::MultiArcString(multiarcstring) => self.touches(&multiarcstring),
+                AnyGeometry::AngularBounds(bounds) => self.touches(&bounds),
+                AnyGeometry::SphericalPolygon(polygon) => self.touches(&polygon),
+                AnyGeometry::MultiSphericalPolygon(multipolygon) => self.touches(&multipolygon),
+            }
+        }
+
         #[getter]
         #[pyo3(name = "parts")]
         fn py_parts(&self) -> Vec<ArcString> {
@@ -979,9 +1059,21 @@ mod py_sphersgeo {
         }
 
         #[getter]
-        #[pyo3(name = "points")]
-        fn py_points(&self) -> MultiSphericalPoint {
-            self.points()
+        #[pyo3(name = "coords")]
+        fn py_coords(&self) -> MultiSphericalPoint {
+            self.coords()
+        }
+
+        #[getter]
+        #[pyo3(name = "boundary")]
+        fn py_boundary(&self) -> Option<ArcString> {
+            self.boundary()
+        }
+
+        #[getter]
+        #[pyo3(name = "representative_point")]
+        fn py_representative_point(&self) -> SphericalPoint {
+            self.representative_point()
         }
 
         #[getter]
@@ -1087,6 +1179,19 @@ mod py_sphersgeo {
             }
         }
 
+        #[pyo3(name = "touches")]
+        fn py_touches(&self, other: AnyGeometry) -> bool {
+            match other {
+                AnyGeometry::SphericalPoint(point) => self.touches(&point),
+                AnyGeometry::MultiSphericalPoint(multipoint) => self.touches(&multipoint),
+                AnyGeometry::ArcString(arcstring) => self.touches(&arcstring),
+                AnyGeometry::MultiArcString(multiarcstring) => self.touches(&multiarcstring),
+                AnyGeometry::AngularBounds(bounds) => self.touches(&bounds),
+                AnyGeometry::SphericalPolygon(polygon) => self.touches(&polygon),
+                AnyGeometry::MultiSphericalPolygon(multipolygon) => self.touches(&multipolygon),
+            }
+        }
+
         fn __eq__(&self, other: &Self) -> bool {
             self == other
         }
@@ -1174,9 +1279,21 @@ mod py_sphersgeo {
         }
 
         #[getter]
-        #[pyo3(name = "points")]
-        fn py_points(&self) -> MultiSphericalPoint {
-            self.points()
+        #[pyo3(name = "coords")]
+        fn py_coords(&self) -> MultiSphericalPoint {
+            self.coords()
+        }
+
+        #[getter]
+        #[pyo3(name = "boundary")]
+        fn py_boundary(&self) -> Option<ArcString> {
+            self.boundary()
+        }
+
+        #[getter]
+        #[pyo3(name = "representative_point")]
+        fn py_representative_point(&self) -> SphericalPoint {
+            self.representative_point()
         }
 
         /// closest angular distance on the sphere between this geometry and another
@@ -1259,6 +1376,19 @@ mod py_sphersgeo {
             }
         }
 
+        #[pyo3(name = "touches")]
+        fn py_touches(&self, other: AnyGeometry) -> bool {
+            match other {
+                AnyGeometry::SphericalPoint(point) => self.touches(&point),
+                AnyGeometry::MultiSphericalPoint(multipoint) => self.touches(&multipoint),
+                AnyGeometry::ArcString(arcstring) => self.touches(&arcstring),
+                AnyGeometry::MultiArcString(multiarcstring) => self.touches(&multiarcstring),
+                AnyGeometry::AngularBounds(bounds) => self.touches(&bounds),
+                AnyGeometry::SphericalPolygon(polygon) => self.touches(&polygon),
+                AnyGeometry::MultiSphericalPolygon(multipolygon) => self.touches(&multipolygon),
+            }
+        }
+
         fn __eq__(&self, other: &Self) -> bool {
             self == other
         }
@@ -1324,9 +1454,21 @@ mod py_sphersgeo {
         }
 
         #[getter]
-        #[pyo3(name = "points")]
-        fn py_points(&self) -> MultiSphericalPoint {
-            self.points()
+        #[pyo3(name = "coords")]
+        fn py_coords(&self) -> MultiSphericalPoint {
+            self.coords()
+        }
+
+        #[getter]
+        #[pyo3(name = "boundary")]
+        fn py_boundary(&self) -> Option<MultiArcString> {
+            self.boundary()
+        }
+
+        #[getter]
+        #[pyo3(name = "representative_point")]
+        fn py_representative_point(&self) -> SphericalPoint {
+            self.representative_point()
         }
 
         #[pyo3(name = "distance")]
@@ -1405,6 +1547,19 @@ mod py_sphersgeo {
                 AnyGeometry::MultiSphericalPolygon(multipolygon) => self
                     .intersection(&multipolygon)
                     .map(|geometry| AnyGeometry::MultiSphericalPolygon(geometry)),
+            }
+        }
+
+        #[pyo3(name = "touches")]
+        fn py_touches(&self, other: AnyGeometry) -> bool {
+            match other {
+                AnyGeometry::SphericalPoint(point) => self.touches(&point),
+                AnyGeometry::MultiSphericalPoint(multipoint) => self.touches(&multipoint),
+                AnyGeometry::ArcString(arcstring) => self.touches(&arcstring),
+                AnyGeometry::MultiArcString(multiarcstring) => self.touches(&multiarcstring),
+                AnyGeometry::AngularBounds(bounds) => self.touches(&bounds),
+                AnyGeometry::SphericalPolygon(polygon) => self.touches(&polygon),
+                AnyGeometry::MultiSphericalPolygon(multipolygon) => self.touches(&multipolygon),
             }
         }
 

@@ -232,8 +232,16 @@ impl Geometry for &SphericalPolygon {
         self.exterior.convex_hull()
     }
 
-    fn points(&self) -> crate::sphericalpoint::MultiSphericalPoint {
-        self.exterior.points()
+    fn coords(&self) -> crate::sphericalpoint::MultiSphericalPoint {
+        self.exterior.coords()
+    }
+
+    fn boundary(&self) -> Option<ArcString> {
+        Some(self.exterior.to_owned())
+    }
+
+    fn representative_point(&self) -> crate::sphericalpoint::SphericalPoint {
+        self.interior_point.to_owned()
     }
 }
 
@@ -250,8 +258,16 @@ impl Geometry for SphericalPolygon {
         (&self).convex_hull()
     }
 
-    fn points(&self) -> crate::sphericalpoint::MultiSphericalPoint {
-        (&self).exterior.points()
+    fn coords(&self) -> crate::sphericalpoint::MultiSphericalPoint {
+        (&self).exterior.coords()
+    }
+
+    fn boundary(&self) -> Option<ArcString> {
+        (&self).boundary()
+    }
+
+    fn representative_point(&self) -> crate::sphericalpoint::SphericalPoint {
+        (&self).representative_point()
     }
 }
 
@@ -299,9 +315,12 @@ impl GeometricOperations<&SphericalPoint> for &SphericalPolygon {
         self.contains(other)
     }
 
-    #[allow(refining_impl_trait)]
     fn intersection(self, other: &SphericalPoint) -> Option<SphericalPoint> {
         other.intersection(self)
+    }
+
+    fn touches(self, other: &SphericalPoint) -> bool {
+        self.exterior.intersects(other) || self.intersects(other)
     }
 }
 
@@ -387,7 +406,6 @@ impl GeometricOperations<&MultiSphericalPoint> for &SphericalPolygon {
         return false;
     }
 
-    #[allow(refining_impl_trait)]
     fn intersection(self, other: &MultiSphericalPoint) -> Option<MultiSphericalPoint> {
         let mut intersections = vec![];
 
@@ -430,6 +448,10 @@ impl GeometricOperations<&MultiSphericalPoint> for &SphericalPolygon {
             None
         }
     }
+
+    fn touches(self, other: &MultiSphericalPoint) -> bool {
+        self.exterior.intersects(other) || self.intersects(other)
+    }
 }
 
 impl GeometricOperations<&ArcString> for &SphericalPolygon {
@@ -458,9 +480,12 @@ impl GeometricOperations<&ArcString> for &SphericalPolygon {
         }
     }
 
-    #[allow(refining_impl_trait)]
     fn intersection(self, other: &ArcString) -> Option<MultiArcString> {
         todo!()
+    }
+
+    fn touches(self, other: &ArcString) -> bool {
+        self.exterior.intersects(&other.points) || self.intersects(other)
     }
 }
 
@@ -485,9 +510,12 @@ impl GeometricOperations<&MultiArcString> for &SphericalPolygon {
         other.intersects(self)
     }
 
-    #[allow(refining_impl_trait)]
     fn intersection(self, other: &MultiArcString) -> Option<MultiArcString> {
         todo!()
+    }
+
+    fn touches(self, other: &MultiArcString) -> bool {
+        self.exterior.intersects(&other) || self.intersects(other)
     }
 }
 
@@ -497,7 +525,7 @@ impl GeometricOperations<&AngularBounds> for &SphericalPolygon {
     }
 
     fn contains(self, other: &AngularBounds) -> bool {
-        self.contains(&other.points())
+        self.contains(&other.coords())
     }
 
     fn within(self, _: &AngularBounds) -> bool {
@@ -510,13 +538,16 @@ impl GeometricOperations<&AngularBounds> for &SphericalPolygon {
             .map_or(false, |convex_hull| self.intersects(&convex_hull))
     }
 
-    #[allow(refining_impl_trait)]
     fn intersection(self, other: &AngularBounds) -> Option<MultiSphericalPolygon> {
         if let Some(convex_hull) = other.convex_hull() {
             self.intersection(&convex_hull)
         } else {
             None
         }
+    }
+
+    fn touches(self, other: &AngularBounds) -> bool {
+        self.exterior.touches(&other.boundary().unwrap())
     }
 }
 
@@ -526,7 +557,7 @@ impl GeometricOperations<&SphericalPolygon> for &SphericalPolygon {
     }
 
     fn contains(self, other: &SphericalPolygon) -> bool {
-        self.contains(&other.points())
+        self.contains(&other.coords())
     }
 
     fn within(self, other: &SphericalPolygon) -> bool {
@@ -534,12 +565,19 @@ impl GeometricOperations<&SphericalPolygon> for &SphericalPolygon {
     }
 
     fn intersects(self, other: &SphericalPolygon) -> bool {
-        self.intersection(other).is_some()
+        self.exterior.intersects(&other.exterior)
     }
 
-    #[allow(refining_impl_trait)]
     fn intersection(self, other: &SphericalPolygon) -> Option<MultiSphericalPolygon> {
         todo!()
+    }
+
+    fn touches(self, other: &SphericalPolygon) -> bool {
+        self.exterior.touches(&other.exterior)
+            || self
+                .holes
+                .as_ref()
+                .is_some_and(|holes| holes.touches(&other.exterior))
     }
 }
 
@@ -560,9 +598,12 @@ impl GeometricOperations<&MultiSphericalPolygon> for &SphericalPolygon {
         other.intersects(self)
     }
 
-    #[allow(refining_impl_trait)]
     fn intersection(self, other: &MultiSphericalPolygon) -> Option<MultiSphericalPolygon> {
         other.intersection(self)
+    }
+
+    fn touches(self, other: &MultiSphericalPolygon) -> bool {
+        todo!()
     }
 }
 
@@ -628,14 +669,27 @@ impl Geometry for &MultiSphericalPolygon {
     }
 
     fn convex_hull(&self) -> Option<SphericalPolygon> {
-        self.points().convex_hull()
+        self.coords().convex_hull()
     }
 
-    fn points(&self) -> crate::sphericalpoint::MultiSphericalPoint {
+    fn coords(&self) -> crate::sphericalpoint::MultiSphericalPoint {
         self.polygons
             .par_iter()
-            .map(|geometry| geometry.points())
+            .map(|geometry| geometry.coords())
             .sum()
+    }
+
+    fn boundary(&self) -> Option<MultiArcString> {
+        let arcstrings: Vec<ArcString> = self
+            .polygons
+            .par_iter()
+            .filter_map(|polygon| polygon.boundary())
+            .collect();
+        Some(MultiArcString::from(arcstrings))
+    }
+
+    fn representative_point(&self) -> crate::sphericalpoint::SphericalPoint {
+        self.polygons[0].representative_point()
     }
 }
 
@@ -652,8 +706,16 @@ impl Geometry for MultiSphericalPolygon {
         (&self).convex_hull()
     }
 
-    fn points(&self) -> crate::sphericalpoint::MultiSphericalPoint {
-        (&self).points()
+    fn coords(&self) -> crate::sphericalpoint::MultiSphericalPoint {
+        (&self).coords()
+    }
+
+    fn boundary(&self) -> Option<MultiArcString> {
+        (&self).boundary()
+    }
+
+    fn representative_point(&self) -> crate::sphericalpoint::SphericalPoint {
+        (&self).representative_point()
     }
 }
 
@@ -708,9 +770,12 @@ impl GeometricOperations<&SphericalPoint> for &MultiSphericalPolygon {
         self.contains(other)
     }
 
-    #[allow(refining_impl_trait)]
     fn intersection(self, other: &SphericalPoint) -> Option<SphericalPoint> {
         other.intersection(self)
+    }
+
+    fn touches(self, other: &SphericalPoint) -> bool {
+        self.intersects(other) || self.boundary().unwrap().touches(&other.boundary().unwrap())
     }
 }
 
@@ -731,12 +796,15 @@ impl GeometricOperations<&MultiSphericalPoint> for &MultiSphericalPolygon {
         other.intersects(self)
     }
 
-    #[allow(refining_impl_trait)]
     fn intersection(self, other: &MultiSphericalPoint) -> Option<MultiSphericalPoint> {
         self.polygons
             .par_iter()
             .map(|polygon| polygon.intersection(other))
             .sum()
+    }
+
+    fn touches(self, other: &MultiSphericalPoint) -> bool {
+        self.intersects(other) || self.boundary().unwrap().touches(&other.boundary().unwrap())
     }
 }
 
@@ -761,12 +829,15 @@ impl GeometricOperations<&ArcString> for &MultiSphericalPolygon {
             .any(|polygon| polygon.intersects(other))
     }
 
-    #[allow(refining_impl_trait)]
     fn intersection(self, other: &ArcString) -> Option<MultiArcString> {
         self.polygons
             .par_iter()
             .map(|polygon| polygon.intersection(other))
             .sum()
+    }
+
+    fn touches(self, other: &ArcString) -> bool {
+        self.intersects(other) || self.boundary().unwrap().touches(&other.boundary().unwrap())
     }
 }
 
@@ -789,7 +860,6 @@ impl GeometricOperations<&MultiArcString> for &MultiSphericalPolygon {
             .any(|polygon| self.intersects(polygon))
     }
 
-    #[allow(refining_impl_trait)]
     fn intersection(self, other: &MultiArcString) -> Option<MultiArcString> {
         todo!()
     }
@@ -805,7 +875,7 @@ impl GeometricOperations<&AngularBounds> for &MultiSphericalPolygon {
     }
 
     fn contains(self, other: &AngularBounds) -> bool {
-        self.contains(&other.points())
+        self.contains(&other.coords())
     }
 
     fn within(self, other: &AngularBounds) -> bool {
@@ -820,7 +890,6 @@ impl GeometricOperations<&AngularBounds> for &MultiSphericalPolygon {
             .any(|polygon| polygon.intersects(other))
     }
 
-    #[allow(refining_impl_trait)]
     fn intersection(self, other: &AngularBounds) -> Option<MultiSphericalPolygon> {
         self.polygons
             .par_iter()
@@ -854,7 +923,6 @@ impl GeometricOperations<&SphericalPolygon> for &MultiSphericalPolygon {
             .any(|polygon| polygon.intersects(other))
     }
 
-    #[allow(refining_impl_trait)]
     fn intersection(self, other: &SphericalPolygon) -> Option<MultiSphericalPolygon> {
         todo!()
     }
@@ -879,7 +947,6 @@ impl GeometricOperations<&MultiSphericalPolygon> for &MultiSphericalPolygon {
             .any(|polygon| polygon.intersects(other))
     }
 
-    #[allow(refining_impl_trait)]
     fn intersection(self, other: &MultiSphericalPolygon) -> Option<MultiSphericalPolygon> {
         self.polygons
             .par_iter()
