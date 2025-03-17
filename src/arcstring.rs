@@ -214,10 +214,10 @@ pub fn vector_arc_crossings(
     let t = cross_vector(&p.view(), &q.view());
 
     let signs = array![
-        -cross_vector(&a_0, &p.view()).dot(&t.view()),
-        cross_vector(&a_1, &p.view()).dot(&t.view()),
-        -cross_vector(&b_0, &q.view()).dot(&t.view()),
-        cross_vector(&b_1, &q.view()).dot(&t.view()),
+        -cross_vector(a_0, &p.view()).dot(&t.view()),
+        cross_vector(a_1, &p.view()).dot(&t.view()),
+        -cross_vector(b_0, &q.view()).dot(&t.view()),
+        cross_vector(b_1, &q.view()).dot(&t.view()),
     ]
     .signum();
 
@@ -267,13 +267,13 @@ pub fn arcstring_contains_point(arcstring: &ArcString, xyz: &ArrayView1<f64>) ->
             let a = xyzs.slice(s![index, ..]);
             let b = xyzs.slice(s![index + 1, ..]);
 
-            if vectors_collinear(&a.view(), &xyz, &b.view()) {
+            if vectors_collinear(&a.view(), xyz, &b.view()) {
                 return true;
             }
         }
     }
 
-    return false;
+    false
 }
 
 /// series of great circle arcs along the sphere
@@ -289,15 +289,15 @@ impl From<MultiSphericalPoint> for ArcString {
     }
 }
 
-impl Into<MultiSphericalPoint> for ArcString {
-    fn into(self) -> MultiSphericalPoint {
-        self.points
+impl From<ArcString> for MultiSphericalPoint {
+    fn from(arcstring: ArcString) -> Self {
+        arcstring.points
     }
 }
 
-impl Into<Vec<ArcString>> for &ArcString {
-    fn into(self) -> Vec<ArcString> {
-        let vectors = &self.points.xyz;
+impl From<&ArcString> for Vec<ArcString> {
+    fn from(arcstring: &ArcString) -> Self {
+        let vectors = &arcstring.points.xyz;
         let mut arcs = vec![];
         for index in 0..vectors.nrows() - 1 {
             arcs.push(ArcString {
@@ -364,7 +364,7 @@ impl ArcString {
             }
         }
 
-        if intersections.len() > 0 {
+        if !intersections.is_empty() {
             Some(unsafe { MultiSphericalPoint::try_from(&intersections).unwrap_unchecked() })
         } else {
             None
@@ -407,7 +407,7 @@ impl Geometry for &ArcString {
     }
 
     fn convex_hull(&self) -> Option<crate::sphericalpolygon::SphericalPolygon> {
-        (&self.points).convex_hull()
+        self.points.convex_hull()
     }
 
     fn coords(&self) -> MultiSphericalPoint {
@@ -512,7 +512,7 @@ impl GeometricOperations<&MultiSphericalPoint> for &ArcString {
                     }
                 }
 
-                return false;
+                false
             })
     }
 
@@ -572,7 +572,7 @@ impl GeometricOperations<&ArcString> for &ArcString {
             }
         }
 
-        return false;
+        false
     }
 
     fn intersects(self, other: &ArcString) -> bool {
@@ -606,7 +606,7 @@ impl GeometricOperations<&ArcString> for &ArcString {
             }
         }));
 
-        if intersections.len() > 0 {
+        if !intersections.is_empty() {
             Some(MultiSphericalPoint::try_from(&intersections).unwrap())
         } else {
             None
@@ -770,7 +770,7 @@ impl TryFrom<Vec<MultiSphericalPoint>> for MultiArcString {
     fn try_from(points: Vec<MultiSphericalPoint>) -> Result<Self, Self::Error> {
         let arcstrings: Vec<ArcString> = points
             .par_iter()
-            .map(|points| ArcString::try_from(points.to_owned()).unwrap())
+            .map(|points| ArcString::from(points.to_owned()))
             .collect();
         Ok(Self::from(arcstrings))
     }
@@ -788,18 +788,19 @@ impl TryFrom<Vec<Array2<f64>>> for MultiArcString {
     }
 }
 
-impl Into<Vec<MultiSphericalPoint>> for MultiArcString {
-    fn into(self) -> Vec<MultiSphericalPoint> {
-        self.arcstrings
+impl From<MultiArcString> for Vec<MultiSphericalPoint> {
+    fn from(arcstrings: MultiArcString) -> Self {
+        arcstrings
+            .arcstrings
             .into_par_iter()
             .map(|arcstring| arcstring.points)
             .collect()
     }
 }
 
-impl Into<Vec<ArcString>> for MultiArcString {
-    fn into(self) -> Vec<ArcString> {
-        self.arcstrings.into()
+impl From<MultiArcString> for Vec<ArcString> {
+    fn from(arcstrings: MultiArcString) -> Self {
+        arcstrings.arcstrings.into()
     }
 }
 
@@ -839,7 +840,7 @@ impl PartialEq<MultiArcString> for MultiArcString {
             }
         }
 
-        return true;
+        true
     }
 }
 
@@ -855,7 +856,7 @@ impl PartialEq<Vec<ArcString>> for MultiArcString {
             }
         }
 
-        return true;
+        true
     }
 }
 
@@ -1025,7 +1026,7 @@ impl GeometricOperations<&MultiSphericalPoint> for &MultiArcString {
             .filter_map(|arcstring| arcstring.intersection(other))
             .collect();
 
-        if intersections.len() > 0 {
+        if !intersections.is_empty() {
             Some(MultiSphericalPoint::from(&intersections))
         } else {
             None
@@ -1079,7 +1080,7 @@ impl GeometricOperations<&ArcString> for &MultiArcString {
             .filter_map(|arcstring| arcstring.intersection(other))
             .collect();
 
-        if intersections.len() > 0 {
+        if !intersections.is_empty() {
             Some(intersections.into_iter().sum())
         } else {
             None
@@ -1133,7 +1134,7 @@ impl GeometricOperations<&MultiArcString> for &MultiArcString {
             .filter_map(|arcstring| arcstring.intersection(other))
             .collect();
 
-        if intersections.len() > 0 {
+        if !intersections.is_empty() {
             Some(intersections.into_iter().sum())
         } else {
             None

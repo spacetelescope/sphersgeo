@@ -155,11 +155,11 @@ pub fn vector_to_lonlat(xyz: &ArrayView1<f64>, degrees: bool) -> Array1<f64> {
     let lat = xyz[2].atan2((xyz[0].powi(2) + xyz[1].powi(2)).sqrt());
 
     let radians = array![lon, lat,];
-    return if degrees {
+    if degrees {
         radians.to_degrees()
     } else {
         radians
-    };
+    }
 }
 
 pub fn vectors_to_lonlats(xyzs: &ArrayView2<f64>, degrees: bool) -> Array2<f64> {
@@ -200,7 +200,7 @@ pub fn vectors_to_lonlats(xyzs: &ArrayView2<f64>, degrees: bool) -> Array2<f64> 
 
 pub fn point_within_kdtree(xyz: &ArrayView1<f64>, kdtree: &ImmutableKdTree<f64, 3>) -> bool {
     // so we must also normalize this point to compare them
-    let xyz = normalize_vector(&xyz);
+    let xyz = normalize_vector(xyz);
 
     // take advantage of the kdtree's distance function in 3D space
     let tolerance = 1e-10;
@@ -228,15 +228,15 @@ impl TryFrom<Array1<f64>> for SphericalPoint {
     }
 }
 
-impl Into<Array1<f64>> for SphericalPoint {
-    fn into(self) -> Array1<f64> {
-        self.xyz
+impl From<SphericalPoint> for Array1<f64> {
+    fn from(point: SphericalPoint) -> Self {
+        point.xyz
     }
 }
 
-impl<'p> Into<ArrayView1<'p, f64>> for &'p SphericalPoint {
-    fn into(self) -> ArrayView1<'p, f64> {
-        self.xyz.view()
+impl<'p> From<&'p SphericalPoint> for ArrayView1<'p, f64> {
+    fn from(point: &'p SphericalPoint) -> Self {
+        point.xyz.view()
     }
 }
 
@@ -248,9 +248,9 @@ impl TryFrom<Vec<f64>> for SphericalPoint {
     }
 }
 
-impl Into<Vec<f64>> for SphericalPoint {
-    fn into(self) -> Vec<f64> {
-        self.xyz.to_vec()
+impl From<SphericalPoint> for Vec<f64> {
+    fn from(point: SphericalPoint) -> Self {
+        point.xyz.to_vec()
     }
 }
 
@@ -270,15 +270,15 @@ impl From<(f64, f64, f64)> for SphericalPoint {
     }
 }
 
-impl Into<[f64; 3]> for SphericalPoint {
-    fn into(self) -> [f64; 3] {
-        self.xyz.to_vec().try_into().unwrap()
+impl From<SphericalPoint> for [f64; 3] {
+    fn from(point: SphericalPoint) -> Self {
+        point.xyz.to_vec().try_into().unwrap()
     }
 }
 
-impl Into<MultiSphericalPoint> for &SphericalPoint {
-    fn into(self) -> MultiSphericalPoint {
-        MultiSphericalPoint::try_from(self.xyz.to_shape((1, 3)).unwrap().to_owned()).unwrap()
+impl From<&SphericalPoint> for MultiSphericalPoint {
+    fn from(point: &SphericalPoint) -> Self {
+        MultiSphericalPoint::try_from(point.xyz.to_shape((1, 3)).unwrap().to_owned()).unwrap()
     }
 }
 
@@ -771,17 +771,17 @@ impl From<&Vec<MultiSphericalPoint>> for MultiSphericalPoint {
     }
 }
 
-impl Into<Array1<SphericalPoint>> for &MultiSphericalPoint {
-    fn into(self) -> Array1<SphericalPoint> {
-        Zip::from(self.xyz.rows())
+impl From<&MultiSphericalPoint> for Array1<SphericalPoint> {
+    fn from(points: &MultiSphericalPoint) -> Self {
+        Zip::from(points.xyz.rows())
             .par_map_collect(|row| SphericalPoint::try_from(row.to_owned()).unwrap())
     }
 }
 
-impl Into<Vec<SphericalPoint>> for &MultiSphericalPoint {
-    fn into(self) -> Vec<SphericalPoint> {
-        let points: Array1<SphericalPoint> = self.into();
-        points.to_vec()
+impl From<&MultiSphericalPoint> for Vec<SphericalPoint> {
+    fn from(points: &MultiSphericalPoint) -> Self {
+        let array: Array1<SphericalPoint> = points.into();
+        array.to_vec()
     }
 }
 
@@ -798,15 +798,15 @@ impl TryFrom<Array2<f64>> for MultiSphericalPoint {
     }
 }
 
-impl Into<Array2<f64>> for MultiSphericalPoint {
-    fn into(self) -> Array2<f64> {
-        self.xyz
+impl From<MultiSphericalPoint> for Array2<f64> {
+    fn from(points: MultiSphericalPoint) -> Self {
+        points.xyz
     }
 }
 
-impl<'p> Into<ArrayView2<'p, f64>> for &'p MultiSphericalPoint {
-    fn into(self) -> ArrayView2<'p, f64> {
-        self.xyz.view()
+impl<'p> From<&'p MultiSphericalPoint> for ArrayView2<'p, f64> {
+    fn from(points: &'p MultiSphericalPoint) -> Self {
+        points.xyz.view()
     }
 }
 
@@ -820,9 +820,10 @@ impl From<Vec<[f64; 3]>> for MultiSphericalPoint {
     }
 }
 
-impl Into<Vec<[f64; 3]>> for &MultiSphericalPoint {
-    fn into(self) -> Vec<[f64; 3]> {
-        self.xyz
+impl From<&MultiSphericalPoint> for Vec<[f64; 3]> {
+    fn from(points: &MultiSphericalPoint) -> Self {
+        points
+            .xyz
             .rows()
             .into_iter()
             .map(|row| unsafe { row.to_vec().try_into().unwrap_unchecked() })
@@ -1084,7 +1085,7 @@ impl MultiSphericalPoint {
     }
 
     fn push_xyz(&mut self, xyz: &ArrayView1<f64>, recreate: bool) {
-        if !point_within_kdtree(&xyz, &self.kdtree) {
+        if !point_within_kdtree(xyz, &self.kdtree) {
             unsafe { self.xyz.push_row(*xyz).unwrap_unchecked() }
             if recreate {
                 self.recreate_kdtree();
@@ -1109,25 +1110,23 @@ impl ToString for MultiSphericalPoint {
 impl PartialEq for MultiSphericalPoint {
     fn eq(&self, other: &MultiSphericalPoint) -> bool {
         let tolerance = 1e-11;
-        if self.len() == other.len() {
-            if self.xyz.sum() == other.xyz.sum() {
-                let mut rows: Vec<ArrayView1<f64>> = Zip::from(self.xyz.rows())
-                    .par_map_collect(|xyz| xyz)
-                    .to_vec();
-                let mut other_rows: Vec<ArrayView1<f64>> = Zip::from(self.xyz.rows())
-                    .par_map_collect(|xyz| xyz)
-                    .to_vec();
+        if self.len() == other.len() && self.xyz.sum() == other.xyz.sum() {
+            let mut rows: Vec<ArrayView1<f64>> = Zip::from(self.xyz.rows())
+                .par_map_collect(|xyz| xyz)
+                .to_vec();
+            let mut other_rows: Vec<ArrayView1<f64>> = Zip::from(self.xyz.rows())
+                .par_map_collect(|xyz| xyz)
+                .to_vec();
 
-                rows.sort_by(|a, b| a.sum().partial_cmp(&b.sum()).unwrap());
-                other_rows.sort_by(|a, b| a.sum().partial_cmp(&b.sum()).unwrap());
+            rows.sort_by(|a, b| a.sum().partial_cmp(&b.sum()).unwrap());
+            other_rows.sort_by(|a, b| a.sum().partial_cmp(&b.sum()).unwrap());
 
-                return Zip::from(stack(Axis(0), rows.as_slice()).unwrap().rows())
-                    .and(stack(Axis(0), other_rows.as_slice()).unwrap().rows())
-                    .all(|a, b| (&a - &b).abs().sum() < tolerance);
-            }
+            return Zip::from(stack(Axis(0), rows.as_slice()).unwrap().rows())
+                .and(stack(Axis(0), other_rows.as_slice()).unwrap().rows())
+                .all(|a, b| (&a - &b).abs().sum() < tolerance);
         }
 
-        return true;
+        true
     }
 }
 
@@ -1387,10 +1386,10 @@ impl GeometricOperations<&MultiSphericalPoint> for &MultiSphericalPoint {
             .xyz
             .rows()
             .into_iter()
-            .filter(|xyz| point_within_kdtree(&xyz, &more.kdtree))
+            .filter(|xyz| point_within_kdtree(xyz, &more.kdtree))
             .collect();
 
-        if points.len() > 0 {
+        if !points.is_empty() {
             Some(MultiSphericalPoint::try_from(&points).unwrap())
         } else {
             None
@@ -1437,10 +1436,10 @@ impl GeometricOperations<&crate::arcstring::ArcString> for &MultiSphericalPoint 
             .xyz
             .rows()
             .into_iter()
-            .filter(|xyz| crate::arcstring::arcstring_contains_point(other, &xyz))
+            .filter(|xyz| crate::arcstring::arcstring_contains_point(other, xyz))
             .collect();
 
-        if intersections.len() > 0 {
+        if !intersections.is_empty() {
             MultiSphericalPoint::try_from(&intersections).ok()
         } else {
             None

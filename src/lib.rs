@@ -248,25 +248,25 @@ mod py_sphersgeo {
             match other {
                 AnyGeometry::SphericalPoint(point) => self
                     .intersection(&point)
-                    .map(|geometry| AnyGeometry::SphericalPoint(geometry)),
+                    .map(AnyGeometry::SphericalPoint),
                 AnyGeometry::MultiSphericalPoint(multipoint) => self
                     .intersection(&multipoint)
-                    .map(|geometry| AnyGeometry::SphericalPoint(geometry)),
+                    .map(AnyGeometry::SphericalPoint),
                 AnyGeometry::ArcString(arcstring) => self
                     .intersection(&arcstring)
-                    .map(|geometry| AnyGeometry::SphericalPoint(geometry)),
+                    .map(AnyGeometry::SphericalPoint),
                 AnyGeometry::MultiArcString(multiarcstring) => self
                     .intersection(&multiarcstring)
-                    .map(|geometry| AnyGeometry::SphericalPoint(geometry)),
+                    .map(AnyGeometry::SphericalPoint),
                 AnyGeometry::AngularBounds(bounds) => self
                     .intersection(&bounds)
-                    .map(|geometry| AnyGeometry::SphericalPoint(geometry)),
+                    .map(AnyGeometry::SphericalPoint),
                 AnyGeometry::SphericalPolygon(polygon) => self
                     .intersection(&polygon)
-                    .map(|geometry| AnyGeometry::SphericalPoint(geometry)),
+                    .map(AnyGeometry::SphericalPoint),
                 AnyGeometry::MultiSphericalPolygon(multipolygon) => self
                     .intersection(&multipolygon)
-                    .map(|geometry| AnyGeometry::SphericalPoint(geometry)),
+                    .map(AnyGeometry::SphericalPoint),
             }
         }
 
@@ -551,25 +551,25 @@ mod py_sphersgeo {
             match other {
                 AnyGeometry::SphericalPoint(point) => self
                     .intersection(&point)
-                    .map(|geometry| AnyGeometry::SphericalPoint(geometry)),
+                    .map(AnyGeometry::SphericalPoint),
                 AnyGeometry::MultiSphericalPoint(multipoint) => self
                     .intersection(&multipoint)
-                    .map(|geometry| AnyGeometry::MultiSphericalPoint(geometry)),
+                    .map(AnyGeometry::MultiSphericalPoint),
                 AnyGeometry::ArcString(arcstring) => self
                     .intersection(&arcstring)
-                    .map(|geometry| AnyGeometry::MultiSphericalPoint(geometry)),
+                    .map(AnyGeometry::MultiSphericalPoint),
                 AnyGeometry::MultiArcString(multiarcstring) => self
                     .intersection(&multiarcstring)
-                    .map(|geometry| AnyGeometry::MultiSphericalPoint(geometry)),
+                    .map(AnyGeometry::MultiSphericalPoint),
                 AnyGeometry::AngularBounds(bounds) => self
                     .intersection(&bounds)
-                    .map(|geometry| AnyGeometry::MultiSphericalPoint(geometry)),
+                    .map(AnyGeometry::MultiSphericalPoint),
                 AnyGeometry::SphericalPolygon(polygon) => self
                     .intersection(&polygon)
-                    .map(|geometry| AnyGeometry::MultiSphericalPoint(geometry)),
+                    .map(AnyGeometry::MultiSphericalPoint),
                 AnyGeometry::MultiSphericalPolygon(multipolygon) => self
                     .intersection(&multipolygon)
-                    .map(|geometry| AnyGeometry::MultiSphericalPoint(geometry)),
+                    .map(AnyGeometry::MultiSphericalPoint),
             }
         }
 
@@ -794,25 +794,25 @@ mod py_sphersgeo {
             match other {
                 AnyGeometry::SphericalPoint(point) => self
                     .intersection(&point)
-                    .map(|geometry| AnyGeometry::SphericalPoint(geometry)),
+                    .map(AnyGeometry::SphericalPoint),
                 AnyGeometry::MultiSphericalPoint(multipoint) => self
                     .intersection(&multipoint)
-                    .map(|geometry| AnyGeometry::MultiSphericalPoint(geometry)),
+                    .map(AnyGeometry::MultiSphericalPoint),
                 AnyGeometry::ArcString(arcstring) => self
                     .intersection(&arcstring)
-                    .map(|geometry| AnyGeometry::MultiSphericalPoint(geometry)),
+                    .map(AnyGeometry::MultiSphericalPoint),
                 AnyGeometry::MultiArcString(multiarcstring) => self
                     .intersection(&multiarcstring)
-                    .map(|geometry| AnyGeometry::MultiSphericalPoint(geometry)),
+                    .map(AnyGeometry::MultiSphericalPoint),
                 AnyGeometry::AngularBounds(bounds) => self
                     .intersection(&bounds)
-                    .map(|geometry| AnyGeometry::MultiArcString(geometry)),
+                    .map(AnyGeometry::MultiArcString),
                 AnyGeometry::SphericalPolygon(polygon) => self
                     .intersection(&polygon)
-                    .map(|geometry| AnyGeometry::MultiArcString(geometry)),
+                    .map(AnyGeometry::MultiArcString),
                 AnyGeometry::MultiSphericalPolygon(multipolygon) => self
                     .intersection(&multipolygon)
-                    .map(|geometry| AnyGeometry::MultiArcString(geometry)),
+                    .map(AnyGeometry::MultiArcString),
             }
         }
 
@@ -983,25 +983,25 @@ mod py_sphersgeo {
             match other {
                 AnyGeometry::SphericalPoint(point) => self
                     .intersection(&point)
-                    .map(|geometry| AnyGeometry::SphericalPoint(geometry)),
+                    .map(AnyGeometry::SphericalPoint),
                 AnyGeometry::MultiSphericalPoint(multipoint) => self
                     .intersection(&multipoint)
-                    .map(|geometry| AnyGeometry::MultiSphericalPoint(geometry)),
+                    .map(AnyGeometry::MultiSphericalPoint),
                 AnyGeometry::ArcString(arcstring) => self
                     .intersection(&arcstring)
-                    .map(|geometry| AnyGeometry::MultiSphericalPoint(geometry)),
+                    .map(AnyGeometry::MultiSphericalPoint),
                 AnyGeometry::MultiArcString(multiarcstring) => self
                     .intersection(&multiarcstring)
-                    .map(|geometry| AnyGeometry::MultiSphericalPoint(geometry)),
+                    .map(AnyGeometry::MultiSphericalPoint),
                 AnyGeometry::AngularBounds(bounds) => self
                     .intersection(&bounds)
-                    .map(|geometry| AnyGeometry::MultiArcString(geometry)),
+                    .map(AnyGeometry::MultiArcString),
                 AnyGeometry::SphericalPolygon(polygon) => self
                     .intersection(&polygon)
-                    .map(|geometry| AnyGeometry::MultiArcString(geometry)),
+                    .map(AnyGeometry::MultiArcString),
                 AnyGeometry::MultiSphericalPolygon(multipolygon) => self
                     .intersection(&multipolygon)
-                    .map(|geometry| AnyGeometry::MultiArcString(geometry)),
+                    .map(AnyGeometry::MultiArcString),
             }
         }
 
@@ -1157,25 +1157,25 @@ mod py_sphersgeo {
             match other {
                 AnyGeometry::SphericalPoint(point) => self
                     .intersection(&point)
-                    .map(|geometry| AnyGeometry::SphericalPoint(geometry)),
+                    .map(AnyGeometry::SphericalPoint),
                 AnyGeometry::MultiSphericalPoint(multipoint) => self
                     .intersection(&multipoint)
-                    .map(|geometry| AnyGeometry::MultiSphericalPoint(geometry)),
+                    .map(AnyGeometry::MultiSphericalPoint),
                 AnyGeometry::ArcString(arcstring) => self
                     .intersection(&arcstring)
-                    .map(|geometry| AnyGeometry::MultiArcString(geometry)),
+                    .map(AnyGeometry::MultiArcString),
                 AnyGeometry::MultiArcString(multiarcstring) => self
                     .intersection(&multiarcstring)
-                    .map(|geometry| AnyGeometry::MultiArcString(geometry)),
+                    .map(AnyGeometry::MultiArcString),
                 AnyGeometry::AngularBounds(bounds) => self
                     .intersection(&bounds)
-                    .map(|geometry| AnyGeometry::AngularBounds(geometry)),
+                    .map(AnyGeometry::AngularBounds),
                 AnyGeometry::SphericalPolygon(polygon) => self
                     .intersection(&polygon)
-                    .map(|geometry| AnyGeometry::MultiSphericalPolygon(geometry)),
+                    .map(AnyGeometry::MultiSphericalPolygon),
                 AnyGeometry::MultiSphericalPolygon(multipolygon) => self
                     .intersection(&multipolygon)
-                    .map(|geometry| AnyGeometry::MultiSphericalPolygon(geometry)),
+                    .map(AnyGeometry::MultiSphericalPolygon),
             }
         }
 
@@ -1354,25 +1354,25 @@ mod py_sphersgeo {
             match other {
                 AnyGeometry::SphericalPoint(point) => self
                     .intersection(&point)
-                    .map(|geometry| AnyGeometry::SphericalPoint(geometry)),
+                    .map(AnyGeometry::SphericalPoint),
                 AnyGeometry::MultiSphericalPoint(multipoint) => self
                     .intersection(&multipoint)
-                    .map(|geometry| AnyGeometry::MultiSphericalPoint(geometry)),
+                    .map(AnyGeometry::MultiSphericalPoint),
                 AnyGeometry::ArcString(arcstring) => self
                     .intersection(&arcstring)
-                    .map(|geometry| AnyGeometry::MultiArcString(geometry)),
+                    .map(AnyGeometry::MultiArcString),
                 AnyGeometry::MultiArcString(multiarcstring) => self
                     .intersection(&multiarcstring)
-                    .map(|geometry| AnyGeometry::MultiArcString(geometry)),
+                    .map(AnyGeometry::MultiArcString),
                 AnyGeometry::AngularBounds(bounds) => self
                     .intersection(&bounds)
-                    .map(|geometry| AnyGeometry::MultiSphericalPolygon(geometry)),
+                    .map(AnyGeometry::MultiSphericalPolygon),
                 AnyGeometry::SphericalPolygon(polygon) => self
                     .intersection(&polygon)
-                    .map(|geometry| AnyGeometry::MultiSphericalPolygon(geometry)),
+                    .map(AnyGeometry::MultiSphericalPolygon),
                 AnyGeometry::MultiSphericalPolygon(multipolygon) => self
                     .intersection(&multipolygon)
-                    .map(|geometry| AnyGeometry::MultiSphericalPolygon(geometry)),
+                    .map(AnyGeometry::MultiSphericalPolygon),
             }
         }
 
@@ -1528,25 +1528,25 @@ mod py_sphersgeo {
             match other {
                 AnyGeometry::SphericalPoint(point) => self
                     .intersection(&point)
-                    .map(|geometry| AnyGeometry::SphericalPoint(geometry)),
+                    .map(AnyGeometry::SphericalPoint),
                 AnyGeometry::MultiSphericalPoint(multipoint) => self
                     .intersection(&multipoint)
-                    .map(|geometry| AnyGeometry::MultiSphericalPoint(geometry)),
+                    .map(AnyGeometry::MultiSphericalPoint),
                 AnyGeometry::ArcString(arcstring) => self
                     .intersection(&arcstring)
-                    .map(|geometry| AnyGeometry::MultiArcString(geometry)),
+                    .map(AnyGeometry::MultiArcString),
                 AnyGeometry::MultiArcString(multiarcstring) => self
                     .intersection(&multiarcstring)
-                    .map(|geometry| AnyGeometry::MultiArcString(geometry)),
+                    .map(AnyGeometry::MultiArcString),
                 AnyGeometry::AngularBounds(bounds) => self
                     .intersection(&bounds)
-                    .map(|geometry| AnyGeometry::MultiSphericalPolygon(geometry)),
+                    .map(AnyGeometry::MultiSphericalPolygon),
                 AnyGeometry::SphericalPolygon(polygon) => self
                     .intersection(&polygon)
-                    .map(|geometry| AnyGeometry::MultiSphericalPolygon(geometry)),
+                    .map(AnyGeometry::MultiSphericalPolygon),
                 AnyGeometry::MultiSphericalPolygon(multipolygon) => self
                     .intersection(&multipolygon)
-                    .map(|geometry| AnyGeometry::MultiSphericalPolygon(geometry)),
+                    .map(AnyGeometry::MultiSphericalPolygon),
             }
         }
 
