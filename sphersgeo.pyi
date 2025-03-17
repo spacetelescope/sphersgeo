@@ -279,6 +279,9 @@ class ArcString:
     ) -> ArcString: ...
 
     @property
+    def closed(self) -> bool: ...
+
+    @property
     def lengths(self) -> NDArray[float64]: ...
 
     @property

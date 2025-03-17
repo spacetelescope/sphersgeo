@@ -1,9 +1,4 @@
-use crate::{
-    angularbounds::AngularBounds,
-    arcstring::{vector_arcs_angle_between, vectors_collinear},
-    geometry::{ExtendMultiGeometry, GeometricOperations, Geometry, MultiGeometry},
-    sphericalpolygon::{MultiSphericalPolygon, SphericalPolygon},
-};
+use crate::geometry::{ExtendMultiGeometry, GeometricOperations, Geometry, MultiGeometry};
 use kiddo::{ImmutableKdTree, SquaredEuclidean};
 use numpy::ndarray::{
     array, concatenate, s, stack, Array1, Array2, ArrayView1, ArrayView2, Axis, Zip,
@@ -203,11 +198,7 @@ pub fn vectors_to_lonlats(xyzs: &ArrayView2<f64>, degrees: bool) -> Array2<f64> 
     }
 }
 
-pub fn multipoint_contains_point(
-    xyzs: &ArrayView2<f64>,
-    xyz: &ArrayView1<f64>,
-    kdtree: &ImmutableKdTree<f64, 3>,
-) -> bool {
+pub fn point_within_kdtree(xyz: &ArrayView1<f64>, kdtree: &ImmutableKdTree<f64, 3>) -> bool {
     // so we must also normalize this point to compare them
     let xyz = normalize_vector(&xyz);
 
@@ -367,12 +358,12 @@ impl SphericalPoint {
 
     /// angle on the sphere between this point and two other points
     pub fn angle_between(&self, a: &SphericalPoint, b: &SphericalPoint, degrees: bool) -> f64 {
-        vector_arcs_angle_between(&a.into(), &self.into(), &b.into(), degrees)
+        crate::arcstring::vector_arcs_angle_between(&a.into(), &self.into(), &b.into(), degrees)
     }
 
     /// whether this point lies exactly between the given points
     pub fn collinear(&self, a: &SphericalPoint, b: &SphericalPoint) -> bool {
-        vectors_collinear(&a.xyz.view(), &self.xyz.view(), &b.xyz.view())
+        crate::arcstring::vectors_collinear(&a.xyz.view(), &self.xyz.view(), &b.xyz.view())
     }
 
     /// length of the underlying xyz vector
@@ -505,7 +496,7 @@ impl Geometry for SphericalPoint {
 impl GeometricOperations<&SphericalPoint> for &SphericalPoint {
     fn distance(self, other: &SphericalPoint) -> f64 {
         if self.xyz == other.xyz {
-            0.
+            0.0
         } else {
             vector_arc_length(&self.xyz.view(), &other.xyz.view())
         }
@@ -519,13 +510,16 @@ impl GeometricOperations<&SphericalPoint> for &SphericalPoint {
         false
     }
 
+    fn crosses(self, _: &SphericalPoint) -> bool {
+        false
+    }
+
     fn intersects(self, other: &SphericalPoint) -> bool {
-        let tolerance = 3e-11;
-        (&other.xyz - &self.xyz).abs().sum() < tolerance
+        self == other
     }
 
     fn intersection(self, other: &SphericalPoint) -> Option<SphericalPoint> {
-        if self.intersects(other) {
+        if self == other {
             Some(SphericalPoint::try_from(self.xyz.to_owned()).unwrap())
         } else {
             None
@@ -533,7 +527,7 @@ impl GeometricOperations<&SphericalPoint> for &SphericalPoint {
     }
 
     fn touches(self, other: &SphericalPoint) -> bool {
-        self.intersects(other)
+        self == other
     }
 }
 
@@ -550,6 +544,10 @@ impl GeometricOperations<&MultiSphericalPoint> for &SphericalPoint {
         other.contains(self)
     }
 
+    fn crosses(self, _: &MultiSphericalPoint) -> bool {
+        false
+    }
+
     fn intersects(self, other: &MultiSphericalPoint) -> bool {
         self.within(other)
     }
@@ -563,7 +561,7 @@ impl GeometricOperations<&MultiSphericalPoint> for &SphericalPoint {
     }
 
     fn touches(self, other: &MultiSphericalPoint) -> bool {
-        self.intersects(other)
+        self.within(other)
     }
 }
 
@@ -580,6 +578,10 @@ impl GeometricOperations<&crate::arcstring::ArcString> for &SphericalPoint {
         other.contains(self)
     }
 
+    fn crosses(self, _: &crate::arcstring::ArcString) -> bool {
+        false
+    }
+
     fn intersects(self, other: &crate::arcstring::ArcString) -> bool {
         self.within(other)
     }
@@ -593,7 +595,7 @@ impl GeometricOperations<&crate::arcstring::ArcString> for &SphericalPoint {
     }
 
     fn touches(self, other: &crate::arcstring::ArcString) -> bool {
-        self.intersects(other)
+        self.within(other)
     }
 }
 
@@ -610,6 +612,10 @@ impl GeometricOperations<&crate::arcstring::MultiArcString> for &SphericalPoint 
         other.contains(self)
     }
 
+    fn crosses(self, _: &crate::arcstring::MultiArcString) -> bool {
+        false
+    }
+
     fn intersects(self, other: &crate::arcstring::MultiArcString) -> bool {
         self.within(other)
     }
@@ -623,28 +629,32 @@ impl GeometricOperations<&crate::arcstring::MultiArcString> for &SphericalPoint 
     }
 
     fn touches(self, other: &crate::arcstring::MultiArcString) -> bool {
-        self.intersects(other)
+        self.within(other)
     }
 }
 
-impl GeometricOperations<&AngularBounds> for &SphericalPoint {
-    fn distance(self, other: &AngularBounds) -> f64 {
+impl GeometricOperations<&crate::angularbounds::AngularBounds> for &SphericalPoint {
+    fn distance(self, other: &crate::angularbounds::AngularBounds) -> f64 {
         other.distance(self)
     }
 
-    fn contains(self, _: &AngularBounds) -> bool {
+    fn contains(self, _: &crate::angularbounds::AngularBounds) -> bool {
         false
     }
 
-    fn within(self, other: &AngularBounds) -> bool {
+    fn within(self, other: &crate::angularbounds::AngularBounds) -> bool {
         other.contains(self)
     }
 
-    fn intersects(self, other: &AngularBounds) -> bool {
+    fn crosses(self, _: &crate::angularbounds::AngularBounds) -> bool {
+        false
+    }
+
+    fn intersects(self, other: &crate::angularbounds::AngularBounds) -> bool {
         self.within(other)
     }
 
-    fn intersection(self, other: &AngularBounds) -> Option<SphericalPoint> {
+    fn intersection(self, other: &crate::angularbounds::AngularBounds) -> Option<SphericalPoint> {
         if self.within(other) {
             Some(self.to_owned())
         } else {
@@ -652,29 +662,36 @@ impl GeometricOperations<&AngularBounds> for &SphericalPoint {
         }
     }
 
-    fn touches(self, other: &AngularBounds) -> bool {
-        self.intersects(other)
+    fn touches(self, other: &crate::angularbounds::AngularBounds) -> bool {
+        other.touches(self)
     }
 }
 
-impl GeometricOperations<&SphericalPolygon> for &SphericalPoint {
-    fn distance(self, other: &SphericalPolygon) -> f64 {
+impl GeometricOperations<&crate::sphericalpolygon::SphericalPolygon> for &SphericalPoint {
+    fn distance(self, other: &crate::sphericalpolygon::SphericalPolygon) -> f64 {
         other.distance(self)
     }
 
-    fn contains(self, _: &SphericalPolygon) -> bool {
+    fn contains(self, _: &crate::sphericalpolygon::SphericalPolygon) -> bool {
         false
     }
 
-    fn within(self, other: &SphericalPolygon) -> bool {
+    fn within(self, other: &crate::sphericalpolygon::SphericalPolygon) -> bool {
         other.contains(self)
     }
 
-    fn intersects(self, other: &SphericalPolygon) -> bool {
+    fn crosses(self, _: &crate::sphericalpolygon::SphericalPolygon) -> bool {
+        false
+    }
+
+    fn intersects(self, other: &crate::sphericalpolygon::SphericalPolygon) -> bool {
         self.within(other)
     }
 
-    fn intersection(self, other: &SphericalPolygon) -> Option<SphericalPoint> {
+    fn intersection(
+        self,
+        other: &crate::sphericalpolygon::SphericalPolygon,
+    ) -> Option<SphericalPoint> {
         if self.within(other) {
             Some(self.to_owned())
         } else {
@@ -682,29 +699,36 @@ impl GeometricOperations<&SphericalPolygon> for &SphericalPoint {
         }
     }
 
-    fn touches(self, other: &SphericalPolygon) -> bool {
-        self.intersects(other)
+    fn touches(self, other: &crate::sphericalpolygon::SphericalPolygon) -> bool {
+        other.touches(self)
     }
 }
 
-impl GeometricOperations<&MultiSphericalPolygon> for &SphericalPoint {
-    fn distance(self, other: &MultiSphericalPolygon) -> f64 {
+impl GeometricOperations<&crate::sphericalpolygon::MultiSphericalPolygon> for &SphericalPoint {
+    fn distance(self, other: &crate::sphericalpolygon::MultiSphericalPolygon) -> f64 {
         other.distance(self)
     }
 
-    fn contains(self, _: &MultiSphericalPolygon) -> bool {
+    fn contains(self, _: &crate::sphericalpolygon::MultiSphericalPolygon) -> bool {
         false
     }
 
-    fn within(self, other: &MultiSphericalPolygon) -> bool {
+    fn within(self, other: &crate::sphericalpolygon::MultiSphericalPolygon) -> bool {
         other.contains(self)
     }
 
-    fn intersects(self, other: &MultiSphericalPolygon) -> bool {
+    fn crosses(self, _: &crate::sphericalpolygon::MultiSphericalPolygon) -> bool {
+        false
+    }
+
+    fn intersects(self, other: &crate::sphericalpolygon::MultiSphericalPolygon) -> bool {
         self.within(other)
     }
 
-    fn intersection(self, other: &MultiSphericalPolygon) -> Option<SphericalPoint> {
+    fn intersection(
+        self,
+        other: &crate::sphericalpolygon::MultiSphericalPolygon,
+    ) -> Option<SphericalPoint> {
         if self.intersects(other) {
             Some(self.to_owned())
         } else {
@@ -712,8 +736,8 @@ impl GeometricOperations<&MultiSphericalPolygon> for &SphericalPoint {
         }
     }
 
-    fn touches(self, other: &MultiSphericalPolygon) -> bool {
-        self.intersects(other)
+    fn touches(self, other: &crate::sphericalpolygon::MultiSphericalPolygon) -> bool {
+        other.touches(self)
     }
 }
 
@@ -854,7 +878,7 @@ impl TryFrom<&Vec<Array1<f64>>> for MultiSphericalPoint {
     type Error = String;
 
     fn try_from(list: &Vec<Array1<f64>>) -> Result<Self, Self::Error> {
-        let list: Vec<ArrayView1<f64>> = list.iter().map(|point| point.view()).collect();
+        let list: Vec<ArrayView1<f64>> = list.par_iter().map(|point| point.view()).collect();
         Self::try_from(&list)
     }
 }
@@ -945,16 +969,15 @@ impl MultiSphericalPoint {
     }
 
     pub fn nearest(&self, point: &SphericalPoint) -> SphericalPoint {
-        unsafe {
-            let normalized = point.normalized().xyz;
-            let nearest = self.kdtree.nearest_one::<SquaredEuclidean>(&[
-                normalized[0],
-                normalized[1],
-                normalized[2],
-            ]);
+        // since the kdtree is over normalized vectors, the nearest vector in 3D space is also the nearest in angular distance
+        let nearest = self.kdtree.nearest_one::<SquaredEuclidean>(&[
+            point.xyz[0],
+            point.xyz[1],
+            point.xyz[2],
+        ]);
 
-            SphericalPoint::try_from(self.xyz.slice(s![nearest.item as usize, ..]).to_owned())
-                .unwrap_unchecked()
+        SphericalPoint {
+            xyz: self.xyz.slice(s![nearest.item as usize, ..]).to_owned(),
         }
     }
 
@@ -1039,7 +1062,9 @@ impl MultiSphericalPoint {
         Zip::from(self.xyz.rows())
             .and(a.xyz.rows())
             .and(b.xyz.rows())
-            .par_map_collect(|point, a, b| vector_arcs_angle_between(&point, &a, &b, degrees))
+            .par_map_collect(|point, a, b| {
+                crate::arcstring::vector_arcs_angle_between(&point, &a, &b, degrees)
+            })
     }
 
     pub fn collinear(&self, a: &SphericalPoint, b: &SphericalPoint) -> Array1<bool> {
@@ -1047,13 +1072,19 @@ impl MultiSphericalPoint {
         Array1::from_vec(
             points
                 .par_iter()
-                .map(|point| vectors_collinear(&a.xyz.view(), &point.xyz.view(), &b.xyz.view()))
+                .map(|point| {
+                    crate::arcstring::vectors_collinear(
+                        &a.xyz.view(),
+                        &point.xyz.view(),
+                        &b.xyz.view(),
+                    )
+                })
                 .collect(),
         )
     }
 
     fn push_xyz(&mut self, xyz: &ArrayView1<f64>, recreate: bool) {
-        if !multipoint_contains_point(&self.xyz.view(), &xyz, &self.kdtree) {
+        if !point_within_kdtree(&xyz, &self.kdtree) {
             unsafe { self.xyz.push_row(*xyz).unwrap_unchecked() }
             if recreate {
                 self.recreate_kdtree();
@@ -1258,7 +1289,7 @@ impl MultiGeometry for MultiSphericalPoint {
 impl ExtendMultiGeometry<SphericalPoint> for MultiSphericalPoint {
     fn extend(&mut self, other: MultiSphericalPoint) {
         other.xyz.rows().into_iter().for_each(|row| {
-            if !multipoint_contains_point(&self.xyz.view(), &row, &self.kdtree) {
+            if !point_within_kdtree(&row, &self.kdtree) {
                 unsafe { self.xyz.push_row(row.view()).unwrap_unchecked() }
             }
         });
@@ -1272,25 +1303,19 @@ impl ExtendMultiGeometry<SphericalPoint> for MultiSphericalPoint {
 
 impl GeometricOperations<&SphericalPoint> for &MultiSphericalPoint {
     fn distance(self, other: &SphericalPoint) -> f64 {
-        // find the nearest point in 3D space (kdtree is over normalized vectors)
-        let nearest = self.kdtree.nearest_one::<SquaredEuclidean>(&[
-            other.xyz[0],
-            other.xyz[1],
-            other.xyz[2],
-        ]);
-
-        vector_arc_length(
-            &other.xyz.view(),
-            &self.xyz.slice(s![nearest.item as usize, ..]),
-        )
+        self.nearest(other).distance(other)
     }
 
     fn contains(self, other: &SphericalPoint) -> bool {
-        multipoint_contains_point(&self.xyz.view(), &other.xyz.view(), &self.kdtree)
+        point_within_kdtree(&other.xyz.view(), &self.kdtree)
     }
 
-    fn within(self, other: &SphericalPoint) -> bool {
-        self.len() == 1 && other.within(self)
+    fn within(self, _: &SphericalPoint) -> bool {
+        false
+    }
+
+    fn crosses(self, _: &SphericalPoint) -> bool {
+        false
     }
 
     fn intersects(self, other: &SphericalPoint) -> bool {
@@ -1298,35 +1323,30 @@ impl GeometricOperations<&SphericalPoint> for &MultiSphericalPoint {
     }
 
     fn intersection(self, other: &SphericalPoint) -> Option<SphericalPoint> {
-        let tolerance = 1e-10;
-        let other_point = other.xyz.view();
-
-        for point in self.xyz.rows() {
-            if (&point - &other_point).abs().sum() < tolerance {
-                return Some(SphericalPoint::try_from(point.to_owned()).unwrap());
-            }
+        if self.contains(other) {
+            Some(other.to_owned())
+        } else {
+            None
         }
-
-        None
     }
 
     fn touches(self, other: &SphericalPoint) -> bool {
-        self.intersects(other)
+        self.contains(other)
     }
 }
 
 impl GeometricOperations<&MultiSphericalPoint> for &MultiSphericalPoint {
     fn distance(self, other: &MultiSphericalPoint) -> f64 {
-        // TODO: write a more efficient algorithm than brute-force
         min_1darray(
-            &Zip::from(self.xyz.rows())
-                .par_map_collect(|xyz| {
-                    min_1darray(
-                        &Zip::from(other.xyz.rows())
-                            .par_map_collect(|other_xyz| vector_arc_length(&xyz, &other_xyz))
-                            .view(),
-                    )
-                    .unwrap_or(std::f64::NAN)
+            &Zip::from(other.xyz.rows())
+                .par_map_collect(|other_xyz| {
+                    // since the kdtree is over normalized vectors, the nearest vector in 3D space is also the nearest in angular distance
+                    let nearest = self.kdtree.nearest_one::<SquaredEuclidean>(&[
+                        other_xyz[0],
+                        other_xyz[1],
+                        other_xyz[2],
+                    ]);
+                    vector_arc_length(&self.xyz.slice(s![nearest.item as usize, ..]), &other_xyz)
                 })
                 .view(),
         )
@@ -1338,40 +1358,56 @@ impl GeometricOperations<&MultiSphericalPoint> for &MultiSphericalPoint {
     }
 
     fn within(self, other: &MultiSphericalPoint) -> bool {
-        if self.len() <= other.len() {
-            match self.intersection(other) {
-                Some(intersection) => intersection.len() == self.len(),
-                None => false,
-            }
+        if self.len() < other.len() {
+            self.xyz
+                .rows()
+                .into_iter()
+                .all(|xyz| point_within_kdtree(&xyz, &other.kdtree))
         } else {
             false
         }
     }
 
+    fn crosses(self, _: &MultiSphericalPoint) -> bool {
+        false
+    }
+
     fn intersects(self, other: &MultiSphericalPoint) -> bool {
-        self.intersection(other).is_some()
+        self.touches(other) || self.crosses(other)
     }
 
     fn intersection(self, other: &MultiSphericalPoint) -> Option<MultiSphericalPoint> {
-        let tolerance: f64 = 3e-11;
-        let other_point = other.xyz.view();
+        let (less, more) = if self.len() < other.len() {
+            (self, other)
+        } else {
+            (other, self)
+        };
 
-        let mut points: Vec<ArrayView1<f64>> = vec![];
-        for point in self.xyz.rows() {
-            if (&point - &other_point).abs().sum() < tolerance {
-                points.push(point)
-            }
-        }
+        let points: Vec<ArrayView1<f64>> = less
+            .xyz
+            .rows()
+            .into_iter()
+            .filter(|xyz| point_within_kdtree(&xyz, &more.kdtree))
+            .collect();
 
         if points.len() > 0 {
-            Some(MultiSphericalPoint::try_from(stack(Axis(0), points.as_slice()).unwrap()).unwrap())
+            Some(MultiSphericalPoint::try_from(&points).unwrap())
         } else {
             None
         }
     }
 
     fn touches(self, other: &MultiSphericalPoint) -> bool {
-        self.intersects(other)
+        let (less, more) = if self.len() < other.len() {
+            (self, other)
+        } else {
+            (other, self)
+        };
+
+        less.xyz
+            .rows()
+            .into_iter()
+            .any(|xyz| point_within_kdtree(&xyz, &more.kdtree))
     }
 }
 
@@ -1388,31 +1424,34 @@ impl GeometricOperations<&crate::arcstring::ArcString> for &MultiSphericalPoint 
         other.contains(self)
     }
 
+    fn crosses(self, _: &crate::arcstring::ArcString) -> bool {
+        false
+    }
+
     fn intersects(self, other: &crate::arcstring::ArcString) -> bool {
-        // TODO: vectorize this across xyz array
-        let points: Vec<SphericalPoint> = self.into();
-        points.par_iter().any(|point| point.within(other))
+        self.touches(other) || self.crosses(other)
     }
 
     fn intersection(self, other: &crate::arcstring::ArcString) -> Option<MultiSphericalPoint> {
-        // TODO: vectorize this across xyz array
-        let points: Vec<SphericalPoint> = self.into();
-        Some(MultiSphericalPoint::from(
-            &points
-                .par_iter()
-                .filter_map(|point| {
-                    if point.within(other) {
-                        Some(point.to_owned())
-                    } else {
-                        None
-                    }
-                })
-                .collect::<Vec<SphericalPoint>>(),
-        ))
+        let intersections: Vec<ArrayView1<f64>> = self
+            .xyz
+            .rows()
+            .into_iter()
+            .filter(|xyz| crate::arcstring::arcstring_contains_point(other, &xyz))
+            .collect();
+
+        if intersections.len() > 0 {
+            MultiSphericalPoint::try_from(&intersections).ok()
+        } else {
+            None
+        }
     }
 
     fn touches(self, other: &crate::arcstring::ArcString) -> bool {
-        self.intersects(other)
+        self.xyz
+            .rows()
+            .into_iter()
+            .any(|xyz| crate::arcstring::arcstring_contains_point(other, &xyz))
     }
 }
 
@@ -1426,117 +1465,130 @@ impl GeometricOperations<&crate::arcstring::MultiArcString> for &MultiSphericalP
     }
 
     fn within(self, other: &crate::arcstring::MultiArcString) -> bool {
-        // TODO: vectorize this across xyz array
-        let points: Vec<SphericalPoint> = self.into();
-        points.par_iter().all(|point| point.within(other))
+        other.contains(self)
+    }
+
+    fn crosses(self, _: &crate::arcstring::MultiArcString) -> bool {
+        false
     }
 
     fn intersects(self, other: &crate::arcstring::MultiArcString) -> bool {
-        // TODO: vectorize this across xyz array
-        let points: Vec<SphericalPoint> = self.into();
-        points.par_iter().any(|point| point.within(other))
+        self.touches(other) || self.crosses(other)
     }
 
     fn intersection(self, other: &crate::arcstring::MultiArcString) -> Option<MultiSphericalPoint> {
-        // TODO: vectorize this across xyz array
-        let points: Vec<SphericalPoint> = self.into();
-        Some(MultiSphericalPoint::from(
-            &points
-                .par_iter()
-                .filter_map(|point| {
-                    if point.within(other) {
-                        Some(point.to_owned())
-                    } else {
-                        None
-                    }
-                })
-                .collect::<Vec<SphericalPoint>>(),
-        ))
+        other.intersection(self)
     }
 
     fn touches(self, other: &crate::arcstring::MultiArcString) -> bool {
-        self.intersects(other)
+        other.touches(self)
     }
 }
 
-impl GeometricOperations<&AngularBounds> for &MultiSphericalPoint {
-    fn distance(self, other: &AngularBounds) -> f64 {
+impl GeometricOperations<&crate::angularbounds::AngularBounds> for &MultiSphericalPoint {
+    fn distance(self, other: &crate::angularbounds::AngularBounds) -> f64 {
         other.distance(self)
     }
 
-    fn contains(self, _: &AngularBounds) -> bool {
+    fn contains(self, _: &crate::angularbounds::AngularBounds) -> bool {
         false
     }
 
-    fn within(self, other: &AngularBounds) -> bool {
+    fn within(self, other: &crate::angularbounds::AngularBounds) -> bool {
         other.contains(self)
     }
 
-    fn intersects(self, other: &AngularBounds) -> bool {
+    fn crosses(self, _: &crate::angularbounds::AngularBounds) -> bool {
+        false
+    }
+
+    fn intersects(self, other: &crate::angularbounds::AngularBounds) -> bool {
         other.intersects(self)
     }
 
-    fn intersection(self, other: &AngularBounds) -> Option<MultiSphericalPoint> {
+    fn intersection(
+        self,
+        other: &crate::angularbounds::AngularBounds,
+    ) -> Option<MultiSphericalPoint> {
         other.intersection(self)
     }
 
-    fn touches(self, other: &AngularBounds) -> bool {
+    fn touches(self, other: &crate::angularbounds::AngularBounds) -> bool {
         self.intersects(other)
     }
 }
 
-impl GeometricOperations<&SphericalPolygon> for &MultiSphericalPoint {
-    fn distance(self, other: &SphericalPolygon) -> f64 {
+impl GeometricOperations<&crate::sphericalpolygon::SphericalPolygon> for &MultiSphericalPoint {
+    fn distance(self, other: &crate::sphericalpolygon::SphericalPolygon) -> f64 {
         other.distance(self)
     }
 
-    fn contains(self, _: &SphericalPolygon) -> bool {
+    fn contains(self, _: &crate::sphericalpolygon::SphericalPolygon) -> bool {
         false
     }
 
-    fn within(self, other: &SphericalPolygon) -> bool {
+    fn within(self, other: &crate::sphericalpolygon::SphericalPolygon) -> bool {
         other.contains(self)
     }
 
-    fn intersects(self, other: &SphericalPolygon) -> bool {
+    fn crosses(self, _: &crate::sphericalpolygon::SphericalPolygon) -> bool {
+        false
+    }
+
+    fn intersects(self, other: &crate::sphericalpolygon::SphericalPolygon) -> bool {
         other.intersects(self)
     }
 
-    fn intersection(self, other: &SphericalPolygon) -> Option<MultiSphericalPoint> {
+    fn intersection(
+        self,
+        other: &crate::sphericalpolygon::SphericalPolygon,
+    ) -> Option<MultiSphericalPoint> {
         other.intersection(self)
     }
 
-    fn touches(self, other: &SphericalPolygon) -> bool {
+    fn touches(self, other: &crate::sphericalpolygon::SphericalPolygon) -> bool {
         self.intersects(other)
     }
 }
 
-impl GeometricOperations<&MultiSphericalPolygon> for &MultiSphericalPoint {
-    fn distance(self, other: &MultiSphericalPolygon) -> f64 {
+impl GeometricOperations<&crate::sphericalpolygon::MultiSphericalPolygon> for &MultiSphericalPoint {
+    fn distance(self, other: &crate::sphericalpolygon::MultiSphericalPolygon) -> f64 {
         other.distance(self)
     }
 
-    fn contains(self, _: &MultiSphericalPolygon) -> bool {
+    fn contains(self, _: &crate::sphericalpolygon::MultiSphericalPolygon) -> bool {
         false
     }
 
-    fn within(self, other: &MultiSphericalPolygon) -> bool {
-        // TODO: vectorize this across xyz array
-        let points: Vec<SphericalPoint> = self.into();
-        points.par_iter().all(|point| point.within(other))
+    fn within(self, other: &crate::sphericalpolygon::MultiSphericalPolygon) -> bool {
+        // TODO: find a better algorithm than brute-force
+        self.xyz.rows().into_iter().all(|xyz| {
+            other.polygons.par_iter().any(|polygon| {
+                crate::sphericalpolygon::point_in_polygon_exterior(
+                    &xyz,
+                    &polygon.interior_point.xyz.view(),
+                    &polygon.exterior.points.xyz.view(),
+                )
+            })
+        })
     }
 
-    fn intersects(self, other: &MultiSphericalPolygon) -> bool {
-        // TODO: vectorize this across xyz array
-        let points: Vec<SphericalPoint> = self.into();
-        points.par_iter().any(|point| point.within(other))
+    fn crosses(self, _: &crate::sphericalpolygon::MultiSphericalPolygon) -> bool {
+        false
     }
 
-    fn intersection(self, other: &MultiSphericalPolygon) -> Option<MultiSphericalPoint> {
+    fn intersects(self, other: &crate::sphericalpolygon::MultiSphericalPolygon) -> bool {
+        other.intersects(self)
+    }
+
+    fn intersection(
+        self,
+        other: &crate::sphericalpolygon::MultiSphericalPolygon,
+    ) -> Option<MultiSphericalPoint> {
         other.intersection(self)
     }
 
-    fn touches(self, other: &MultiSphericalPolygon) -> bool {
-        self.intersects(other)
+    fn touches(self, other: &crate::sphericalpolygon::MultiSphericalPolygon) -> bool {
+        other.touches(self)
     }
 }

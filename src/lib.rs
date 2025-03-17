@@ -688,10 +688,10 @@ mod py_sphersgeo {
             self.close()
         }
 
-        /// return a "closed" arcstring (last vertex connected to the first)
+        /// whether this arcstring is "closed" (the last vertex is connected to the first)
         #[getter]
         #[pyo3(name = "closed")]
-        fn py_closed(&self) -> ArcString {
+        fn py_closed(&self) -> bool {
             self.closed()
         }
 
