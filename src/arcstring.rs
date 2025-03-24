@@ -335,40 +335,59 @@ impl ArcString {
     }
 
     /// whether this arcstring intersects itself
-    pub fn intersects_self(&self) -> bool {
-        self.points.len() > 3 && self.intersection_with_self().is_some()
-    }
+    pub fn crosses_self(&self) -> bool {
+        if self.points.len() >= 4 {
+            // we can't use the Bentley-Ottmann sweep-line algorithm here :/
+            // because a sphere is an enclosed infinite space so there's no good way to sort by longitude
+            // so instead we use brute-force and skip visited arcs
+            for arc_index in 0..self.points.len() - 1 {
+                let a_0 = self.points.xyz.slice(s![arc_index, ..]);
+                let a_1 = self.points.xyz.slice(s![arc_index + 1, ..]);
 
-    /// points of intersection with itself
-    pub fn intersection_with_self(&self) -> Option<MultiSphericalPoint> {
-        if self.points.len() < 4 {
-            return None;
-        }
+                for other_arc_index in arc_index..self.points.len() - 1 {
+                    let b_0 = self.points.xyz.slice(s![other_arc_index, ..]);
+                    let b_1 = self.points.xyz.slice(s![other_arc_index + 1, ..]);
 
-        let mut intersections = vec![];
-
-        // we can't use the Bentley-Ottmann sweep-line algorithm here :/
-        // because a sphere is an enclosed infinite space so there's no good way to sort by longitude
-        // so instead we use brute-force and skip visited arcs
-        for arc_index in 0..self.points.len() - 1 {
-            let a_0 = self.points.xyz.slice(s![arc_index, ..]);
-            let a_1 = self.points.xyz.slice(s![arc_index + 1, ..]);
-
-            for other_arc_index in arc_index..self.points.len() - 1 {
-                let b_0 = self.points.xyz.slice(s![other_arc_index, ..]);
-                let b_1 = self.points.xyz.slice(s![other_arc_index + 1, ..]);
-
-                if let Some(point) = vector_arc_crossings(&a_0, &a_1, &b_0, &b_1) {
-                    intersections.push(point);
+                    if let Some(point) = vector_arc_crossings(&a_0, &a_1, &b_0, &b_1) {
+                        return true;
+                    }
                 }
             }
         }
 
-        if !intersections.is_empty() {
-            Some(unsafe { MultiSphericalPoint::try_from(&intersections).unwrap_unchecked() })
-        } else {
-            None
+        false
+    }
+
+    /// points of intersection with itself
+    pub fn crossings_with_self(&self) -> Option<MultiSphericalPoint> {
+        if self.points.len() >= 4 {
+            let mut crossings = vec![];
+
+            // we can't use the Bentley-Ottmann sweep-line algorithm here :/
+            // because a sphere is an enclosed infinite space so there's no good way to sort by longitude
+            // so instead we use brute-force and skip visited arcs
+            for arc_index in 0..self.points.len() - 1 {
+                let a_0 = self.points.xyz.slice(s![arc_index, ..]);
+                let a_1 = self.points.xyz.slice(s![arc_index + 1, ..]);
+
+                for other_arc_index in arc_index..self.points.len() - 1 {
+                    let b_0 = self.points.xyz.slice(s![other_arc_index, ..]);
+                    let b_1 = self.points.xyz.slice(s![other_arc_index + 1, ..]);
+
+                    if let Some(point) = vector_arc_crossings(&a_0, &a_1, &b_0, &b_1) {
+                        crossings.push(point);
+                    }
+                }
+            }
+
+            if !crossings.is_empty() {
+                return Some(unsafe {
+                    MultiSphericalPoint::try_from(&crossings).unwrap_unchecked()
+                });
+            }
         }
+
+        None
     }
 
     pub fn lengths(&self) -> Array1<f64> {
