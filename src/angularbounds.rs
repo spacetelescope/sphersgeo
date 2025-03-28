@@ -119,6 +119,10 @@ impl Geometry for &AngularBounds {
         )
     }
 
+    fn centroid(&self) -> crate::sphericalpoint::SphericalPoint {
+        self.coords().centroid()
+    }
+
     fn bounds(&self, degrees: bool) -> AngularBounds {
         if degrees == self.degrees {
             (*self).to_owned()
@@ -133,8 +137,9 @@ impl Geometry for &AngularBounds {
         crate::sphericalpolygon::SphericalPolygon::new(
             crate::arcstring::ArcString {
                 points: self.coords(),
+                closed: true,
             },
-            self.centroid(),
+            None,
             None,
         )
         .ok()
@@ -155,11 +160,10 @@ impl Geometry for &AngularBounds {
     }
 
     fn boundary(&self) -> Option<crate::arcstring::ArcString> {
-        let mut boundary = crate::arcstring::ArcString {
+        Some(crate::arcstring::ArcString {
             points: self.coords(),
-        };
-        boundary.close();
-        Some(boundary)
+            closed: true,
+        })
     }
 
     fn representative_point(&self) -> crate::sphericalpoint::SphericalPoint {
@@ -174,6 +178,10 @@ impl Geometry for AngularBounds {
 
     fn length(&self) -> f64 {
         (&self).length()
+    }
+
+    fn centroid(&self) -> crate::sphericalpoint::SphericalPoint {
+        (&self).centroid()
     }
 
     fn bounds(&self, degrees: bool) -> crate::angularbounds::AngularBounds {
@@ -490,7 +498,7 @@ impl GeometricOperations<&crate::sphericalpolygon::SphericalPolygon> for &Angula
     }
 
     fn contains(self, other: &crate::sphericalpolygon::SphericalPolygon) -> bool {
-        self.contains(&other.exterior.points)
+        self.contains(&other.boundary.points)
     }
 
     fn within(self, other: &crate::sphericalpolygon::SphericalPolygon) -> bool {

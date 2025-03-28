@@ -1,6 +1,5 @@
 use crate::geometry::AnyGeometry;
 use crate::geometry::{ExtendMultiGeometry, Geometry, MultiGeometry};
-use ndarray::array;
 use pyo3::prelude::*;
 use std::{
     iter::Sum,
@@ -32,6 +31,10 @@ impl Geometry for &GeometryCollection {
         self.geometries.iter().map(|geometry| geometry.area()).sum()
     }
 
+    fn centroid(&self) -> crate::sphericalpoint::SphericalPoint {
+        self.coords().centroid()
+    }
+
     fn length(&self) -> f64 {
         self.geometries
             .iter()
@@ -52,19 +55,10 @@ impl Geometry for &GeometryCollection {
     }
 
     fn coords(&self) -> crate::sphericalpoint::MultiSphericalPoint {
-        if self.len() > 0 {
-            self.geometries
-                .iter()
-                .map(|geometry| geometry.coords())
-                .sum()
-        } else {
-            crate::sphericalpoint::MultiSphericalPoint::try_from(array![[
-                std::f64::NAN,
-                std::f64::NAN,
-                std::f64::NAN
-            ]])
-            .unwrap()
-        }
+        self.geometries
+            .iter()
+            .map(|geometry| geometry.coords())
+            .sum()
     }
 
     fn boundary(&self) -> Option<GeometryCollection> {
@@ -83,6 +77,10 @@ impl Geometry for GeometryCollection {
 
     fn length(&self) -> f64 {
         (&self).length()
+    }
+
+    fn centroid(&self) -> crate::sphericalpoint::SphericalPoint {
+        (&self).centroid()
     }
 
     fn bounds(&self, degrees: bool) -> crate::angularbounds::AngularBounds {

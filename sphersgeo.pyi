@@ -525,6 +525,24 @@ class SphericalPolygon:
         | list[NDArray[float]],
     ): ...
 
+    @classmethod
+    def from_cone(
+        self,
+        center: SphericalPoint,
+        radius: float,
+        degrees: bool = True,
+        steps: int = 16,
+    ) -> SphericalPolygon: ...
+
+    @property
+    def antipode(self) -> bool: ...
+
+    @property
+    def inverse(self) -> SphericalPolygon: ...
+
+    @property
+    def is_clockwise(self) -> bool: ...
+
     @property
     def area(self) -> float: ...
 
