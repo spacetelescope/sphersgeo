@@ -69,7 +69,8 @@ def test_midpoint():
         A = SphericalPoint.from_lonlat(a, degrees=True)
         for b in bvec:
             B = SphericalPoint.from_lonlat(b, degrees=True)
-            C = ArcString((A.combine(B)).xyz).midpoints.parts[0]
+            C = ArcString((A + B).xyz).midpoints.parts[0]
+            assert B.angle_between(A, C) == np.pi
             assert B.collinear(A, C)
             assert_allclose(A.distance(B), B.distance(C), atol=tolerance)
 

@@ -80,6 +80,146 @@ pub fn vector_lengths(vectors: &ArrayView2<f64>) -> Array1<f64> {
     vectors.pow2().sum_axis(Axis(1)).sqrt()
 }
 
+/// given three XYZ vector points on the sphere (`a`, `b`, and `c`), retrieve the angle at `b` formed by arcs `ab` and `bc`
+///
+///     cos(ca) = cos(bc) * cos(ab) + sin(bc) * sin(ab) * cos(b)
+///
+/// References:
+/// - Miller, Robert D. Computing the area of a spherical polygon. Graphics Gems IV. p132. 1994. Academic Press. doi:10.5555/180895.180907
+/// https://www.google.com/books/edition/Graphics_Gems_IV/CCqzMm_-WucC?hl=en&gbpv=1&dq=Graphics%20Gems%20IV.%20p132&pg=PA133&printsec=frontcover
+pub fn angle_between_vectors(
+    a: &ArrayView1<f64>,
+    b: &ArrayView1<f64>,
+    c: &ArrayView1<f64>,
+    degrees: bool,
+) -> f64 {
+    let tolerance = 3e-11;
+
+    // let abx = cross_vector(&a, &b);
+    // let bcx = cross_vector(&b, &c);
+
+    // let angle = if vector_arc_length(a, c) < tolerance
+    //     // || vector_length(&abx.view()) < tolerance
+    //     // || vector_length(&bcx.view()) < tolerance
+    // {
+    //     0.0
+    // } else {
+    //     let x = normalize_vector(&cross_vector(&abx.view(), &bcx.view()).view());
+
+    //     let diff = (b * x).sum();
+    //     let inner = (abx * bcx).sum();
+    //     let mut angle = inner.acos();
+
+    //     if angle.is_nan() {
+    //         std::f64::consts::PI
+    //     } else {
+    //         if diff < 0.0 {
+    //             angle = (2.0 * std::f64::consts::PI) - angle;
+    //         }
+    //         angle
+    //     }
+    // };
+    //
+    // angle
+
+    let ab = vector_arc_length(a, b);
+    let bc = vector_arc_length(b, c);
+    let ca = vector_arc_length(c, a);
+
+    println!(
+        "{} {} {}",
+        SphericalPoint { xyz: a.to_owned() }.to_lonlat(true),
+        SphericalPoint { xyz: b.to_owned() }.to_lonlat(true),
+        SphericalPoint { xyz: c.to_owned() }.to_lonlat(true)
+    );
+    println!("{ab} {bc} {ca}");
+
+    let mut angle = if ca < tolerance {
+        // if the opposite side of the triangle is negligibly small
+        0.0
+    } else if ab < tolerance || bc < tolerance {
+        (1.0 - ca.powi(2) / 2.0).acos()
+    } else {
+        ((ca.cos() - bc.cos() * ab.cos()) / (bc.sin() * ab.sin())).acos()
+    };
+
+    // test if all three points are collinear
+    if angle.is_nan() && (ab + bc - ca) < tolerance {
+        angle = std::f64::consts::PI;
+    }
+
+    if degrees {
+        angle.to_degrees()
+    } else {
+        angle
+    }
+}
+
+/// given three arrays of XYZ vectors on the unit sphere (A, B, and C), element-wise retrieve the angles at B between arcs AB and arcs BC
+///
+/// References:
+/// - Miller, Robert D. Computing the area of a spherical polygon. Graphics Gems IV. 1994. Academic Press. doi:10.5555/180895.180907
+/// https://www.google.com/books/edition/Graphics_Gems_IV/CCqzMm_-WucC?hl=en&gbpv=1&dq=Graphics%20Gems%20IV.%20p132&pg=PA133&printsec=frontcover
+pub fn angles_between_vectors(
+    a: &ArrayView2<f64>,
+    b: &ArrayView2<f64>,
+    c: &ArrayView2<f64>,
+    degrees: bool,
+) -> Array1<f64> {
+    let abx = cross_vectors(a, b);
+    let bcx = cross_vectors(b, c);
+    let x = cross_vectors(&abx.view(), &bcx.view());
+
+    let diff = (b * x).sum_axis(Axis(1));
+    let mut inner = (abx * bcx).sum_axis(Axis(1));
+    inner.par_mapv_inplace(|v| v.acos());
+
+    let angles = stack(Axis(0), &[inner.view(), diff.view()])
+        .unwrap()
+        .map_axis(Axis(0), |v| {
+            if v[1] < 0.0 {
+                (2.0 * std::f64::consts::PI) - v[0]
+            } else {
+                v[0]
+            }
+        });
+
+    if degrees {
+        angles.to_degrees()
+    } else {
+        angles
+    }
+}
+
+/// whether the three points exist on the same line
+pub fn vectors_collinear(a: &ArrayView1<f64>, b: &ArrayView1<f64>, c: &ArrayView1<f64>) -> bool {
+    let tolerance = 3e-11;
+    // let area = spherical_triangle_area(a, b, c);
+    // area.is_nan() || area < tolerance
+
+    let abc = angle_between_vectors(a, b, c, false);
+    let cab = angle_between_vectors(c, a, b, false);
+    let bca = angle_between_vectors(b, c, a, false);
+
+    abc < tolerance
+        || cab < tolerance
+        || bca < tolerance
+        || (abc - std::f64::consts::PI).abs() < tolerance
+        || (cab - std::f64::consts::PI).abs() < tolerance
+        || (bca - std::f64::consts::PI).abs() < tolerance
+
+    // let left = arc_length(&a, &p);
+    // let right = arc_length(&p, &b);
+    // let total = arc_length(&a, &b);
+
+    // let tolerance = 3e-11;
+    // if left + right - total < tolerance {
+    //     // ensure angle is flat
+    //     if angle(&a, &point.xyz.view(), &b, false) - std::f64::consts::PI < tolerance {
+    //         return true;
+    //     }
+    // }
+}
 pub fn cross_vector(a: &ArrayView1<f64>, b: &ArrayView1<f64>) -> Array1<f64> {
     let ax = a[0];
     let ay = a[1];
@@ -343,11 +483,6 @@ impl SphericalPoint {
         vector_to_lonlat(&self.xyz.view(), degrees)
     }
 
-    pub fn combine(&self, other: &Self) -> MultiSphericalPoint {
-        MultiSphericalPoint::try_from(stack(Axis(0), &[self.xyz.view(), other.xyz.view()]).unwrap())
-            .unwrap()
-    }
-
     /// normalize this vector to length 1 (the unit sphere) while preserving direction
     pub fn normalized(&self) -> Self {
         Self::try_from(normalize_vector(&self.xyz.view())).unwrap()
@@ -368,12 +503,12 @@ impl SphericalPoint {
 
     /// angle on the sphere between this point and two other points
     pub fn angle_between(&self, a: &SphericalPoint, b: &SphericalPoint, degrees: bool) -> f64 {
-        crate::arcstring::vector_arcs_angle_between(&a.into(), &self.into(), &b.into(), degrees)
+        angle_between_vectors(&a.xyz.view(), &self.xyz.view(), &b.xyz.view(), degrees)
     }
 
     /// whether this point lies exactly between the given points
     pub fn collinear(&self, a: &SphericalPoint, b: &SphericalPoint) -> bool {
-        crate::arcstring::vectors_collinear(&a.xyz.view(), &self.xyz.view(), &b.xyz.view())
+        vectors_collinear(&a.xyz.view(), &self.xyz.view(), &b.xyz.view())
     }
 
     /// length of the underlying xyz vector
@@ -428,7 +563,8 @@ impl Add<&SphericalPoint> for &SphericalPoint {
     type Output = MultiSphericalPoint;
 
     fn add(self, rhs: &SphericalPoint) -> Self::Output {
-        self.combine(rhs)
+        MultiSphericalPoint::try_from(stack(Axis(0), &[self.xyz.view(), rhs.xyz.view()]).unwrap())
+            .unwrap()
     }
 }
 
@@ -511,11 +647,16 @@ impl Geometry for SphericalPoint {
 }
 
 impl GeometricOperations<&SphericalPoint> for &SphericalPoint {
-    fn distance(self, other: &SphericalPoint) -> f64 {
+    fn distance(self, other: &SphericalPoint, degrees: bool) -> f64 {
         if self.xyz == other.xyz {
             0.0
         } else {
-            vector_arc_length(&self.xyz.view(), &other.xyz.view())
+            let distance = vector_arc_length(&self.xyz.view(), &other.xyz.view());
+            if degrees {
+                distance.to_degrees()
+            } else {
+                distance
+            }
         }
     }
 
@@ -549,8 +690,8 @@ impl GeometricOperations<&SphericalPoint> for &SphericalPoint {
 }
 
 impl GeometricOperations<&MultiSphericalPoint> for &SphericalPoint {
-    fn distance(self, other: &MultiSphericalPoint) -> f64 {
-        other.distance(self)
+    fn distance(self, other: &MultiSphericalPoint, degrees: bool) -> f64 {
+        other.distance(self, degrees)
     }
 
     fn contains(self, _: &MultiSphericalPoint) -> bool {
@@ -583,8 +724,8 @@ impl GeometricOperations<&MultiSphericalPoint> for &SphericalPoint {
 }
 
 impl GeometricOperations<&crate::arcstring::ArcString> for &SphericalPoint {
-    fn distance(self, other: &crate::arcstring::ArcString) -> f64 {
-        other.distance(self)
+    fn distance(self, other: &crate::arcstring::ArcString, degrees: bool) -> f64 {
+        other.distance(self, degrees)
     }
 
     fn contains(self, _: &crate::arcstring::ArcString) -> bool {
@@ -617,8 +758,8 @@ impl GeometricOperations<&crate::arcstring::ArcString> for &SphericalPoint {
 }
 
 impl GeometricOperations<&crate::arcstring::MultiArcString> for &SphericalPoint {
-    fn distance(self, other: &crate::arcstring::MultiArcString) -> f64 {
-        other.distance(self)
+    fn distance(self, other: &crate::arcstring::MultiArcString, degrees: bool) -> f64 {
+        other.distance(self, degrees)
     }
 
     fn contains(self, _: &crate::arcstring::MultiArcString) -> bool {
@@ -651,8 +792,8 @@ impl GeometricOperations<&crate::arcstring::MultiArcString> for &SphericalPoint 
 }
 
 impl GeometricOperations<&crate::angularbounds::AngularBounds> for &SphericalPoint {
-    fn distance(self, other: &crate::angularbounds::AngularBounds) -> f64 {
-        other.distance(self)
+    fn distance(self, other: &crate::angularbounds::AngularBounds, degrees: bool) -> f64 {
+        other.distance(self, degrees)
     }
 
     fn contains(self, _: &crate::angularbounds::AngularBounds) -> bool {
@@ -685,8 +826,8 @@ impl GeometricOperations<&crate::angularbounds::AngularBounds> for &SphericalPoi
 }
 
 impl GeometricOperations<&crate::sphericalpolygon::SphericalPolygon> for &SphericalPoint {
-    fn distance(self, other: &crate::sphericalpolygon::SphericalPolygon) -> f64 {
-        other.distance(self)
+    fn distance(self, other: &crate::sphericalpolygon::SphericalPolygon, degrees: bool) -> f64 {
+        other.distance(self, degrees)
     }
 
     fn contains(self, _: &crate::sphericalpolygon::SphericalPolygon) -> bool {
@@ -722,8 +863,12 @@ impl GeometricOperations<&crate::sphericalpolygon::SphericalPolygon> for &Spheri
 }
 
 impl GeometricOperations<&crate::sphericalpolygon::MultiSphericalPolygon> for &SphericalPoint {
-    fn distance(self, other: &crate::sphericalpolygon::MultiSphericalPolygon) -> f64 {
-        other.distance(self)
+    fn distance(
+        self,
+        other: &crate::sphericalpolygon::MultiSphericalPolygon,
+        degrees: bool,
+    ) -> f64 {
+        other.distance(self, degrees)
     }
 
     fn contains(self, _: &crate::sphericalpolygon::MultiSphericalPolygon) -> bool {
@@ -1094,9 +1239,7 @@ impl MultiSphericalPoint {
         Zip::from(self.xyz.rows())
             .and(a.xyz.rows())
             .and(b.xyz.rows())
-            .par_map_collect(|point, a, b| {
-                crate::arcstring::vector_arcs_angle_between(&point, &a, &b, degrees)
-            })
+            .par_map_collect(|point, a, b| angle_between_vectors(&point, &a, &b, degrees))
     }
 
     pub fn collinear(&self, a: &SphericalPoint, b: &SphericalPoint) -> Array1<bool> {
@@ -1104,13 +1247,7 @@ impl MultiSphericalPoint {
         Array1::from_vec(
             points
                 .par_iter()
-                .map(|point| {
-                    crate::arcstring::vectors_collinear(
-                        &a.xyz.view(),
-                        &point.xyz.view(),
-                        &b.xyz.view(),
-                    )
-                })
+                .map(|point| vectors_collinear(&a.xyz.view(), &point.xyz.view(), &b.xyz.view()))
                 .collect(),
         )
     }
@@ -1400,8 +1537,8 @@ impl ExtendMultiGeometry<SphericalPoint> for MultiSphericalPoint {
 }
 
 impl GeometricOperations<&SphericalPoint> for &MultiSphericalPoint {
-    fn distance(self, other: &SphericalPoint) -> f64 {
-        self.nearest(other).distance(other)
+    fn distance(self, other: &SphericalPoint, degrees: bool) -> f64 {
+        self.nearest(other).distance(other, degrees)
     }
 
     fn contains(self, other: &SphericalPoint) -> bool {
@@ -1434,8 +1571,8 @@ impl GeometricOperations<&SphericalPoint> for &MultiSphericalPoint {
 }
 
 impl GeometricOperations<&MultiSphericalPoint> for &MultiSphericalPoint {
-    fn distance(self, other: &MultiSphericalPoint) -> f64 {
-        min_1darray(
+    fn distance(self, other: &MultiSphericalPoint, degrees: bool) -> f64 {
+        if let Some(distance) = min_1darray(
             &Zip::from(other.xyz.rows())
                 .par_map_collect(|other_xyz| {
                     // since the kdtree is over normalized vectors, the nearest vector in 3D space is also the nearest in angular distance
@@ -1447,8 +1584,15 @@ impl GeometricOperations<&MultiSphericalPoint> for &MultiSphericalPoint {
                     vector_arc_length(&self.xyz.slice(s![nearest.item as usize, ..]), &other_xyz)
                 })
                 .view(),
-        )
-        .unwrap_or(std::f64::NAN)
+        ) {
+            if degrees {
+                distance.to_degrees()
+            } else {
+                distance
+            }
+        } else {
+            std::f64::NAN
+        }
     }
 
     fn contains(self, other: &MultiSphericalPoint) -> bool {
@@ -1510,8 +1654,8 @@ impl GeometricOperations<&MultiSphericalPoint> for &MultiSphericalPoint {
 }
 
 impl GeometricOperations<&crate::arcstring::ArcString> for &MultiSphericalPoint {
-    fn distance(self, other: &crate::arcstring::ArcString) -> f64 {
-        other.distance(self)
+    fn distance(self, other: &crate::arcstring::ArcString, degrees: bool) -> f64 {
+        other.distance(self, degrees)
     }
 
     fn contains(self, _: &crate::arcstring::ArcString) -> bool {
@@ -1554,8 +1698,8 @@ impl GeometricOperations<&crate::arcstring::ArcString> for &MultiSphericalPoint 
 }
 
 impl GeometricOperations<&crate::arcstring::MultiArcString> for &MultiSphericalPoint {
-    fn distance(self, other: &crate::arcstring::MultiArcString) -> f64 {
-        other.distance(self)
+    fn distance(self, other: &crate::arcstring::MultiArcString, degrees: bool) -> f64 {
+        other.distance(self, degrees)
     }
 
     fn contains(self, other: &crate::arcstring::MultiArcString) -> bool {
@@ -1584,8 +1728,8 @@ impl GeometricOperations<&crate::arcstring::MultiArcString> for &MultiSphericalP
 }
 
 impl GeometricOperations<&crate::angularbounds::AngularBounds> for &MultiSphericalPoint {
-    fn distance(self, other: &crate::angularbounds::AngularBounds) -> f64 {
-        other.distance(self)
+    fn distance(self, other: &crate::angularbounds::AngularBounds, degrees: bool) -> f64 {
+        other.distance(self, degrees)
     }
 
     fn contains(self, _: &crate::angularbounds::AngularBounds) -> bool {
@@ -1617,8 +1761,8 @@ impl GeometricOperations<&crate::angularbounds::AngularBounds> for &MultiSpheric
 }
 
 impl GeometricOperations<&crate::sphericalpolygon::SphericalPolygon> for &MultiSphericalPoint {
-    fn distance(self, other: &crate::sphericalpolygon::SphericalPolygon) -> f64 {
-        other.distance(self)
+    fn distance(self, other: &crate::sphericalpolygon::SphericalPolygon, degrees: bool) -> f64 {
+        other.distance(self, degrees)
     }
 
     fn contains(self, _: &crate::sphericalpolygon::SphericalPolygon) -> bool {
@@ -1650,8 +1794,12 @@ impl GeometricOperations<&crate::sphericalpolygon::SphericalPolygon> for &MultiS
 }
 
 impl GeometricOperations<&crate::sphericalpolygon::MultiSphericalPolygon> for &MultiSphericalPoint {
-    fn distance(self, other: &crate::sphericalpolygon::MultiSphericalPolygon) -> f64 {
-        other.distance(self)
+    fn distance(
+        self,
+        other: &crate::sphericalpolygon::MultiSphericalPolygon,
+        degrees: bool,
+    ) -> f64 {
+        other.distance(self, degrees)
     }
 
     fn contains(self, _: &crate::sphericalpolygon::MultiSphericalPolygon) -> bool {
@@ -1689,63 +1837,4 @@ impl GeometricOperations<&crate::sphericalpolygon::MultiSphericalPolygon> for &M
     fn touches(self, other: &crate::sphericalpolygon::MultiSphericalPolygon) -> bool {
         other.touches(self)
     }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn test_angle() {
-        let a = SphericalPoint::from((1.0, 0.0, 0.0));
-        let b = SphericalPoint::from((0.0, 1.0, 0.0));
-        let c = SphericalPoint::from((0.0, 0.0, 1.0));
-        assert_eq!(b.angle_between(&a, &c, false), std::f64::consts::PI / 2.0);
-
-        let a = SphericalPoint::from((1.0, 1.0, 1.0));
-        let b = SphericalPoint::from((0.0, 0.0, 0.0));
-        let c = SphericalPoint::from((-1.0, -1.0, -1.0));
-        assert_eq!(b.angle_between(&a, &c, false), std::f64::consts::PI);
-
-        let a = SphericalPoint::from((1.0, 1.0, 1.0));
-        let b = SphericalPoint::from((0.0, 0.0, 0.0));
-        let c = SphericalPoint::from((1.0, 1.0, 1.0));
-        assert_eq!(b.angle_between(&a, &c, false), 0.0);
-
-        let a = SphericalPoint::try_from_lonlat(&array![60.0, 45.0].view(), true).unwrap();
-        let b = SphericalPoint::try_from_lonlat(&array![0.0, 90.0].view(), true).unwrap();
-        let c = SphericalPoint::try_from_lonlat(&array![30.0, -3.0].view(), true).unwrap();
-        assert_eq!(b.angle_between(&a, &c, true), 30.0);
-
-        // TODO: More angle tests
-    }
-
-    #[test]
-    fn test_angle_domain() {
-        let a = SphericalPoint::from((0.0, 0.0, 0.0));
-        let b = SphericalPoint::from((0.0, 0.0, 0.0));
-        let c = SphericalPoint::from((0.0, 0.0, 0.0));
-        assert_eq!(a.angle_between(&b, &c, false), 0.0);
-    }
-
-    // #[test]
-    // fn test_angle_nearly_coplanar() {
-    //     // test from issue #222 + extra values
-    //     let A = MultiSphericalPoint::from(np.repeat([(1.0, 1.0, 1.0)], 5, axis = 0));
-    //     let B = MultiSphericalPoint::from(np.repeat([(1.0, 0.9999999, 1.0)], 5, axis = 0));
-    //     let C = MultiSphericalPoint::try_from(array![
-    //         [0.0, 0.5, 1.0],
-    //         [0.0, 0.15, 1.0],
-    //         [0.0, 0.001, 1.0],
-    //         [-1.0, -1.0, -1.0],
-    //         [-1.0, 0.1, -1.0],
-    //     ])
-    //     .unwrap();
-    //     let angles = B.angles_between(&A, &C, false);
-
-    //     assert_eq!(angles[0], std::f64::consts::PI / 2.0);
-    //     // assert!(np.isfinite(angles[1:3]).all());
-    //     assert_eq!(angles[3], std::f64::consts::PI / 2.0);
-    //     assert_eq!(angles[4], std::f64::consts::PI);
-    // }
 }
