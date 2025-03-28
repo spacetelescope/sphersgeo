@@ -6,9 +6,7 @@ use numpy::ndarray::{
 use pyo3::prelude::*;
 use rayon::prelude::*;
 use std::{
-    collections::VecDeque,
     iter::Sum,
-    num::NonZero,
     ops::{Add, AddAssign},
 };
 
@@ -126,6 +124,14 @@ pub fn vector_arc_length(a: &ArrayView1<f64>, b: &ArrayView1<f64>) -> f64 {
         .sum()
         .sqrt()
         .atan2(a.dot(b))
+}
+
+fn vector_arcs_clockwise_turn(
+    a: &ArrayView1<f64>,
+    b: &ArrayView1<f64>,
+    c: &ArrayView1<f64>,
+) -> bool {
+    (b * &cross_vector(&(a - b).view(), &(c - b).view()).view()).sum() > 0.0
 }
 
 /// convert the given xyz vector to angular coordinates on the sphere
@@ -1235,40 +1241,86 @@ impl Geometry for &MultiSphericalPoint {
             return None;
         }
 
-        // sort points by distance from the mean center, using squared euclidean distance along the 3D cloud
-        let mut points: Vec<ArrayView1<f64>> = self
-            .kdtree
-            .nearest_n::<SquaredEuclidean>(
-                normalize_vector(&self.centroid().xyz.view())
-                    .as_slice()
-                    .unwrap()
-                    .try_into()
-                    .unwrap(),
-                NonZero::<usize>::try_from(self.len() - 1).unwrap(),
-            )
-            .iter()
-            .map(|neighbor| self.xyz.slice(s![neighbor.item as usize, ..]))
-            .collect();
+        // list of vertices on the convex hull
+        let mut convex_hull = vec![];
+
+        // list of all normalized vector points on the sphere
+        let mut candidates = Zip::from(normalize_vectors(&self.xyz.view()).rows())
+            .par_map_collect(|row| [row[0], row[1], row[2]])
+            .to_vec();
+
+        // mutable kd-tree in 3D space
+        let mut candidates_kdtree = kiddo::KdTree::<f64, 3>::from(&candidates);
+
+        // mean center of all points
+        let centroid = normalize_vector(&self.centroid().xyz.view());
 
         // the farthest point from the mean center must be on the convex hull
-        let mut vertices = vec![points.pop()];
-        points.reverse();
+        let farthest_neighbor_index = candidates_kdtree
+            .nearest_n::<SquaredEuclidean>(
+                centroid.as_slice().unwrap().try_into().unwrap(),
+                candidates.len(),
+            )
+            .last()
+            .unwrap()
+            .item as usize;
+        convex_hull.push(candidates[farthest_neighbor_index]);
 
-        while !points.is_empty() {
-            let point_a = vertices.last().unwrap();
-            for (index_b, point_b) in points.iter().enumerate() {
-                for (index_c, point_c) in points.iter().enumerate() {
-                    if index_c != index_b {
-                        // if point is on the edge, it shouldn't have a clockwise turn
-                        (&b * &cross_vector(&(&a - &b).view(), &(&c - &b).view()).view())
-                            .sum_axis(Axis(1))
-                            < 0.0
+        // iterate enough times to test all points
+        for _ in 1..candidates.len() - 1 {
+            let convex_hull_tail = convex_hull.last().unwrap();
+
+            let candidates_sorted_by_distance =
+                candidates_kdtree.nearest_n::<SquaredEuclidean>(convex_hull_tail, candidates.len());
+
+            for candidate_index in &candidates_sorted_by_distance {
+                let candidate = candidates[candidate_index.item as usize];
+
+                let mut no_clockwise: bool = true;
+                for other_candidate_index in &candidates_sorted_by_distance {
+                    if other_candidate_index.item != candidate_index.item {
+                        let other_candidate = candidates[other_candidate_index.item as usize];
+
+                        // if the candidate point is on the edge, it shouldn't have a clockwise turn to any other point
+                        if vector_arcs_clockwise_turn(
+                            &ArrayView1::from(convex_hull_tail),
+                            &ArrayView1::from(&candidate),
+                            &ArrayView1::from(&other_candidate),
+                        ) {
+                            no_clockwise = false;
+                            break;
+                        }
                     }
                 }
+
+                // if the candidate point has no clockwise turns to any other point, it must be on the convex hull
+                if no_clockwise {
+                    convex_hull.push(candidate);
+                    candidates.remove(candidate_index.item as usize);
+                    candidates_kdtree.remove(&candidate, candidate_index.item);
+                    break;
+                }
+            }
+
+            // if the last point in the chain equals the first, the arcstring is closed
+            if convex_hull.len() > 2 && convex_hull.last().unwrap() == convex_hull.first().unwrap()
+            {
+                break;
             }
         }
 
-        todo!();
+        // we can assume that all other candidates are interior to the convex hull
+        candidates.remove(farthest_neighbor_index);
+        let interior_point = SphericalPoint {
+            xyz: ArrayView1::from(&candidates[0]).to_owned(),
+        };
+
+        crate::sphericalpolygon::SphericalPolygon::new(
+            crate::arcstring::ArcString::from(MultiSphericalPoint::from(convex_hull)),
+            Some(interior_point),
+            None,
+        )
+        .ok()
     }
 
     fn coords(&self) -> MultiSphericalPoint {
