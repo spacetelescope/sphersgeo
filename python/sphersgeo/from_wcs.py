@@ -16,9 +16,9 @@ def polygon_from_wcs(
     crval: tuple[float, float] | None = None,
 ) -> SphericalPolygon:
     r"""
-    Create a new `SphericalPolygon` from the footprint of a FITS WCS specification.
+    Create a new ``SphericalPolygon`` from the footprint of a FITS WCS specification.
 
-    This method requires having `astropy <http://astropy.org>`__ installed.
+    This method requires having ``astropy`` installed.
 
     :param wcs: FITS header containing a WCS specification, or a path to a FITS file
     :param steps: The number of steps along each edge to convert into polygon edges.
