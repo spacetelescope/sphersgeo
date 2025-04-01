@@ -126,14 +126,6 @@ pub fn angle_between_vectors(
     let bc = vector_arc_length(b, c);
     let ca = vector_arc_length(c, a);
 
-    println!(
-        "{} {} {}",
-        SphericalPoint { xyz: a.to_owned() }.to_lonlat(true),
-        SphericalPoint { xyz: b.to_owned() }.to_lonlat(true),
-        SphericalPoint { xyz: c.to_owned() }.to_lonlat(true)
-    );
-    println!("{ab} {bc} {ca}");
-
     let mut angle = if ca < tolerance {
         // if the opposite side of the triangle is negligibly small
         0.0
