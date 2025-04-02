@@ -1,7 +1,14 @@
 use crate::geometry::{GeometricOperations, Geometry};
-use ndarray::Array2;
-use numpy::ndarray::{array, s, Array1, Axis};
+use numpy::ndarray::{array, s, Array1, Array2, ArrayView1, Axis};
 use pyo3::prelude::*;
+
+fn haversine_distance(a: &ArrayView1<f64>, b: &ArrayView1<f64>) -> f64 {
+    2.0 * ((((b[1] - a[1]) / 2.0).sin().powi(2)
+        + (a[1]).cos() * (b[1]).cos() * ((b[0] - a[0]) / 2.0).sin().powi(2))
+    .sqrt())
+    .asin()
+        * 2.0
+}
 
 /// an ortholinear rectangle aligned with the angular axes of the sphere
 #[pyclass]
@@ -113,7 +120,7 @@ impl Geometry for &AngularBounds {
     }
 
     fn length(&self) -> f64 {
-        crate::sphericalpoint::vector_arc_length(
+        haversine_distance(
             &array![self.min_x, self.min_y].view(),
             &array![self.max_x, self.max_y].view(),
         )

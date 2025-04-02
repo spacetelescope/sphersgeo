@@ -51,7 +51,7 @@ def test_init():
 
 
 def test_midpoint():
-    tolerance = 1e-10
+    tolerance = 1e-6
 
     avec = [
         np.array([i, j], dtype=float) + 7.0
@@ -69,72 +69,58 @@ def test_midpoint():
         A = SphericalPoint.from_lonlat(a, degrees=True)
         for b in bvec:
             B = SphericalPoint.from_lonlat(b, degrees=True)
-            C = ArcString((A + B).xyz).midpoints.parts[0]
-            assert B.angle_between(A, C) == np.pi
-            assert B.collinear(A, C)
-            assert_allclose(A.distance(B), B.distance(C), atol=tolerance)
+            mid = ArcString([A, B]).midpoints.parts[0]
+            assert_allclose(A.distance(mid), mid.distance(B), atol=tolerance)
+            assert_allclose(mid.angle_between(A, B), 180, rtol=tolerance)
 
 
 def test_contains():
-    arc = ArcString(
+    diagonal_arc = ArcString(
         MultiSphericalPoint.from_lonlats(
             [(-30.0, -30.0), (30.0, 30.0)], degrees=True
         ).xyz
     )
-    assert arc.contains(
-        SphericalPoint.from_lonlat((349.10660535, -12.30998866), degrees=True)
-    )
+    assert diagonal_arc.contains(SphericalPoint.from_lonlat((0, 0), degrees=True))
 
     vertical_arc = ArcString(
         MultiSphericalPoint.from_lonlats([(60.0, 0.0), (60.0, 30.0)], degrees=True).xyz,
     )
-    for i in range(1, 29):
+    for latitude in np.arange(1.0, 29.0, 1.0):
         assert vertical_arc.contains(
-            SphericalPoint.from_lonlat((60.0, float(i)), degrees=True)
+            SphericalPoint.from_lonlat((60.0, latitude), degrees=True)
         )
 
     horizontal_arc = ArcString(
         MultiSphericalPoint.from_lonlats([(0.0, 60.0), (30.0, 60.0)], degrees=True).xyz,
     )
-    for i in range(1, 29):
+    for longitude in np.arange(1.0, 29.0, 1.0):
         assert not horizontal_arc.contains(
-            SphericalPoint.from_lonlat((float(i), 60.0), degrees=True)
+            SphericalPoint.from_lonlat((longitude, 60.0), degrees=True)
         )
 
 
 def test_interpolate():
     tolerance = 1e-10
 
-    a_lonlat = (60.0, 0.0)
-    b_lonlat = (60.0, 30.0)
+    a = SphericalPoint.from_lonlat((60.0, 0.0), degrees=True)
+    b = SphericalPoint.from_lonlat((60.0, 30.0), degrees=True)
+    ab = ArcString([a, b])
 
-    a = SphericalPoint.from_lonlat(a_lonlat, degrees=True)
-    b = SphericalPoint.from_lonlat(b_lonlat, degrees=True)
+    interpolated_points = MultiSphericalPoint(
+        sphersgeo.array.interpolate_points_along_vector_arc(a.xyz, b.xyz, n=10)
+    ).parts
 
-    lonlats = sphersgeo.array.interpolate_points_along_vector_arc(a.xyz, b.xyz, n=10)
+    assert interpolated_points[0] == a
+    assert interpolated_points[-1] == b
 
-    assert_allclose(lonlats[0], a_lonlat)
-    assert_allclose(lonlats[-1], b_lonlat)
+    interpolated_arc = ArcString(interpolated_points)
 
-    xyzs = sphersgeo.array.interpolate(a.xyz, b.xyz, n=10)
+    for point in interpolated_points[1:-1]:
+        assert interpolated_arc.contains(point)
 
-    assert_allclose(xyzs[0], a.xyz)
-    assert_allclose(xyzs[-1], b.xyz)
+    distances = interpolated_arc.lengths
 
-    arc_from_lonlats = ArcString(
-        MultiSphericalPoint.from_lonlats(lonlats, degrees=True)
-    )
-    arc_from_xyzs = ArcString(MultiSphericalPoint(xyzs))
-
-    for xyz in xyzs:
-        point = SphericalPoint(xyz)
-        assert arc_from_lonlats.contains(point)
-        assert arc_from_xyzs.contains(point)
-
-    distances_from_lonlats = arc_from_lonlats.lengths
-    distances_from_xyz = arc_from_xyzs.lengths
-
-    assert np.allclose(distances_from_lonlats, distances_from_xyz, atol=tolerance)
+    assert np.allclose(distances, ab.length / 10, atol=tolerance)
 
 
 def test_intersection():

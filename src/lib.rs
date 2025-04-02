@@ -129,7 +129,7 @@ mod py_sphersgeo {
                 .map_err(|err| PyValueError::new_err(format!("{err}")))
         }
 
-        /// whether this point lies exactly between the given points
+        /// whether this point shares a line with two other points
         #[pyo3(name = "collinear")]
         fn py_collinear(&self, a: &SphericalPoint, b: &SphericalPoint) -> bool {
             self.collinear(a, b)
@@ -1820,9 +1820,13 @@ mod py_sphersgeo {
         }
 
         #[pyfunction]
-        #[pyo3(name = "vector_arc_length")]
-        fn py_vector_arc_length(a: PyReadonlyArray1<f64>, b: PyReadonlyArray1<f64>) -> f64 {
-            crate::sphericalpoint::vector_arc_length(&a.as_array(), &b.as_array())
+        #[pyo3(name = "vector_arc_length", signature=(a, b, normalized=false))]
+        fn py_vector_arc_length(
+            a: PyReadonlyArray1<f64>,
+            b: PyReadonlyArray1<f64>,
+            normalized: bool,
+        ) -> f64 {
+            crate::sphericalpoint::vector_arc_length(&a.as_array(), &b.as_array(), normalized)
         }
 
         #[pyfunction]
