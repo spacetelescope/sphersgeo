@@ -21,7 +21,7 @@ use std::{cmp::Ordering, collections::VecDeque, iter::Sum};
 /// ----------
 /// - Klain, D. A. (2019). A probabilistic proof of the spherical excess formula (No. arXiv:1909.04505). arXiv. https://doi.org/10.48550/arXiv.1909.04505
 /// - Miller, Robert D. Computing the area of a spherical polygon. Graphics Gems IV. 1994. Academic Press. doi:10.5555/180895.180907
-/// https://www.google.com/books/edition/Graphics_Gems_IV/CCqzMm_-WucC?hl=en&gbpv=1&dq=Graphics%20Gems%20IV.%20p132&pg=PA133&printsec=frontcover
+///   `pdf <https://www.google.com/books/edition/Graphics_Gems_IV/CCqzMm_-WucC?hl=en&gbpv=1&dq=Graphics%20Gems%20IV.%20p132&pg=PA133&printsec=frontcover>`_
 pub fn spherical_triangle_area(
     a: &ArrayView1<f64>,
     b: &ArrayView1<f64>,
@@ -243,11 +243,11 @@ fn interior_point_from_polygon_boundary(
 
         // assume there are always more interior triangles than exterior, due to the nature of the boundary being closed
         if side_a.len() > side_b.len() {
-            return Ok(side_a[0].to_owned());
+            Ok(side_a[0].to_owned())
         } else if side_a.len() > side_b.len() {
-            return Ok(side_b[0].to_owned());
+            Ok(side_b[0].to_owned())
         } else {
-            return Err(String::from("polygon boundary is a perfect great circle; cannot infer an interior point from two hemispheres!"));
+            Err(String::from("polygon boundary is a perfect great circle; cannot infer an interior point from two hemispheres!"))
         }
     }
 }
