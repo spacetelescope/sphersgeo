@@ -2,7 +2,9 @@ use crate::{
     angularbounds::AngularBounds,
     arcstring::{vector_arc_crossings, ArcString, MultiArcString},
     geometry::{ExtendMultiGeometry, GeometricOperations, Geometry, MultiGeometry},
-    sphericalpoint::{shift_rows, vector_arc_length, MultiSphericalPoint, SphericalPoint},
+    sphericalpoint::{
+        angle_between_vectors, shift_rows, vector_arc_length, MultiSphericalPoint, SphericalPoint,
+    },
 };
 use ndarray::{
     array, concatenate,
@@ -10,10 +12,9 @@ use ndarray::{
     s, stack, Array1, ArrayView1, ArrayView2, Axis, Zip,
 };
 use pyo3::prelude::*;
-use rayon::iter::IntoParallelIterator;
-use std::{cmp::Ordering, collections::VecDeque, iter::Sum};
+use std::{cmp::Ordering, collections::VecDeque, fmt::Display, iter::Sum};
 
-/// surface area of a spherical triangle via Girard's theorum
+/// surface area of a triangle on the sphere via Girard's theorum
 ///
 ///     θ_1 + θ_2 + θ_3 − π
 ///
@@ -45,12 +46,10 @@ pub fn spherical_triangle_area(
 
 // calculate the interior angles of the polygon comprised of the given points
 pub fn spherical_polygon_interior_angles(points: &ArrayView2<f64>, degrees: bool) -> Array1<f64> {
-    crate::sphericalpoint::angles_between_vectors(
-        &points.slice(s![-2..-2, ..]),
-        &shift_rows(points, -2).view(),
-        &shift_rows(points, -1).view(),
-        degrees,
-    )
+    Zip::from(shift_rows(points, -1).rows())
+        .and(points.rows())
+        .and(shift_rows(points, 1).rows())
+        .par_map_collect(|a, b, c| angle_between_vectors(&a, &b, &c, degrees))
 }
 
 /// surface area of a spherical polygon via deconstructing into triangles
@@ -92,26 +91,25 @@ pub fn point_in_polygon_boundary(
 /// the vertices are predominantly clockwise and counter-clockwise if
 /// the reverse.
 fn orientation(xyzs: &ArrayView2<f64>) -> Array1<f64> {
-    let points = concatenate(
-        Axis(0),
-        &[
-            xyzs.view(),
-            xyzs.slice(s![1, ..]).broadcast((1, 3)).unwrap().view(),
-        ],
-    )
-    .unwrap();
-    let a = points.slice(s![..-2, ..]);
-    let b = points.slice(s![1..-1, ..]);
-    let c = points.slice(s![2.., ..]);
-    (&b * &crate::sphericalpoint::cross_vectors(&(&a - &b).view(), &(&c - &b).view()).view())
+    // let points = concatenate(
+    //     Axis(0),
+    //     &[
+    //         xyzs.view(),
+    //         xyzs.slice(s![1, ..]).to_shape((1, 3)).unwrap().view(),
+    //     ],
+    // )
+    // .unwrap();
+
+    let a = xyzs.slice(s![..xyzs.nrows() - 2, ..]);
+    let b = xyzs.slice(s![1..xyzs.nrows() - 1, ..]);
+    let c = xyzs.slice(s![2.., ..]);
+
+    (&b.reversed_axes()
+        * &crate::sphericalpoint::cross_vectors(&(&a - &b).view(), &(&c - &b).view()).view())
         .sum_axis(Axis(1))
 }
 
-// TODO: support holes
-fn centroid_from_polygon_boundary(
-    boundary: &ArcString,
-    holes: &Option<MultiSphericalPolygon>,
-) -> SphericalPoint {
+fn centroid_from_polygon_boundary(boundary: &ArcString) -> SphericalPoint {
     let xyz = if boundary.points.xyz.nrows() <= 4 {
         // a simple polygon centroid is the mean of its vertices
         boundary.centroid().normalized().xyz
@@ -150,65 +148,13 @@ fn centroid_from_polygon_boundary(
 }
 
 /// choose an interior point from the smaller area of the two regions created by the given boundary
-fn interior_point_from_polygon_boundary(
-    boundary: &ArcString,
-    holes: &Option<MultiArcString>,
-) -> Result<SphericalPoint, String> {
+fn interior_point_from_polygon_boundary(boundary: &ArcString) -> Result<SphericalPoint, String> {
     // remember: the centroid of the boundary arcstring COULD be outside the polygon!
     let boundary_centroid = boundary.centroid();
 
-    if boundary.points.xyz.nrows() <= 4 && holes.is_none() {
+    if boundary.points.xyz.nrows() <= 4 {
         Ok(boundary_centroid)
     } else {
-        // if holes are provided, we can assume they
-        let holes = holes.to_owned().map(|holes| {
-            let polygons: Vec<SphericalPolygon> = holes
-                .arcstrings
-                .into_par_iter()
-                .map(|arcstring| SphericalPolygon::new(arcstring, None, None).unwrap())
-                .collect();
-            MultiSphericalPolygon::from(polygons)
-        });
-        if let Some(holes) = holes {
-            let hole_boundary_point = holes.polygons[0]
-                .boundary
-                .points
-                .xyz
-                .slice(s![0, ..])
-                .to_owned();
-            for index in -2..boundary.points.xyz.nrows() as i32 - 3 {
-                let triangle_centroid = SphericalPoint {
-                    xyz: boundary
-                        .points
-                        .xyz
-                        .slice(s![index..index + 3, ..])
-                        .sum_axis(Axis(0))
-                        / 3.0,
-                };
-
-                // TODO: handle the case where all triangle centroids are within holes
-                if triangle_centroid.within(&holes) {
-                    continue;
-                }
-
-                if (ArcString {
-                    points: MultiSphericalPoint::try_from(
-                        stack(
-                            Axis(0),
-                            &[triangle_centroid.xyz.view(), hole_boundary_point.view()],
-                        )
-                        .unwrap(),
-                    )
-                    .unwrap(),
-                    closed: false,
-                })
-                .crosses(boundary)
-                {
-                    return Ok(triangle_centroid);
-                }
-            }
-        }
-
         // build two lists of triangle centroids, segregated by the exterior boundary of the polygon (we don't know which is which yet)
         let mut side_a = vec![];
         let mut side_b = vec![];
@@ -255,18 +201,16 @@ fn interior_point_from_polygon_boundary(
 /// polygon on the sphere, comprising:
 /// 1. a non-intersecting collection of connected arcs (arcstring) that connects back to its first point (closed)
 /// 2. an interior point to specify which region of the sphere the polygon represents; this is required for non-Euclidian closed geometry
-/// 3. a series of closed arcstrings representing holes inside the exterior polygon
 #[pyclass]
 #[derive(Clone, Debug, PartialEq)]
 pub struct SphericalPolygon {
     pub boundary: ArcString,
     pub interior_point: SphericalPoint,
-    pub holes: Option<MultiSphericalPolygon>,
 }
 
-impl ToString for SphericalPolygon {
-    fn to_string(&self) -> String {
-        format!("AngularPolygon({:?})", self.boundary)
+impl Display for SphericalPolygon {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "SphericalPolygon({:?})", self.boundary)
     }
 }
 
@@ -275,7 +219,6 @@ impl SphericalPolygon {
     pub fn new(
         boundary: ArcString,
         interior_point: Option<SphericalPoint>,
-        holes: Option<MultiArcString>,
     ) -> Result<Self, String> {
         if let Some(crossings_with_self) = boundary.crossings_with_self() {
             Err(format!(
@@ -286,39 +229,8 @@ impl SphericalPolygon {
             let interior_point = if let Some(interior_point) = interior_point {
                 interior_point
             } else {
-                interior_point_from_polygon_boundary(&boundary, &holes)?
+                interior_point_from_polygon_boundary(&boundary)?
             };
-
-            if let Some(holes) = &holes {
-                for hole in &holes.arcstrings {
-                    if let Some(crossings_with_self) = hole.crossings_with_self() {
-                        return Err(format!(
-                            "hole crosses itself {} times",
-                            crossings_with_self.xyz.nrows()
-                        ));
-                    }
-
-                    if point_in_polygon_boundary(
-                        &interior_point.xyz.view(),
-                        &hole.centroid().xyz.view(),
-                        &hole.points.xyz.view(),
-                    ) {
-                        return Err(format!(
-                            "interior point {} is within hole {}",
-                            interior_point.xyz, hole.points.xyz
-                        ));
-                    }
-                }
-            }
-
-            let holes = holes.map(|holes| {
-                let polygons: Vec<SphericalPolygon> = holes
-                    .arcstrings
-                    .into_par_iter()
-                    .map(|arcstring| SphericalPolygon::new(arcstring, None, None).unwrap())
-                    .collect();
-                MultiSphericalPolygon::from(polygons)
-            });
 
             Ok(Self {
                 boundary: if boundary.closed {
@@ -329,7 +241,6 @@ impl SphericalPolygon {
                     boundary
                 },
                 interior_point,
-                holes,
             })
         }
     }
@@ -381,7 +292,6 @@ impl SphericalPolygon {
         Self::new(
             ArcString::from(MultiSphericalPoint::try_from(&vertices).unwrap()),
             Some(center.to_owned()),
-            None,
         )
         .unwrap()
     }
@@ -421,7 +331,6 @@ impl SphericalPolygon {
         Self {
             boundary: self.boundary.to_owned(),
             interior_point: self.antipode(),
-            holes: None,
         }
     }
 
@@ -475,7 +384,7 @@ impl Geometry for SphericalPolygon {
     }
 
     fn centroid(&self) -> crate::sphericalpoint::SphericalPoint {
-        centroid_from_polygon_boundary(&self.boundary, &self.holes)
+        centroid_from_polygon_boundary(&self.boundary)
     }
 
     fn convex_hull(&self) -> Option<SphericalPolygon> {
@@ -505,23 +414,11 @@ impl GeometricOperations<&SphericalPoint> for &SphericalPolygon {
     }
 
     fn contains(self, other: &SphericalPoint) -> bool {
-        if point_in_polygon_boundary(
+        point_in_polygon_boundary(
             &other.xyz.view(),
             &self.interior_point.xyz.view(),
             &self.boundary.points.xyz.view(),
-        ) {
-            // check against holes, if any
-            if let Some(holes) = &self.holes {
-                // if the point is within a hole, it is not within the polygon
-                !holes.contains(other)
-            } else {
-                // if there are no holes
-                true
-            }
-        } else {
-            // if the point is NOT within the polygon exterior
-            false
-        }
+        )
     }
 
     fn within(self, _: &SphericalPoint) -> bool {
@@ -556,32 +453,18 @@ impl GeometricOperations<&MultiSphericalPoint> for &SphericalPolygon {
 
     fn contains(self, other: &MultiSphericalPoint) -> bool {
         for xyz in other.xyz.rows() {
-            if point_in_polygon_boundary(
+            if !point_in_polygon_boundary(
                 &xyz,
                 &self.interior_point.xyz.view(),
                 &self.boundary.points.xyz.view(),
             ) {
-                // check against holes, if any
-                if let Some(holes) = &self.holes {
-                    if holes.polygons.par_iter().any(|hole| {
-                        point_in_polygon_boundary(
-                            &xyz,
-                            &hole.interior_point.xyz.view(),
-                            &hole.boundary.points.xyz.view(),
-                        )
-                    }) {
-                        // if the point is within a hole, it is not within the polygon
-                        return false;
-                    }
-                }
-            } else {
                 // if the point is NOT within the polygon exterior
                 return false;
             }
         }
 
         // if none of the points returned false
-        return true;
+        true
     }
 
     fn within(self, _: &MultiSphericalPoint) -> bool {
@@ -599,24 +482,7 @@ impl GeometricOperations<&MultiSphericalPoint> for &SphericalPolygon {
                 &self.interior_point.xyz.view(),
                 &self.boundary.points.xyz.view(),
             ) {
-                // check against holes, if any
-                if let Some(holes) = &self.holes {
-                    // if the point is within a hole, it is not within the polygon
-                    if !holes.polygons.par_iter().any(|hole| {
-                        point_in_polygon_boundary(
-                            &xyz,
-                            // calculate the centroid of the hole's exterior
-                            &hole.interior_point.xyz.view(),
-                            &hole.boundary.points.xyz.view(),
-                        )
-                    }) {
-                        // if the point is not within any holes
-                        return true;
-                    }
-                } else {
-                    // if there are no holes
-                    return true;
-                }
+                return true;
             }
         }
 
@@ -633,34 +499,15 @@ impl GeometricOperations<&MultiSphericalPoint> for &SphericalPolygon {
                 &self.interior_point.xyz.view(),
                 &self.boundary.points.xyz.view(),
             ) {
-                // check against holes, if any
-                if let Some(holes) = &self.holes {
-                    // if the point is within a hole, it is not within the polygon
-                    if !holes.polygons.par_iter().any(|hole| {
-                        point_in_polygon_boundary(
-                            &xyz,
-                            // calculate the centroid of the hole's exterior
-                            &hole.interior_point.xyz.view(),
-                            &hole.boundary.points.xyz.view(),
-                        )
-                    }) {
-                        // if the point is not within any holes
-                        intersections.push(xyz);
-                    }
-                } else {
-                    // if there are no holes
-                    intersections.push(xyz);
-                }
+                intersections.push(xyz);
             }
         }
 
         if !intersections.is_empty() {
-            Some(unsafe {
-                MultiSphericalPoint::try_from(
-                    stack(Axis(0), intersections.as_slice()).unwrap_unchecked(),
-                )
-                .unwrap_unchecked()
-            })
+            Some(
+                MultiSphericalPoint::try_from(stack(Axis(0), intersections.as_slice()).unwrap())
+                    .unwrap(),
+            )
         } else {
             None
         }
@@ -690,10 +537,6 @@ impl GeometricOperations<&ArcString> for &SphericalPolygon {
 
     fn crosses(self, other: &ArcString) -> bool {
         self.boundary.crosses(other)
-            || self
-                .holes
-                .as_ref()
-                .is_some_and(|holes| holes.crosses(other))
     }
 
     fn intersects(self, other: &ArcString) -> bool {
@@ -706,11 +549,6 @@ impl GeometricOperations<&ArcString> for &SphericalPolygon {
 
     fn touches(self, other: &ArcString) -> bool {
         self.boundary.touches(other)
-            || (!self.contains(other)
-                && self
-                    .holes
-                    .as_ref()
-                    .is_some_and(|holes| holes.touches(other)))
     }
 }
 
@@ -733,10 +571,6 @@ impl GeometricOperations<&MultiArcString> for &SphericalPolygon {
 
     fn crosses(self, other: &MultiArcString) -> bool {
         self.boundary.crosses(other)
-            || self
-                .holes
-                .as_ref()
-                .is_some_and(|holes| holes.crosses(other))
     }
 
     fn intersects(self, other: &MultiArcString) -> bool {
@@ -749,11 +583,6 @@ impl GeometricOperations<&MultiArcString> for &SphericalPolygon {
 
     fn touches(self, other: &MultiArcString) -> bool {
         self.boundary.touches(other)
-            || (!self.contains(other)
-                && self
-                    .holes
-                    .as_ref()
-                    .is_some_and(|holes| holes.touches(other)))
     }
 }
 
@@ -776,10 +605,6 @@ impl GeometricOperations<&AngularBounds> for &SphericalPolygon {
 
     fn crosses(self, other: &AngularBounds) -> bool {
         self.boundary.crosses(other)
-            || self
-                .holes
-                .as_ref()
-                .is_some_and(|holes| holes.crosses(other))
     }
 
     fn intersects(self, other: &AngularBounds) -> bool {
@@ -796,11 +621,6 @@ impl GeometricOperations<&AngularBounds> for &SphericalPolygon {
 
     fn touches(self, other: &AngularBounds) -> bool {
         self.boundary.touches(other)
-            || (!self.contains(other)
-                && self
-                    .holes
-                    .as_ref()
-                    .is_some_and(|holes| holes.touches(other)))
     }
 }
 
@@ -823,10 +643,6 @@ impl GeometricOperations<&SphericalPolygon> for &SphericalPolygon {
 
     fn crosses(self, other: &SphericalPolygon) -> bool {
         self.boundary.crosses(other)
-            || self
-                .holes
-                .as_ref()
-                .is_some_and(|holes| holes.crosses(other))
     }
 
     fn intersects(self, other: &SphericalPolygon) -> bool {
@@ -839,11 +655,6 @@ impl GeometricOperations<&SphericalPolygon> for &SphericalPolygon {
 
     fn touches(self, other: &SphericalPolygon) -> bool {
         self.boundary.touches(&other.boundary)
-            || (!self.contains(other)
-                && self
-                    .holes
-                    .as_ref()
-                    .is_some_and(|holes| holes.touches(&other.boundary)))
     }
 }
 
@@ -866,10 +677,6 @@ impl GeometricOperations<&MultiSphericalPolygon> for &SphericalPolygon {
 
     fn crosses(self, other: &MultiSphericalPolygon) -> bool {
         self.boundary.crosses(other)
-            || self
-                .holes
-                .as_ref()
-                .is_some_and(|holes| holes.crosses(other))
     }
 
     fn intersects(self, other: &MultiSphericalPolygon) -> bool {
@@ -882,11 +689,6 @@ impl GeometricOperations<&MultiSphericalPolygon> for &SphericalPolygon {
 
     fn touches(self, other: &MultiSphericalPolygon) -> bool {
         self.boundary.touches(other)
-            || (!self.contains(other)
-                && self
-                    .holes
-                    .as_ref()
-                    .is_some_and(|holes| holes.touches(other)))
     }
 }
 
@@ -904,9 +706,9 @@ impl From<Vec<SphericalPolygon>> for MultiSphericalPolygon {
     }
 }
 
-impl ToString for MultiSphericalPolygon {
-    fn to_string(&self) -> String {
-        format!("MultiAngularPolygon({:?})", self.polygons)
+impl Display for MultiSphericalPolygon {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "MultiAngularPolygon({:?})", self.polygons)
     }
 }
 

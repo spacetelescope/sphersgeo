@@ -65,10 +65,10 @@ def test_init():
 def test_from_cone():
     random.seed(0)
     for i in range(50):
+        lon = random.randrange(-180, 180)
+        lat = random.randrange(20, 90)
         polygon = SphericalPolygon.from_cone(
-            SphericalPoint.from_lonlat(
-                (random.randrange(-180, 180), random.randrange(20, 90)), degrees=True
-            ),
+            SphericalPoint.from_lonlat((lon, lat), degrees=True),
             8,
             steps=64,
         )
@@ -84,24 +84,25 @@ def test_cone_area():
             ).area
             if expected_area is None:
                 expected_area = area
-                print(expected_area)
             assert_almost_equal(area, expected_area)
 
 
 def test_is_clockwise():
-    clockwise_poly = SphericalPolygon.from_cone(0.0, 90.0, 1.0)
-    assert clockwise_poly.is_clockwise
+    counterclockwise_poly = SphericalPolygon.from_cone(
+        SphericalPoint.from_lonlat((0.0, 90.0)), 1.0
+    )
+    assert not counterclockwise_poly.is_clockwise
 
-    points = list(clockwise_poly.points)[0]
-    inside = list(clockwise_poly)[0]
+    points = list(counterclockwise_poly.points)[0]
+    inside = list(counterclockwise_poly)[0]
     outside = -1.0 * inside
 
     rpoints = points[::-1]
     reverse_poly = SphericalPolygon(rpoints, interior_point=inside)
-    assert reverse_poly.is_clockwise()
+    assert reverse_poly.is_clockwise
 
     complement_poly = SphericalPolygon(points, inside=outside)
-    assert not complement_poly.is_clockwise()
+    assert not complement_poly.is_clockwise
 
 
 def test_overlap():

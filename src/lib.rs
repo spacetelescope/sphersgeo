@@ -3,7 +3,6 @@ mod angularbounds;
 mod arcstring;
 mod geometry;
 mod geometrycollection;
-mod sphericalgraph;
 mod sphericalpoint;
 mod sphericalpolygon;
 
@@ -1354,11 +1353,10 @@ mod py_sphersgeo {
     impl SphericalPolygon {
         /// an interior point is required because an arcstring divides a sphere into two regions
         #[new]
-        #[pyo3(signature=(boundary, interior_point=None, holes=None))]
+        #[pyo3(signature=(boundary, interior_point=None))]
         fn py_new<'py>(
             boundary: PyArcStringInputs<'py>,
             interior_point: Option<PySphericalPointInputs<'py>>,
-            holes: Option<PyMultiArcStringInputs<'py>>,
         ) -> PyResult<Self> {
             let boundary = ArcString::py_new(boundary, true)?;
             let interior_point = if let Some(interior_point) = interior_point {
@@ -1366,12 +1364,7 @@ mod py_sphersgeo {
             } else {
                 None
             };
-            let holes = if let Some(holes) = holes {
-                Some(MultiArcString::py_new(holes)?)
-            } else {
-                None
-            };
-            Self::new(boundary, interior_point, holes)
+            Self::new(boundary, interior_point)
                 .map_err(|err| PyValueError::new_err(err.to_string()))
         }
 
@@ -1590,7 +1583,7 @@ mod py_sphersgeo {
                     let mut polygons: Vec<SphericalPolygon> = vec![];
                     for arcstring in arcstrings {
                         polygons.push(
-                            SphericalPolygon::new(ArcString::py_new(arcstring, true)?, None, None)
+                            SphericalPolygon::new(ArcString::py_new(arcstring, true)?, None)
                                 .map_err(|err| PyValueError::new_err(err.to_string()))?,
                         );
                     }
@@ -1786,12 +1779,6 @@ mod py_sphersgeo {
             self.to_string()
         }
     }
-
-    #[pymodule_export]
-    use crate::sphericalgraph::SphericalGraph;
-
-    #[pymethods]
-    impl SphericalGraph {}
 
     #[pymodule(name = "array")]
     pub mod py_array {

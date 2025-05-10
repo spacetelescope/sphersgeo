@@ -11,6 +11,6 @@ crate-type = ["cdylib"]
 [dependencies]
 kiddo = "5.0.3"
 ndarray = { version = "0.16.1", features = ["rayon"] }
-numpy = "0.23.0"
-pyo3 = "0.23.3"
+numpy = "0.24.0"
+pyo3 = "0.24.2"
 rayon = "1.10.0"

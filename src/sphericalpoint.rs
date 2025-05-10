@@ -16,12 +16,12 @@ pub fn min_1darray(arr: &ArrayView1<f64>) -> Option<f64> {
     if arr.is_any_nan() || arr.is_any_infinite() {
         None
     } else {
-        Some(unsafe {
+        Some(
             *(arr
                 .into_par_iter()
-                .min_by(|a, b| a.partial_cmp(b).unwrap_unchecked())
-                .unwrap_unchecked())
-        })
+                .min_by(|a, b| a.partial_cmp(b).unwrap())
+                .unwrap()),
+        )
     }
 }
 
@@ -30,12 +30,12 @@ pub fn max_1darray(arr: &ArrayView1<f64>) -> Option<f64> {
     if arr.is_any_nan() || arr.is_any_infinite() {
         None
     } else {
-        Some(unsafe {
+        Some(
             *(arr
                 .into_par_iter()
-                .max_by(|a, b| a.partial_cmp(b).unwrap_unchecked())
-                .unwrap_unchecked())
-        })
+                .max_by(|a, b| a.partial_cmp(b).unwrap())
+                .unwrap()),
+        )
     }
 }
 
@@ -940,7 +940,7 @@ impl From<&Vec<SphericalPoint>> for MultiSphericalPoint {
         for (index, row) in xyz.axis_iter_mut(Axis(0)).enumerate() {
             points[index].xyz.assign_to(row);
         }
-        unsafe { Self::try_from(xyz.assume_init()).unwrap_unchecked() }
+        Self::try_from(unsafe { xyz.assume_init() }).unwrap()
     }
 }
 
@@ -1014,7 +1014,7 @@ impl From<&MultiSphericalPoint> for Vec<[f64; 3]> {
             .xyz
             .rows()
             .into_iter()
-            .map(|row| unsafe { row.to_vec().try_into().unwrap_unchecked() })
+            .map(|row| row.to_vec().try_into().unwrap())
             .collect()
     }
 }
@@ -1276,7 +1276,7 @@ impl MultiSphericalPoint {
 
     fn push_xyz(&mut self, xyz: &ArrayView1<f64>, recreate: bool) {
         if !point_within_kdtree(xyz, &self.kdtree) {
-            unsafe { self.xyz.push_row(*xyz).unwrap_unchecked() }
+            self.xyz.push_row(*xyz).unwrap();
             if recreate {
                 self.recreate_kdtree();
             }
@@ -1477,7 +1477,6 @@ impl Geometry for &MultiSphericalPoint {
         crate::sphericalpolygon::SphericalPolygon::new(
             crate::arcstring::ArcString::from(MultiSphericalPoint::from(convex_hull)),
             Some(interior_point),
-            None,
         )
         .ok()
     }
@@ -1547,7 +1546,7 @@ impl ExtendMultiGeometry<SphericalPoint> for MultiSphericalPoint {
     fn extend(&mut self, other: MultiSphericalPoint) {
         other.xyz.rows().into_iter().for_each(|row| {
             if !point_within_kdtree(&row, &self.kdtree) {
-                unsafe { self.xyz.push_row(row.view()).unwrap_unchecked() }
+                self.xyz.push_row(row.view()).unwrap()
             }
         });
         self.recreate_kdtree();

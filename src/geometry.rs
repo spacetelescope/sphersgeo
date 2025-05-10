@@ -55,6 +55,11 @@ pub trait GeometricOperations<O: Geometry = Self> {
     /// https://esri.github.io/geometry-api-java/doc/Within.html
     fn within(self, other: O) -> bool;
 
+    /// An object is said to touch other if it has at least one point in common with other and its interior does not intersect with any part of the other.
+    /// Overlapping features therefore do not touch.
+    /// https://esri.github.io/geometry-api-java/doc/Touches.html
+    fn touches(self, other: O) -> bool;
+
     /// the geometries have some, but not all interior points in common
     ///
     /// Two polylines cross if they meet at (a) point/s only, and at least one of the shared points is internal to both polylines.
@@ -72,11 +77,6 @@ pub trait GeometricOperations<O: Geometry = Self> {
     /// it will ONLY return the lower order of geometry being compared
     /// and will NOT handle touching, collinear overlap, or degenerate cases
     fn intersection(self, other: O) -> Option<impl Geometry>;
-
-    /// An object is said to touch other if it has at least one point in common with other and its interior does not intersect with any part of the other.
-    /// Overlapping features therefore do not touch.
-    /// https://esri.github.io/geometry-api-java/doc/Touches.html
-    fn touches(self, other: O) -> bool;
 }
 
 #[derive(FromPyObject, IntoPyObject, Debug, Clone, PartialEq)]
@@ -171,11 +171,41 @@ impl Geometry for AnyGeometry {
     }
 
     fn boundary(&self) -> Option<AnyGeometry> {
-        todo!()
+        match self {
+            AnyGeometry::SphericalPoint(point) => point
+                .boundary()
+                .map(|boundary| AnyGeometry::SphericalPoint(boundary)),
+            AnyGeometry::MultiSphericalPoint(multipoint) => multipoint
+                .boundary()
+                .map(|boundary| AnyGeometry::MultiSphericalPoint(boundary)),
+            AnyGeometry::ArcString(arcstring) => arcstring
+                .boundary()
+                .map(|boundary| AnyGeometry::MultiSphericalPoint(boundary)),
+            AnyGeometry::MultiArcString(multiarcstring) => multiarcstring
+                .boundary()
+                .map(|boundary| AnyGeometry::MultiSphericalPoint(boundary)),
+            AnyGeometry::AngularBounds(bounding_box) => bounding_box
+                .boundary()
+                .map(|boundary| AnyGeometry::ArcString(boundary)),
+            AnyGeometry::SphericalPolygon(polygon) => polygon
+                .boundary()
+                .map(|boundary| AnyGeometry::ArcString(boundary)),
+            AnyGeometry::MultiSphericalPolygon(multipolygon) => multipolygon
+                .boundary()
+                .map(|boundary| AnyGeometry::MultiArcString(boundary)),
+        }
     }
 
     fn representative_point(&self) -> crate::sphericalpoint::SphericalPoint {
-        todo!()
+        match self {
+            AnyGeometry::SphericalPoint(point) => point.representative_point(),
+            AnyGeometry::MultiSphericalPoint(multipoint) => multipoint.representative_point(),
+            AnyGeometry::ArcString(arcstring) => arcstring.representative_point(),
+            AnyGeometry::MultiArcString(multiarcstring) => multiarcstring.representative_point(),
+            AnyGeometry::AngularBounds(bounding_box) => bounding_box.representative_point(),
+            AnyGeometry::SphericalPolygon(polygon) => polygon.representative_point(),
+            AnyGeometry::MultiSphericalPolygon(multipolygon) => multipolygon.representative_point(),
+        }
     }
 }
 
