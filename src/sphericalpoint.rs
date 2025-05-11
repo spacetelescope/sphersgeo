@@ -40,7 +40,7 @@ pub fn max_1darray(arr: &ArrayView1<f64>) -> Option<f64> {
 }
 
 pub fn shift_rows(from: &ArrayView2<f64>, by: i32) -> Array2<f64> {
-    let mut to = Array2::uninit(from.dim());
+    let mut to = Array2::<f64>::uninit(from.dim());
     from.slice(s![-by.., ..])
         .assign_to(to.slice_mut(s![..by, ..]));
     from.slice(s![..-by, ..])
@@ -894,7 +894,7 @@ pub struct MultiSphericalPoint {
 
 impl From<&Vec<SphericalPoint>> for MultiSphericalPoint {
     fn from(points: &Vec<SphericalPoint>) -> Self {
-        let mut xyz = Array2::uninit((points.len(), 3));
+        let mut xyz = Array2::<f64>::uninit((points.len(), 3));
         for (index, row) in xyz.axis_iter_mut(Axis(0)).enumerate() {
             points[index].xyz.assign_to(row);
         }
@@ -979,7 +979,7 @@ impl From<&MultiSphericalPoint> for Vec<[f64; 3]> {
 
 impl From<&Vec<(f64, f64, f64)>> for MultiSphericalPoint {
     fn from(xyzs: &Vec<(f64, f64, f64)>) -> Self {
-        let mut xyz = Array2::uninit((xyzs.len(), 3));
+        let mut xyz = Array2::<f64>::uninit((xyzs.len(), 3));
         for (index, tuple) in xyzs.iter().enumerate() {
             array![tuple.0, tuple.1, tuple.2].assign_to(xyz.index_axis_mut(Axis(0), index));
         }
