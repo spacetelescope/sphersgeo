@@ -98,7 +98,7 @@ def test_from_lonlat():
     for equator in equators:
         assert_allclose(equator.to_lonlat(degrees=True)[1], 0.0)
 
-    multi_equator = MultiSphericalPoint.from_lonlats(
+    multi_equator = MultiSphericalPoint.from_lonlat(
         np.stack([lons, np.repeat(equator_lat, len(lons))], axis=1), degrees=True
     )
 
@@ -113,7 +113,7 @@ def test_from_lonlat():
     for north_pole in north_poles:
         assert_allclose(north_pole.xyz, [0.0, 0.0, 1.0], atol=tolerance)
 
-    multi_north_pole = MultiSphericalPoint.from_lonlats(
+    multi_north_pole = MultiSphericalPoint.from_lonlat(
         np.stack([lons, np.repeat(north_pole_lat, len(lons))], axis=1), degrees=True
     )
 
@@ -132,7 +132,7 @@ def test_from_lonlat():
     for south_pole in south_poles:
         assert_allclose(south_pole.xyz, [0.0, 0.0, -1.0], atol=tolerance)
 
-    multi_south_pole = MultiSphericalPoint.from_lonlats(
+    multi_south_pole = MultiSphericalPoint.from_lonlat(
         np.stack([lons, np.repeat(south_pole_lat, len(lons))], axis=1), degrees=True
     )
 
@@ -172,7 +172,7 @@ def test_to_lonlat():
     assert_allclose(e.to_lonlat(degrees=True), lonlats[4])
 
     abcde = MultiSphericalPoint(xyz)
-    assert_allclose(abcde.to_lonlats(degrees=True), lonlats)
+    assert_allclose(abcde.to_lonlat(degrees=True), lonlats)
 
 
 def test_vector_arc_length():
@@ -208,8 +208,12 @@ def test_distance():
     bc = MultiSphericalPoint(xyz[1:3, :])
     cd = MultiSphericalPoint(xyz[2:, :])
 
-    assert_allclose(a.distance(b), haversine_distance(a.to_lonlat(True), b.to_lonlat(True)))
-    assert_allclose(b.distance(c), haversine_distance(b.to_lonlat(True), c.to_lonlat(True)))
+    assert_allclose(
+        a.distance(b), haversine_distance(a.to_lonlat(True), b.to_lonlat(True))
+    )
+    assert_allclose(
+        b.distance(c), haversine_distance(b.to_lonlat(True), c.to_lonlat(True))
+    )
     assert_allclose(
         c.distance(d, degrees=False),
         haversine_distance(c.to_lonlat(False), d.to_lonlat(False), degrees=False),
