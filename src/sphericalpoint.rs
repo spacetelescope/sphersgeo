@@ -1089,7 +1089,7 @@ impl MultiSphericalPoint {
     /// References
     /// ----------
     /// - Miller, Robert D. Computing the area of a spherical polygon. Graphics Gems IV. 1994. Academic Press. doi:10.5555/180895.180907
-    pub fn try_from_lonlats(coordinates: &ArrayView2<f64>, degrees: bool) -> Result<Self, String> {
+    pub fn try_from_lonlat(coordinates: &ArrayView2<f64>, degrees: bool) -> Result<Self, String> {
         if coordinates.shape()[1] == 2 {
             let coordinates = if degrees {
                 coordinates.to_radians()
@@ -1162,7 +1162,7 @@ impl MultiSphericalPoint {
     /// References
     /// ----------
     /// - Miller, Robert D. Computing the area of a spherical polygon. Graphics Gems IV. 1994. Academic Press. doi:10.5555/180895.180907
-    pub fn to_lonlats(&self, degrees: bool) -> Array2<f64> {
+    pub fn to_lonlat(&self, degrees: bool) -> Array2<f64> {
         vectors_to_lonlats(&self.xyz.view(), degrees)
     }
 

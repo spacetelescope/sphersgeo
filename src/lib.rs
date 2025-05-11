@@ -357,8 +357,8 @@ mod py_sphersgeo {
 
         /// from the given coordinates, build xyz vectors representing points on the sphere
         #[classmethod]
-        #[pyo3(name = "from_lonlats", signature=(coordinates, degrees=true))]
-        fn py_from_lonlats(
+        #[pyo3(name = "from_lonlat", signature=(coordinates, degrees=true))]
+        fn py_from_lonlat(
             _: &Bound<'_, PyType>,
             coordinates: PyMultiSphericalPointLonLatInputs,
             degrees: bool,
@@ -390,7 +390,7 @@ mod py_sphersgeo {
                 }
             };
 
-            match Self::try_from_lonlats(&coordinates.view(), degrees) {
+            match Self::try_from_lonlat(&coordinates.view(), degrees) {
                 Ok(result) => Ok(result),
                 Err(err) => Err(PyValueError::new_err(err)),
             }
@@ -403,9 +403,9 @@ mod py_sphersgeo {
         }
 
         /// convert to angle coordinates along the sphere
-        #[pyo3(name = "to_lonlats", signature=(degrees=true))]
-        fn py_to_lonlats<'py>(&self, py: Python<'py>, degrees: bool) -> Bound<'py, PyArray2<f64>> {
-            self.to_lonlats(degrees).into_pyarray(py)
+        #[pyo3(name = "to_lonlat", signature=(degrees=true))]
+        fn py_to_lonlat<'py>(&self, py: Python<'py>, degrees: bool) -> Bound<'py, PyArray2<f64>> {
+            self.to_lonlat(degrees).into_pyarray(py)
         }
 
         /// normalize the underlying vectors to length 1 (the unit sphere) while preserving direction

@@ -128,7 +128,7 @@ class MultiSphericalPoint:
     ) -> MultiSphericalPoint: ...
 
     @classmethod
-    def from_lonlats(
+    def from_lonlat(
         cls,
         coordinates: NDArray[float64]
         | tuple[float, float]
@@ -140,7 +140,7 @@ class MultiSphericalPoint:
     @property
     def xyz(self) -> NDArray[float64]: ...
 
-    def to_lonlats(self, degrees: bool = True) -> NDArray[float64]: ...
+    def to_lonlat(self, degrees: bool = True) -> NDArray[float64]: ...
 
     @property
     def normalized(self) -> MultiSphericalPoint: ...
