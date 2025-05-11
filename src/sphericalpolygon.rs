@@ -1,5 +1,4 @@
 use crate::{
-    angularbounds::AngularBounds,
     arcstring::{vector_arc_crossings, ArcString, MultiArcString},
     geometry::{ExtendMultiGeometry, GeometricOperations, Geometry, MultiGeometry},
     sphericalpoint::{
@@ -586,44 +585,6 @@ impl GeometricOperations<&MultiArcString> for &SphericalPolygon {
     }
 }
 
-impl GeometricOperations<&AngularBounds> for &SphericalPolygon {
-    fn distance(self, other: &AngularBounds, degrees: bool) -> f64 {
-        if self.contains(other) {
-            0.0
-        } else {
-            self.boundary.distance(other, degrees)
-        }
-    }
-
-    fn contains(self, other: &AngularBounds) -> bool {
-        self.contains(&other.coords())
-    }
-
-    fn within(self, _: &AngularBounds) -> bool {
-        false
-    }
-
-    fn crosses(self, other: &AngularBounds) -> bool {
-        self.boundary.crosses(other)
-    }
-
-    fn intersects(self, other: &AngularBounds) -> bool {
-        self.touches(other) || self.crosses(other) || self.contains(other) || self.within(other)
-    }
-
-    fn intersection(self, other: &AngularBounds) -> Option<MultiSphericalPolygon> {
-        if let Some(convex_hull) = other.convex_hull() {
-            self.intersection(&convex_hull)
-        } else {
-            None
-        }
-    }
-
-    fn touches(self, other: &AngularBounds) -> bool {
-        self.boundary.touches(other)
-    }
-}
-
 impl GeometricOperations<&SphericalPolygon> for &SphericalPolygon {
     fn distance(self, other: &SphericalPolygon, degrees: bool) -> f64 {
         if self.contains(other) {
@@ -1009,51 +970,6 @@ impl GeometricOperations<&MultiArcString> for &MultiSphericalPolygon {
     }
 
     fn touches(self, other: &MultiArcString) -> bool {
-        self.polygons
-            .par_iter()
-            .any(|polygon| polygon.touches(other))
-    }
-}
-
-impl GeometricOperations<&AngularBounds> for &MultiSphericalPolygon {
-    fn distance(self, other: &AngularBounds, degrees: bool) -> f64 {
-        if self.contains(other) {
-            0.0
-        } else {
-            self.boundary().unwrap().distance(other, degrees)
-        }
-    }
-
-    fn contains(self, other: &AngularBounds) -> bool {
-        self.contains(&other.coords())
-    }
-
-    fn within(self, other: &AngularBounds) -> bool {
-        self.polygons
-            .par_iter()
-            .all(|polygon| polygon.within(other))
-    }
-
-    fn crosses(self, other: &AngularBounds) -> bool {
-        self.polygons
-            .par_iter()
-            .any(|polygon| polygon.crosses(other))
-    }
-
-    fn intersects(self, other: &AngularBounds) -> bool {
-        self.polygons
-            .par_iter()
-            .any(|polygon| polygon.intersects(other))
-    }
-
-    fn intersection(self, other: &AngularBounds) -> Option<MultiSphericalPolygon> {
-        self.polygons
-            .par_iter()
-            .map(|polygon| polygon.intersection(other))
-            .sum()
-    }
-
-    fn touches(self, other: &AngularBounds) -> bool {
         self.polygons
             .par_iter()
             .any(|polygon| polygon.touches(other))
