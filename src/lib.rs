@@ -143,6 +143,11 @@ mod py_sphersgeo {
         }
 
         #[getter]
+        fn get_vertices(&self) -> MultiSphericalPoint {
+            self.vertices()
+        }
+
+        #[getter]
         fn get_area(&self) -> f64 {
             self.area()
         }
@@ -153,18 +158,13 @@ mod py_sphersgeo {
         }
 
         #[getter]
+        fn get_representative_point(&self) -> SphericalPoint {
+            self.representative_point()
+        }
+
+        #[getter]
         fn get_centroid(&self) -> SphericalPoint {
             self.centroid()
-        }
-
-        #[getter]
-        fn get_convex_hull(&self) -> Option<SphericalPolygon> {
-            self.convex_hull()
-        }
-
-        #[getter]
-        fn get_vertices(&self) -> MultiSphericalPoint {
-            self.vertices()
         }
 
         #[getter]
@@ -173,8 +173,8 @@ mod py_sphersgeo {
         }
 
         #[getter]
-        fn get_representative_point(&self) -> SphericalPoint {
-            self.representative_point()
+        fn get_convex_hull(&self) -> Option<SphericalPolygon> {
+            self.convex_hull()
         }
 
         #[pyo3(name = "distance", signature=(other, degrees=true))]
@@ -450,6 +450,11 @@ mod py_sphersgeo {
         }
 
         #[getter]
+        fn get_vertices(&self) -> MultiSphericalPoint {
+            self.vertices()
+        }
+
+        #[getter]
         fn get_area(&self) -> f64 {
             self.area()
         }
@@ -460,18 +465,13 @@ mod py_sphersgeo {
         }
 
         #[getter]
+        fn get_representative_point(&self) -> SphericalPoint {
+            self.representative_point()
+        }
+
+        #[getter]
         fn get_centroid(&self) -> SphericalPoint {
             self.centroid()
-        }
-
-        #[getter]
-        fn get_convex_hull(&self) -> Option<SphericalPolygon> {
-            self.convex_hull()
-        }
-
-        #[getter]
-        fn get_vertices(&self) -> MultiSphericalPoint {
-            self.vertices()
         }
 
         #[getter]
@@ -480,8 +480,8 @@ mod py_sphersgeo {
         }
 
         #[getter]
-        fn get_representative_point(&self) -> SphericalPoint {
-            self.representative_point()
+        fn get_convex_hull(&self) -> Option<SphericalPolygon> {
+            self.convex_hull()
         }
 
         /// closest angular distance on the sphere between this geometry and another
@@ -720,6 +720,11 @@ mod py_sphersgeo {
         }
 
         #[getter]
+        fn get_vertices(&self) -> MultiSphericalPoint {
+            self.vertices()
+        }
+
+        #[getter]
         fn get_area(&self) -> f64 {
             self.area()
         }
@@ -730,18 +735,13 @@ mod py_sphersgeo {
         }
 
         #[getter]
+        fn get_representative_point(&self) -> SphericalPoint {
+            self.representative_point()
+        }
+
+        #[getter]
         fn get_centroid(&self) -> SphericalPoint {
             self.centroid()
-        }
-
-        #[getter]
-        fn get_convex_hull(&self) -> Option<SphericalPolygon> {
-            self.convex_hull()
-        }
-
-        #[getter]
-        fn get_vertices(&self) -> MultiSphericalPoint {
-            self.vertices()
         }
 
         #[getter]
@@ -750,8 +750,8 @@ mod py_sphersgeo {
         }
 
         #[getter]
-        fn get_representative_point(&self) -> SphericalPoint {
-            self.representative_point()
+        fn get_convex_hull(&self) -> Option<SphericalPolygon> {
+            self.convex_hull()
         }
 
         /// closest angular distance on the sphere between this geometry and another
@@ -922,6 +922,11 @@ mod py_sphersgeo {
         }
 
         #[getter]
+        fn get_vertices(&self) -> MultiSphericalPoint {
+            self.vertices()
+        }
+
+        #[getter]
         fn get_area(&self) -> f64 {
             self.area()
         }
@@ -932,18 +937,13 @@ mod py_sphersgeo {
         }
 
         #[getter]
+        fn get_representative_point(&self) -> SphericalPoint {
+            self.representative_point()
+        }
+
+        #[getter]
         fn get_centroid(&self) -> SphericalPoint {
             self.centroid()
-        }
-
-        #[getter]
-        fn get_convex_hull(&self) -> Option<SphericalPolygon> {
-            self.convex_hull()
-        }
-
-        #[getter]
-        fn get_vertices(&self) -> MultiSphericalPoint {
-            self.vertices()
         }
 
         #[getter]
@@ -952,8 +952,8 @@ mod py_sphersgeo {
         }
 
         #[getter]
-        fn get_representative_point(&self) -> SphericalPoint {
-            self.representative_point()
+        fn get_convex_hull(&self) -> Option<SphericalPolygon> {
+            self.convex_hull()
         }
 
         /// closest angular distance on the sphere between this geometry and another
@@ -1134,6 +1134,11 @@ mod py_sphersgeo {
         }
 
         #[getter]
+        fn get_vertices(&self) -> MultiSphericalPoint {
+            self.vertices()
+        }
+
+        #[getter]
         fn get_area(&self) -> f64 {
             self.area()
         }
@@ -1144,18 +1149,13 @@ mod py_sphersgeo {
         }
 
         #[getter]
+        fn get_representative_point(&self) -> SphericalPoint {
+            self.representative_point()
+        }
+
+        #[getter]
         fn get_centroid(&self) -> SphericalPoint {
             self.centroid()
-        }
-
-        #[getter]
-        fn get_convex_hull(&self) -> Option<SphericalPolygon> {
-            self.convex_hull()
-        }
-
-        #[getter]
-        fn get_vertices(&self) -> MultiSphericalPoint {
-            self.vertices()
         }
 
         #[getter]
@@ -1164,8 +1164,8 @@ mod py_sphersgeo {
         }
 
         #[getter]
-        fn get_representative_point(&self) -> SphericalPoint {
-            self.representative_point()
+        fn get_convex_hull(&self) -> Option<SphericalPolygon> {
+            self.convex_hull()
         }
 
         /// closest angular distance on the sphere between this geometry and another
@@ -1326,6 +1326,11 @@ mod py_sphersgeo {
         }
 
         #[getter]
+        fn get_vertices(&self) -> MultiSphericalPoint {
+            self.vertices()
+        }
+
+        #[getter]
         fn get_area(&self) -> f64 {
             self.area()
         }
@@ -1336,18 +1341,13 @@ mod py_sphersgeo {
         }
 
         #[getter]
+        fn get_representative_point(&self) -> SphericalPoint {
+            self.representative_point()
+        }
+
+        #[getter]
         fn get_centroid(&self) -> SphericalPoint {
             self.centroid()
-        }
-
-        #[getter]
-        fn get_convex_hull(&self) -> Option<SphericalPolygon> {
-            self.convex_hull()
-        }
-
-        #[getter]
-        fn get_vertices(&self) -> MultiSphericalPoint {
-            self.vertices()
         }
 
         #[getter]
@@ -1356,8 +1356,8 @@ mod py_sphersgeo {
         }
 
         #[getter]
-        fn get_representative_point(&self) -> SphericalPoint {
-            self.representative_point()
+        fn get_convex_hull(&self) -> Option<SphericalPolygon> {
+            self.convex_hull()
         }
 
         #[pyo3(name = "distance", signature=(other, degrees=true))]

@@ -340,6 +340,10 @@ impl SphericalPolygon {
 }
 
 impl Geometry for &SphericalPolygon {
+    fn vertices(&self) -> crate::sphericalpoint::MultiSphericalPoint {
+        self.boundary.vertices()
+    }
+
     /// we can calculate the surface area of a spherical polygon by summing its interior angles on the sphere
     /// https://www.math.csi.cuny.edu/abhijit/623/spherical-triangle.pdf
     fn area(&self) -> f64 {
@@ -351,28 +355,28 @@ impl Geometry for &SphericalPolygon {
         self.boundary().map_or(0.0, |boundary| boundary.length())
     }
 
+    fn representative_point(&self) -> crate::sphericalpoint::SphericalPoint {
+        self.interior_point.to_owned()
+    }
+
     fn centroid(&self) -> crate::sphericalpoint::SphericalPoint {
         (*self).centroid()
-    }
-
-    fn convex_hull(&self) -> Option<SphericalPolygon> {
-        self.boundary.convex_hull()
-    }
-
-    fn vertices(&self) -> crate::sphericalpoint::MultiSphericalPoint {
-        self.boundary.vertices()
     }
 
     fn boundary(&self) -> Option<ArcString> {
         Some(self.boundary.to_owned())
     }
 
-    fn representative_point(&self) -> crate::sphericalpoint::SphericalPoint {
-        self.interior_point.to_owned()
+    fn convex_hull(&self) -> Option<SphericalPolygon> {
+        self.boundary.convex_hull()
     }
 }
 
 impl Geometry for SphericalPolygon {
+    fn vertices(&self) -> crate::sphericalpoint::MultiSphericalPoint {
+        self.boundary.vertices()
+    }
+
     fn area(&self) -> f64 {
         (&self).area()
     }
@@ -381,24 +385,20 @@ impl Geometry for SphericalPolygon {
         (&self).length()
     }
 
+    fn representative_point(&self) -> crate::sphericalpoint::SphericalPoint {
+        (&self).representative_point()
+    }
+
     fn centroid(&self) -> crate::sphericalpoint::SphericalPoint {
         centroid_from_polygon_boundary(&self.boundary)
-    }
-
-    fn convex_hull(&self) -> Option<SphericalPolygon> {
-        (&self).convex_hull()
-    }
-
-    fn vertices(&self) -> crate::sphericalpoint::MultiSphericalPoint {
-        self.boundary.vertices()
     }
 
     fn boundary(&self) -> Option<ArcString> {
         (&self).boundary()
     }
 
-    fn representative_point(&self) -> crate::sphericalpoint::SphericalPoint {
-        (&self).representative_point()
+    fn convex_hull(&self) -> Option<SphericalPolygon> {
+        (&self).convex_hull()
     }
 }
 
@@ -705,12 +705,23 @@ impl PartialEq<Vec<SphericalPolygon>> for MultiSphericalPolygon {
 }
 
 impl Geometry for &MultiSphericalPolygon {
+    fn vertices(&self) -> crate::sphericalpoint::MultiSphericalPoint {
+        self.polygons
+            .par_iter()
+            .map(|geometry| geometry.vertices())
+            .sum()
+    }
+
     fn area(&self) -> f64 {
         self.polygons.par_iter().map(|polygon| polygon.area()).sum()
     }
 
     fn length(&self) -> f64 {
         self.boundary().map_or(0.0, |boundary| boundary.length())
+    }
+
+    fn representative_point(&self) -> crate::sphericalpoint::SphericalPoint {
+        self.polygons[0].representative_point()
     }
 
     fn centroid(&self) -> crate::sphericalpoint::SphericalPoint {
@@ -722,17 +733,6 @@ impl Geometry for &MultiSphericalPolygon {
         MultiSphericalPoint::from(&centroids).centroid()
     }
 
-    fn convex_hull(&self) -> Option<SphericalPolygon> {
-        self.vertices().convex_hull()
-    }
-
-    fn vertices(&self) -> crate::sphericalpoint::MultiSphericalPoint {
-        self.polygons
-            .par_iter()
-            .map(|geometry| geometry.vertices())
-            .sum()
-    }
-
     fn boundary(&self) -> Option<MultiArcString> {
         let arcstrings: Vec<ArcString> = self
             .polygons
@@ -742,12 +742,16 @@ impl Geometry for &MultiSphericalPolygon {
         Some(MultiArcString::from(arcstrings))
     }
 
-    fn representative_point(&self) -> crate::sphericalpoint::SphericalPoint {
-        self.polygons[0].representative_point()
+    fn convex_hull(&self) -> Option<SphericalPolygon> {
+        self.vertices().convex_hull()
     }
 }
 
 impl Geometry for MultiSphericalPolygon {
+    fn vertices(&self) -> crate::sphericalpoint::MultiSphericalPoint {
+        (&self).vertices()
+    }
+
     fn area(&self) -> f64 {
         (&self).area()
     }
@@ -756,24 +760,20 @@ impl Geometry for MultiSphericalPolygon {
         (&self).length()
     }
 
+    fn representative_point(&self) -> crate::sphericalpoint::SphericalPoint {
+        (&self).representative_point()
+    }
+
     fn centroid(&self) -> crate::sphericalpoint::SphericalPoint {
         (&self).centroid()
-    }
-
-    fn convex_hull(&self) -> Option<SphericalPolygon> {
-        (&self).convex_hull()
-    }
-
-    fn vertices(&self) -> crate::sphericalpoint::MultiSphericalPoint {
-        (&self).vertices()
     }
 
     fn boundary(&self) -> Option<MultiArcString> {
         (&self).boundary()
     }
 
-    fn representative_point(&self) -> crate::sphericalpoint::SphericalPoint {
-        (&self).representative_point()
+    fn convex_hull(&self) -> Option<SphericalPolygon> {
+        (&self).convex_hull()
     }
 }
 
