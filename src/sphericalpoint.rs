@@ -1692,39 +1692,6 @@ impl GeometricOperations<&crate::arcstring::MultiArcString> for &MultiSphericalP
     }
 }
 
-impl GeometricOperations<&crate::angularbounds::AngularBounds> for &MultiSphericalPoint {
-    fn distance(self, other: &crate::angularbounds::AngularBounds, degrees: bool) -> f64 {
-        other.distance(self, degrees)
-    }
-
-    fn contains(self, _: &crate::angularbounds::AngularBounds) -> bool {
-        false
-    }
-
-    fn within(self, other: &crate::angularbounds::AngularBounds) -> bool {
-        other.contains(self)
-    }
-
-    fn crosses(self, _: &crate::angularbounds::AngularBounds) -> bool {
-        false
-    }
-
-    fn intersects(self, other: &crate::angularbounds::AngularBounds) -> bool {
-        other.intersects(self)
-    }
-
-    fn intersection(
-        self,
-        other: &crate::angularbounds::AngularBounds,
-    ) -> Option<MultiSphericalPoint> {
-        other.intersection(self)
-    }
-
-    fn touches(self, other: &crate::angularbounds::AngularBounds) -> bool {
-        self.intersects(other)
-    }
-}
-
 impl GeometricOperations<&crate::sphericalpolygon::SphericalPolygon> for &MultiSphericalPoint {
     fn distance(self, other: &crate::sphericalpolygon::SphericalPolygon, degrees: bool) -> f64 {
         other.distance(self, degrees)
