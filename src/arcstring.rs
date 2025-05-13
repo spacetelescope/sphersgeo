@@ -285,8 +285,8 @@ impl Geometry for &ArcString {
         self.lengths().sum()
     }
 
-    fn representative_point(&self) -> crate::sphericalpoint::SphericalPoint {
-        self.points.representative_point()
+    fn representative(&self) -> crate::sphericalpoint::SphericalPoint {
+        self.points.representative()
     }
 
     fn centroid(&self) -> crate::sphericalpoint::SphericalPoint {
@@ -315,8 +315,8 @@ impl Geometry for ArcString {
         (&self).length()
     }
 
-    fn representative_point(&self) -> crate::sphericalpoint::SphericalPoint {
-        (&self).representative_point()
+    fn representative(&self) -> crate::sphericalpoint::SphericalPoint {
+        (&self).representative()
     }
 
     fn centroid(&self) -> crate::sphericalpoint::SphericalPoint {
@@ -752,8 +752,8 @@ impl Geometry for &MultiArcString {
             .sum()
     }
 
-    fn representative_point(&self) -> crate::sphericalpoint::SphericalPoint {
-        self.arcstrings[0].representative_point()
+    fn representative(&self) -> crate::sphericalpoint::SphericalPoint {
+        self.arcstrings[0].representative()
     }
 
     fn centroid(&self) -> crate::sphericalpoint::SphericalPoint {
@@ -782,8 +782,8 @@ impl Geometry for MultiArcString {
         (&self).length()
     }
 
-    fn representative_point(&self) -> crate::sphericalpoint::SphericalPoint {
-        (&self).representative_point()
+    fn representative(&self) -> crate::sphericalpoint::SphericalPoint {
+        (&self).representative()
     }
 
     fn centroid(&self) -> crate::sphericalpoint::SphericalPoint {

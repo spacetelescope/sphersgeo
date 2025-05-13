@@ -613,7 +613,7 @@ impl Geometry for &SphericalPoint {
         0.
     }
 
-    fn representative_point(&self) -> SphericalPoint {
+    fn representative(&self) -> SphericalPoint {
         (*self).to_owned()
     }
 
@@ -643,8 +643,8 @@ impl Geometry for SphericalPoint {
         (&self).length()
     }
 
-    fn representative_point(&self) -> SphericalPoint {
-        (&self).representative_point()
+    fn representative(&self) -> SphericalPoint {
+        (&self).representative()
     }
 
     fn centroid(&self) -> crate::sphericalpoint::SphericalPoint {
@@ -1329,7 +1329,7 @@ impl Geometry for &MultiSphericalPoint {
         0.
     }
 
-    fn representative_point(&self) -> SphericalPoint {
+    fn representative(&self) -> SphericalPoint {
         SphericalPoint {
             xyz: self.xyz.slice(s![0, ..]).to_owned(),
         }
@@ -1453,8 +1453,8 @@ impl Geometry for MultiSphericalPoint {
         (&self).length()
     }
 
-    fn representative_point(&self) -> crate::sphericalpoint::SphericalPoint {
-        (&self).representative_point()
+    fn representative(&self) -> crate::sphericalpoint::SphericalPoint {
+        (&self).representative()
     }
 
     fn centroid(&self) -> crate::sphericalpoint::SphericalPoint {

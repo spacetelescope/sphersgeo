@@ -158,8 +158,8 @@ mod py_sphersgeo {
         }
 
         #[getter]
-        fn get_representative_point(&self) -> SphericalPoint {
-            self.representative_point()
+        fn get_representative(&self) -> SphericalPoint {
+            self.representative()
         }
 
         #[getter]
@@ -465,8 +465,8 @@ mod py_sphersgeo {
         }
 
         #[getter]
-        fn get_representative_point(&self) -> SphericalPoint {
-            self.representative_point()
+        fn get_representative(&self) -> SphericalPoint {
+            self.representative()
         }
 
         #[getter]
@@ -735,8 +735,8 @@ mod py_sphersgeo {
         }
 
         #[getter]
-        fn get_representative_point(&self) -> SphericalPoint {
-            self.representative_point()
+        fn get_representative(&self) -> SphericalPoint {
+            self.representative()
         }
 
         #[getter]
@@ -937,8 +937,8 @@ mod py_sphersgeo {
         }
 
         #[getter]
-        fn get_representative_point(&self) -> SphericalPoint {
-            self.representative_point()
+        fn get_representative(&self) -> SphericalPoint {
+            self.representative()
         }
 
         #[getter]
@@ -1149,8 +1149,8 @@ mod py_sphersgeo {
         }
 
         #[getter]
-        fn get_representative_point(&self) -> SphericalPoint {
-            self.representative_point()
+        fn get_representative(&self) -> SphericalPoint {
+            self.representative()
         }
 
         #[getter]
@@ -1341,8 +1341,8 @@ mod py_sphersgeo {
         }
 
         #[getter]
-        fn get_representative_point(&self) -> SphericalPoint {
-            self.representative_point()
+        fn get_representative(&self) -> SphericalPoint {
+            self.representative()
         }
 
         #[getter]

@@ -355,7 +355,7 @@ impl Geometry for &SphericalPolygon {
         self.boundary().map_or(0.0, |boundary| boundary.length())
     }
 
-    fn representative_point(&self) -> crate::sphericalpoint::SphericalPoint {
+    fn representative(&self) -> crate::sphericalpoint::SphericalPoint {
         self.interior_point.to_owned()
     }
 
@@ -385,8 +385,8 @@ impl Geometry for SphericalPolygon {
         (&self).length()
     }
 
-    fn representative_point(&self) -> crate::sphericalpoint::SphericalPoint {
-        (&self).representative_point()
+    fn representative(&self) -> crate::sphericalpoint::SphericalPoint {
+        (&self).representative()
     }
 
     fn centroid(&self) -> crate::sphericalpoint::SphericalPoint {
@@ -720,8 +720,8 @@ impl Geometry for &MultiSphericalPolygon {
         self.boundary().map_or(0.0, |boundary| boundary.length())
     }
 
-    fn representative_point(&self) -> crate::sphericalpoint::SphericalPoint {
-        self.polygons[0].representative_point()
+    fn representative(&self) -> crate::sphericalpoint::SphericalPoint {
+        self.polygons[0].representative()
     }
 
     fn centroid(&self) -> crate::sphericalpoint::SphericalPoint {
@@ -760,8 +760,8 @@ impl Geometry for MultiSphericalPolygon {
         (&self).length()
     }
 
-    fn representative_point(&self) -> crate::sphericalpoint::SphericalPoint {
-        (&self).representative_point()
+    fn representative(&self) -> crate::sphericalpoint::SphericalPoint {
+        (&self).representative()
     }
 
     fn centroid(&self) -> crate::sphericalpoint::SphericalPoint {
