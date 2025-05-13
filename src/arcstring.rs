@@ -58,7 +58,7 @@ pub fn interpolate_points_along_vector_arc(
 /// - Method explained in an `e-mail <http://www.mathworks.com/matlabcentral/newsreader/view_thread/276271>`_ by Roger Stafford.
 /// - https://spherical-geometry.readthedocs.io/en/latest/api/spherical_geometry.great_circle_arc.intersection.html#rb82e4e1c8654-1
 /// - Spinielli, Enrico. 2014. “Understanding Great Circle Arcs Intersection Algorithm.” October 19, 2014. https://enrico.spinielli.net/posts/2014-10-19-understanding-great-circle-arcs.
-pub fn vector_arc_crossings(
+pub fn vector_arc_crossing(
     a_0: &ArrayView1<f64>,
     a_1: &ArrayView1<f64>,
     b_0: &ArrayView1<f64>,
@@ -108,7 +108,7 @@ pub fn arcstring_contains_point(arcstring: &ArcString, xyz: &ArrayView1<f64>) ->
     }
 
     // iterate over endpoints and check if collinear with the given point
-    for index in 0..arcstring.points.xyz.nrows() - 1 {
+    for index in 0..xyzs.nrows() - 1 {
         let a = xyzs.slice(s![index, ..]);
         let b = xyzs.slice(s![index + 1, ..]);
 
@@ -218,7 +218,7 @@ impl ArcString {
                 for b_0_index in a_0_index + 2..(self.points.len() - 1) as isize {
                     let b_0 = self.points.xyz.slice(s![b_0_index, ..]);
                     let b_1 = self.points.xyz.slice(s![b_0_index + 1, ..]);
-                    if let Some(point) = vector_arc_crossings(&a_0, &a_1, &b_0, &b_1) {
+                    if let Some(point) = vector_arc_crossing(&a_0, &a_1, &b_0, &b_1) {
                         return true;
                     }
                 }
@@ -245,7 +245,7 @@ impl ArcString {
                     let b_0 = self.points.xyz.slice(s![b_0_index, ..]);
                     let b_1 = self.points.xyz.slice(s![b_0_index + 1, ..]);
 
-                    if let Some(point) = vector_arc_crossings(&a_0, &a_1, &b_0, &b_1) {
+                    if let Some(point) = vector_arc_crossing(&a_0, &a_1, &b_0, &b_1) {
                         crossings.push(point);
                     }
                 }
@@ -467,7 +467,7 @@ impl GeometricOperations<&ArcString> for &ArcString {
                 let b_0 = other.points.xyz.slice(s![other_arc_index, ..]);
                 let b_1 = other.points.xyz.slice(s![other_arc_index + 1, ..]);
 
-                if vector_arc_crossings(&a_0, &a_1, &b_0, &b_1).is_some() {
+                if vector_arc_crossing(&a_0, &a_1, &b_0, &b_1).is_some() {
                     return true;
                 }
             }
@@ -494,7 +494,7 @@ impl GeometricOperations<&ArcString> for &ArcString {
                 let b_0 = other.points.xyz.slice(s![other_arc_index, ..]);
                 let b_1 = other.points.xyz.slice(s![other_arc_index + 1, ..]);
 
-                if let Some(point) = vector_arc_crossings(&a_0, &a_1, &b_0, &b_1) {
+                if let Some(point) = vector_arc_crossing(&a_0, &a_1, &b_0, &b_1) {
                     intersections.push(point);
                 }
             }
