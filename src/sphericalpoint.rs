@@ -1351,8 +1351,11 @@ impl Geometry for &MultiSphericalPoint {
     /// ensures that as we scan through the points, each new point can only
     /// belong at the end of the chain (i.e., the chain is monotone in terms of
     /// the angle around O from the starting point).
-    /// from https://github.com/google/s2geometry/blob/master/src/s2/s2convex_hull_query.cc#L123
-    /// https://www.researchgate.net/profile/Jayaram-Ma-2/publication/303522254/figure/fig1/AS:365886075621376@1464245446409/Monotone-Chain-Algorithm-and-graphic-illustration.png
+    ///
+    /// References
+    /// ----------
+    /// - https://github.com/google/s2geometry/blob/master/src/s2/s2convex_hull_query.cc#L123
+    /// - https://www.researchgate.net/profile/Jayaram-Ma-2/publication/303522254/figure/fig1/AS:365886075621376@1464245446409/Monotone-Chain-Algorithm-and-graphic-illustration.png
     fn convex_hull(&self) -> Option<crate::sphericalpolygon::SphericalPolygon> {
         if self.len() < 3 {
             return None;
