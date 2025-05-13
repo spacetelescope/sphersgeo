@@ -359,8 +359,8 @@ impl Geometry for &SphericalPolygon {
         self.boundary.convex_hull()
     }
 
-    fn coords(&self) -> crate::sphericalpoint::MultiSphericalPoint {
-        self.boundary.coords()
+    fn vertices(&self) -> crate::sphericalpoint::MultiSphericalPoint {
+        self.boundary.vertices()
     }
 
     fn boundary(&self) -> Option<ArcString> {
@@ -389,8 +389,8 @@ impl Geometry for SphericalPolygon {
         (&self).convex_hull()
     }
 
-    fn coords(&self) -> crate::sphericalpoint::MultiSphericalPoint {
-        self.boundary.coords()
+    fn vertices(&self) -> crate::sphericalpoint::MultiSphericalPoint {
+        self.boundary.vertices()
     }
 
     fn boundary(&self) -> Option<ArcString> {
@@ -594,7 +594,7 @@ impl GeometricOperations<&SphericalPolygon> for &SphericalPolygon {
     }
 
     fn contains(self, other: &SphericalPolygon) -> bool {
-        self.contains(&other.coords())
+        self.contains(&other.vertices())
     }
 
     fn within(self, other: &SphericalPolygon) -> bool {
@@ -723,13 +723,13 @@ impl Geometry for &MultiSphericalPolygon {
     }
 
     fn convex_hull(&self) -> Option<SphericalPolygon> {
-        self.coords().convex_hull()
+        self.vertices().convex_hull()
     }
 
-    fn coords(&self) -> crate::sphericalpoint::MultiSphericalPoint {
+    fn vertices(&self) -> crate::sphericalpoint::MultiSphericalPoint {
         self.polygons
             .par_iter()
-            .map(|geometry| geometry.coords())
+            .map(|geometry| geometry.vertices())
             .sum()
     }
 
@@ -764,8 +764,8 @@ impl Geometry for MultiSphericalPolygon {
         (&self).convex_hull()
     }
 
-    fn coords(&self) -> crate::sphericalpoint::MultiSphericalPoint {
-        (&self).coords()
+    fn vertices(&self) -> crate::sphericalpoint::MultiSphericalPoint {
+        (&self).vertices()
     }
 
     fn boundary(&self) -> Option<MultiArcString> {

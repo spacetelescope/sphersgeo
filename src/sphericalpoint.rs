@@ -617,7 +617,7 @@ impl Geometry for &SphericalPoint {
         None
     }
 
-    fn coords(&self) -> MultiSphericalPoint {
+    fn vertices(&self) -> MultiSphericalPoint {
         self.to_owned().into()
     }
 
@@ -647,7 +647,7 @@ impl Geometry for SphericalPoint {
         (&self).convex_hull()
     }
 
-    fn coords(&self) -> MultiSphericalPoint {
+    fn vertices(&self) -> MultiSphericalPoint {
         self.into()
     }
 
@@ -1425,7 +1425,7 @@ impl Geometry for &MultiSphericalPoint {
         .ok()
     }
 
-    fn coords(&self) -> MultiSphericalPoint {
+    fn vertices(&self) -> MultiSphericalPoint {
         (*self).to_owned()
     }
 
@@ -1457,7 +1457,7 @@ impl Geometry for MultiSphericalPoint {
         (&self).convex_hull()
     }
 
-    fn coords(&self) -> MultiSphericalPoint {
+    fn vertices(&self) -> MultiSphericalPoint {
         self.to_owned()
     }
 

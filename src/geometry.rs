@@ -14,10 +14,10 @@ pub trait Geometry {
     fn boundary(&self) -> Option<impl Geometry>;
 
     fn convex_hull(&self) -> Option<crate::sphericalpolygon::SphericalPolygon> {
-        self.coords().convex_hull()
+        self.vertices().convex_hull()
     }
 
-    fn coords(&self) -> crate::sphericalpoint::MultiSphericalPoint;
+    fn vertices(&self) -> crate::sphericalpoint::MultiSphericalPoint;
 
     /// point guaranteed to be within the object
     fn representative_point(&self) -> crate::sphericalpoint::SphericalPoint;
@@ -134,14 +134,14 @@ impl Geometry for AnyGeometry {
         }
     }
 
-    fn coords(&self) -> crate::sphericalpoint::MultiSphericalPoint {
+    fn vertices(&self) -> crate::sphericalpoint::MultiSphericalPoint {
         match self {
-            AnyGeometry::SphericalPoint(point) => point.coords(),
-            AnyGeometry::MultiSphericalPoint(multipoint) => multipoint.coords(),
-            AnyGeometry::ArcString(arcstring) => arcstring.coords(),
-            AnyGeometry::MultiArcString(multiarcstring) => multiarcstring.coords(),
-            AnyGeometry::SphericalPolygon(polygon) => polygon.coords(),
-            AnyGeometry::MultiSphericalPolygon(multipolygon) => multipolygon.coords(),
+            AnyGeometry::SphericalPoint(point) => point.vertices(),
+            AnyGeometry::MultiSphericalPoint(multipoint) => multipoint.vertices(),
+            AnyGeometry::ArcString(arcstring) => arcstring.vertices(),
+            AnyGeometry::MultiArcString(multiarcstring) => multiarcstring.vertices(),
+            AnyGeometry::SphericalPolygon(polygon) => polygon.vertices(),
+            AnyGeometry::MultiSphericalPolygon(multipolygon) => multipolygon.vertices(),
         }
     }
 
