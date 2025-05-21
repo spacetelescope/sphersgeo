@@ -26,10 +26,11 @@ mod py_sphersgeo {
     #[derive(FromPyObject)]
     #[allow(clippy::large_enum_variant)]
     enum PySphericalPointInputs<'py> {
+        // NOTE: AnyGeometry MUST be the first option in this enum, otherwise it will attempt to match another pattern
+        AnyGeometry(AnyGeometry),
         NumpyArray(PyReadonlyArray1<'py, f64>),
         Tuple((f64, f64, f64)),
         List(Vec<f64>),
-        AnyGeometry(AnyGeometry),
     }
 
     #[derive(FromPyObject)]
@@ -300,13 +301,13 @@ mod py_sphersgeo {
     #[derive(FromPyObject)]
     #[allow(clippy::large_enum_variant)]
     enum PyMultiSphericalPointInputs<'py> {
+        // NOTE: AnyGeometry MUST be the first option in this enum, otherwise it will attempt to match another pattern
+        AnyGeometry(AnyGeometry),
         NumpyArray(PyReadonlyArray2<'py, f64>),
         ListOfTuples(Vec<(f64, f64, f64)>),
         NestedList(Vec<Vec<f64>>),
         FlatList(Vec<f64>),
         PointList(Vec<SphericalPoint>),
-        // TODO: fix error with collapse_axis: Index 4 must be less than axis length 4 for array with shape [4, 3]
-        AnyGeometry(AnyGeometry),
     }
 
     #[derive(FromPyObject)]
@@ -642,8 +643,9 @@ mod py_sphersgeo {
     #[derive(FromPyObject)]
     #[allow(clippy::large_enum_variant)]
     enum PyArcStringInputs<'py> {
-        MultiPointInput(PyMultiSphericalPointInputs<'py>),
+        // NOTE: AnyGeometry MUST be the first option in this enum, otherwise it will attempt to match another pattern
         AnyGeometry(AnyGeometry),
+        MultiPointInput(PyMultiSphericalPointInputs<'py>),
     }
 
     #[pymethods]
@@ -874,8 +876,9 @@ mod py_sphersgeo {
     #[derive(FromPyObject)]
     #[allow(clippy::large_enum_variant)]
     enum PyMultiArcStringInputs<'py> {
-        ListOfArcStrings(Vec<PyArcStringInputs<'py>>),
+        // NOTE: AnyGeometry MUST be the first option in this enum, otherwise it will attempt to match another pattern
         AnyGeometry(AnyGeometry),
+        ListOfArcStrings(Vec<PyArcStringInputs<'py>>),
     }
 
     #[pymethods]
@@ -1288,9 +1291,10 @@ mod py_sphersgeo {
     #[derive(FromPyObject)]
     #[allow(clippy::large_enum_variant)]
     enum PyMultiSphericalPolygonInputs<'py> {
+        // NOTE: AnyGeometry MUST be the first option in this enum, otherwise it will attempt to match another pattern
+        AnyGeometry(AnyGeometry),
         ListOfArcString(Vec<PyArcStringInputs<'py>>),
         ListOfPolygons(Vec<SphericalPolygon>),
-        AnyGeometry(AnyGeometry),
     }
 
     #[pymethods]
