@@ -131,6 +131,15 @@ class SphericalPoint:
         | MultiSphericalPolygon,
     ) -> AnyGeometry | None: ...
 
+    def split(
+        self,
+        other: SphericalPoint
+        | MultiSphericalPoint
+        | ArcString
+        | MultiArcString
+        | SphericalPolygon
+        | MultiSphericalPolygon,
+    ) -> AnyGeometry: ...
     def __add__(self, other: SphericalPoint) -> MultiSphericalPoint: ...
 
 
@@ -279,6 +288,16 @@ class MultiSphericalPoint:
         | MultiSphericalPolygon,
     ) -> AnyGeometry | None: ...
 
+    def split(
+        self,
+        other: SphericalPoint
+        | MultiSphericalPoint
+        | ArcString
+        | MultiArcString
+        | SphericalPolygon
+        | MultiSphericalPolygon,
+    ) -> AnyGeometry: ...
+
     def __add__(
         self, other: MultiSphericalPoint | NDArray[float64]
     ) -> MultiSphericalPoint: ...
@@ -402,6 +421,16 @@ class ArcString:
         | MultiSphericalPolygon,
     ) -> AnyGeometry | None: ...
 
+    def split(
+        self,
+        other: SphericalPoint
+        | MultiSphericalPoint
+        | ArcString
+        | MultiArcString
+        | SphericalPolygon
+        | MultiSphericalPolygon,
+    ) -> AnyGeometry: ...
+
 
 class MultiArcString:
     def __init__(
@@ -503,6 +532,16 @@ class MultiArcString:
         | SphericalPolygon
         | MultiSphericalPolygon,
     ) -> AnyGeometry | None: ...
+
+    def split(
+        self,
+        other: SphericalPoint
+        | MultiSphericalPoint
+        | ArcString
+        | MultiArcString
+        | SphericalPolygon
+        | MultiSphericalPolygon,
+    ) -> AnyGeometry: ...
 
 
 class SphericalPolygon:
@@ -635,6 +674,16 @@ class SphericalPolygon:
         | MultiSphericalPolygon,
     ) -> AnyGeometry | None: ...
 
+    def split(
+        self,
+        other: SphericalPoint
+        | MultiSphericalPoint
+        | ArcString
+        | MultiArcString
+        | SphericalPolygon
+        | MultiSphericalPolygon,
+    ) -> AnyGeometry: ...
+
 
 class MultiSphericalPolygon:
     def __init__(self, polygons: list[SphericalPolygon]): ...
@@ -729,6 +778,16 @@ class MultiSphericalPolygon:
         | SphericalPolygon
         | MultiSphericalPolygon,
     ) -> AnyGeometry | None: ...
+
+    def split(
+        self,
+        other: SphericalPoint
+        | MultiSphericalPoint
+        | ArcString
+        | MultiArcString
+        | SphericalPolygon
+        | MultiSphericalPolygon,
+    ) -> AnyGeometry: ...
 
 
 class AnyGeometry(Enum):

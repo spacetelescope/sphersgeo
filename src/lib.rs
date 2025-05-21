@@ -213,6 +213,18 @@ mod py_sphersgeo {
             }
         }
 
+        #[pyo3(name = "touches")]
+        fn py_touches(&self, other: AnyGeometry) -> bool {
+            match other {
+                AnyGeometry::SphericalPoint(point) => self.touches(&point),
+                AnyGeometry::MultiSphericalPoint(multipoint) => self.touches(&multipoint),
+                AnyGeometry::ArcString(arcstring) => self.touches(&arcstring),
+                AnyGeometry::MultiArcString(multiarcstring) => self.touches(&multiarcstring),
+                AnyGeometry::SphericalPolygon(polygon) => self.touches(&polygon),
+                AnyGeometry::MultiSphericalPolygon(multipolygon) => self.touches(&multipolygon),
+            }
+        }
+
         #[pyo3(name = "crosses")]
         fn py_crosses(&self, other: AnyGeometry) -> bool {
             match other {
@@ -261,15 +273,27 @@ mod py_sphersgeo {
             }
         }
 
-        #[pyo3(name = "touches")]
-        fn py_touches(&self, other: AnyGeometry) -> bool {
+        #[pyo3(name = "split")]
+        fn py_split(&self, other: AnyGeometry) -> AnyGeometry {
             match other {
-                AnyGeometry::SphericalPoint(point) => self.touches(&point),
-                AnyGeometry::MultiSphericalPoint(multipoint) => self.touches(&multipoint),
-                AnyGeometry::ArcString(arcstring) => self.touches(&arcstring),
-                AnyGeometry::MultiArcString(multiarcstring) => self.touches(&multiarcstring),
-                AnyGeometry::SphericalPolygon(polygon) => self.touches(&polygon),
-                AnyGeometry::MultiSphericalPolygon(multipolygon) => self.touches(&multipolygon),
+                AnyGeometry::SphericalPoint(point) => {
+                    AnyGeometry::MultiSphericalPoint(self.split(&point))
+                }
+                AnyGeometry::MultiSphericalPoint(multipoint) => {
+                    AnyGeometry::MultiSphericalPoint(self.split(&multipoint))
+                }
+                AnyGeometry::ArcString(arcstring) => {
+                    AnyGeometry::MultiSphericalPoint(self.split(&arcstring))
+                }
+                AnyGeometry::MultiArcString(multiarcstring) => {
+                    AnyGeometry::MultiSphericalPoint(self.split(&multiarcstring))
+                }
+                AnyGeometry::SphericalPolygon(polygon) => {
+                    AnyGeometry::MultiSphericalPoint(self.split(&polygon))
+                }
+                AnyGeometry::MultiSphericalPolygon(multipolygon) => {
+                    AnyGeometry::MultiSphericalPoint(self.split(&multipolygon))
+                }
             }
         }
 
@@ -515,6 +539,18 @@ mod py_sphersgeo {
             }
         }
 
+        #[pyo3(name = "touches")]
+        fn py_touches(&self, other: AnyGeometry) -> bool {
+            match other {
+                AnyGeometry::SphericalPoint(point) => self.touches(&point),
+                AnyGeometry::MultiSphericalPoint(multipoint) => self.touches(&multipoint),
+                AnyGeometry::ArcString(arcstring) => self.touches(&arcstring),
+                AnyGeometry::MultiArcString(multiarcstring) => self.touches(&multiarcstring),
+                AnyGeometry::SphericalPolygon(polygon) => self.touches(&polygon),
+                AnyGeometry::MultiSphericalPolygon(multipolygon) => self.touches(&multipolygon),
+            }
+        }
+
         #[pyo3(name = "crosses")]
         fn py_crosses(&self, other: AnyGeometry) -> bool {
             match other {
@@ -562,16 +598,27 @@ mod py_sphersgeo {
                     .map(AnyGeometry::MultiSphericalPoint),
             }
         }
-
-        #[pyo3(name = "touches")]
-        fn py_touches(&self, other: AnyGeometry) -> bool {
+        #[pyo3(name = "split")]
+        fn py_split(&self, other: AnyGeometry) -> AnyGeometry {
             match other {
-                AnyGeometry::SphericalPoint(point) => self.touches(&point),
-                AnyGeometry::MultiSphericalPoint(multipoint) => self.touches(&multipoint),
-                AnyGeometry::ArcString(arcstring) => self.touches(&arcstring),
-                AnyGeometry::MultiArcString(multiarcstring) => self.touches(&multiarcstring),
-                AnyGeometry::SphericalPolygon(polygon) => self.touches(&polygon),
-                AnyGeometry::MultiSphericalPolygon(multipolygon) => self.touches(&multipolygon),
+                AnyGeometry::SphericalPoint(point) => {
+                    AnyGeometry::MultiSphericalPoint(self.split(&point))
+                }
+                AnyGeometry::MultiSphericalPoint(multipoint) => {
+                    AnyGeometry::MultiSphericalPoint(self.split(&multipoint))
+                }
+                AnyGeometry::ArcString(arcstring) => {
+                    AnyGeometry::MultiSphericalPoint(self.split(&arcstring))
+                }
+                AnyGeometry::MultiArcString(multiarcstring) => {
+                    AnyGeometry::MultiSphericalPoint(self.split(&multiarcstring))
+                }
+                AnyGeometry::SphericalPolygon(polygon) => {
+                    AnyGeometry::MultiSphericalPoint(self.split(&polygon))
+                }
+                AnyGeometry::MultiSphericalPolygon(multipolygon) => {
+                    AnyGeometry::MultiSphericalPoint(self.split(&multipolygon))
+                }
             }
         }
 
@@ -782,6 +829,18 @@ mod py_sphersgeo {
             }
         }
 
+        #[pyo3(name = "touches")]
+        fn py_touches(&self, other: AnyGeometry) -> bool {
+            match other {
+                AnyGeometry::SphericalPoint(point) => self.touches(&point),
+                AnyGeometry::MultiSphericalPoint(multipoint) => self.touches(&multipoint),
+                AnyGeometry::ArcString(arcstring) => self.touches(&arcstring),
+                AnyGeometry::MultiArcString(multiarcstring) => self.touches(&multiarcstring),
+                AnyGeometry::SphericalPolygon(polygon) => self.touches(&polygon),
+                AnyGeometry::MultiSphericalPolygon(multipolygon) => self.touches(&multipolygon),
+            }
+        }
+
         #[pyo3(name = "crosses")]
         fn py_crosses(&self, other: AnyGeometry) -> bool {
             match other {
@@ -829,16 +888,27 @@ mod py_sphersgeo {
                     .map(AnyGeometry::MultiArcString),
             }
         }
-
-        #[pyo3(name = "touches")]
-        fn py_touches(&self, other: AnyGeometry) -> bool {
+        #[pyo3(name = "split")]
+        fn py_split(&self, other: AnyGeometry) -> AnyGeometry {
             match other {
-                AnyGeometry::SphericalPoint(point) => self.touches(&point),
-                AnyGeometry::MultiSphericalPoint(multipoint) => self.touches(&multipoint),
-                AnyGeometry::ArcString(arcstring) => self.touches(&arcstring),
-                AnyGeometry::MultiArcString(multiarcstring) => self.touches(&multiarcstring),
-                AnyGeometry::SphericalPolygon(polygon) => self.touches(&polygon),
-                AnyGeometry::MultiSphericalPolygon(multipolygon) => self.touches(&multipolygon),
+                AnyGeometry::SphericalPoint(point) => {
+                    AnyGeometry::MultiArcString(self.split(&point))
+                }
+                AnyGeometry::MultiSphericalPoint(multipoint) => {
+                    AnyGeometry::MultiArcString(self.split(&multipoint))
+                }
+                AnyGeometry::ArcString(arcstring) => {
+                    AnyGeometry::MultiArcString(self.split(&arcstring))
+                }
+                AnyGeometry::MultiArcString(multiarcstring) => {
+                    AnyGeometry::MultiArcString(self.split(&multiarcstring))
+                }
+                AnyGeometry::SphericalPolygon(polygon) => {
+                    AnyGeometry::MultiArcString(self.split(&polygon))
+                }
+                AnyGeometry::MultiSphericalPolygon(multipolygon) => {
+                    AnyGeometry::MultiArcString(self.split(&multipolygon))
+                }
             }
         }
 
@@ -981,6 +1051,18 @@ mod py_sphersgeo {
             }
         }
 
+        #[pyo3(name = "touches")]
+        fn py_touches(&self, other: AnyGeometry) -> bool {
+            match other {
+                AnyGeometry::SphericalPoint(point) => self.touches(&point),
+                AnyGeometry::MultiSphericalPoint(multipoint) => self.touches(&multipoint),
+                AnyGeometry::ArcString(arcstring) => self.touches(&arcstring),
+                AnyGeometry::MultiArcString(multiarcstring) => self.touches(&multiarcstring),
+                AnyGeometry::SphericalPolygon(polygon) => self.touches(&polygon),
+                AnyGeometry::MultiSphericalPolygon(multipolygon) => self.touches(&multipolygon),
+            }
+        }
+
         #[pyo3(name = "crosses")]
         fn py_crosses(&self, other: AnyGeometry) -> bool {
             match other {
@@ -1028,16 +1110,27 @@ mod py_sphersgeo {
                     .map(AnyGeometry::MultiArcString),
             }
         }
-
-        #[pyo3(name = "touches")]
-        fn py_touches(&self, other: AnyGeometry) -> bool {
+        #[pyo3(name = "split")]
+        fn py_split(&self, other: AnyGeometry) -> AnyGeometry {
             match other {
-                AnyGeometry::SphericalPoint(point) => self.touches(&point),
-                AnyGeometry::MultiSphericalPoint(multipoint) => self.touches(&multipoint),
-                AnyGeometry::ArcString(arcstring) => self.touches(&arcstring),
-                AnyGeometry::MultiArcString(multiarcstring) => self.touches(&multiarcstring),
-                AnyGeometry::SphericalPolygon(polygon) => self.touches(&polygon),
-                AnyGeometry::MultiSphericalPolygon(multipolygon) => self.touches(&multipolygon),
+                AnyGeometry::SphericalPoint(point) => {
+                    AnyGeometry::MultiArcString(self.split(&point))
+                }
+                AnyGeometry::MultiSphericalPoint(multipoint) => {
+                    AnyGeometry::MultiArcString(self.split(&multipoint))
+                }
+                AnyGeometry::ArcString(arcstring) => {
+                    AnyGeometry::MultiArcString(self.split(&arcstring))
+                }
+                AnyGeometry::MultiArcString(multiarcstring) => {
+                    AnyGeometry::MultiArcString(self.split(&multiarcstring))
+                }
+                AnyGeometry::SphericalPolygon(polygon) => {
+                    AnyGeometry::MultiArcString(self.split(&polygon))
+                }
+                AnyGeometry::MultiSphericalPolygon(multipolygon) => {
+                    AnyGeometry::MultiArcString(self.split(&multipolygon))
+                }
             }
         }
 
@@ -1187,6 +1280,18 @@ mod py_sphersgeo {
             }
         }
 
+        #[pyo3(name = "touches")]
+        fn py_touches(&self, other: AnyGeometry) -> bool {
+            match other {
+                AnyGeometry::SphericalPoint(point) => self.touches(&point),
+                AnyGeometry::MultiSphericalPoint(multipoint) => self.touches(&multipoint),
+                AnyGeometry::ArcString(arcstring) => self.touches(&arcstring),
+                AnyGeometry::MultiArcString(multiarcstring) => self.touches(&multiarcstring),
+                AnyGeometry::SphericalPolygon(polygon) => self.touches(&polygon),
+                AnyGeometry::MultiSphericalPolygon(multipolygon) => self.touches(&multipolygon),
+            }
+        }
+
         #[pyo3(name = "crosses")]
         fn py_crosses(&self, other: AnyGeometry) -> bool {
             match other {
@@ -1234,16 +1339,27 @@ mod py_sphersgeo {
                     .map(AnyGeometry::MultiSphericalPolygon),
             }
         }
-
-        #[pyo3(name = "touches")]
-        fn py_touches(&self, other: AnyGeometry) -> bool {
+        #[pyo3(name = "split")]
+        fn py_split(&self, other: AnyGeometry) -> AnyGeometry {
             match other {
-                AnyGeometry::SphericalPoint(point) => self.touches(&point),
-                AnyGeometry::MultiSphericalPoint(multipoint) => self.touches(&multipoint),
-                AnyGeometry::ArcString(arcstring) => self.touches(&arcstring),
-                AnyGeometry::MultiArcString(multiarcstring) => self.touches(&multiarcstring),
-                AnyGeometry::SphericalPolygon(polygon) => self.touches(&polygon),
-                AnyGeometry::MultiSphericalPolygon(multipolygon) => self.touches(&multipolygon),
+                AnyGeometry::SphericalPoint(point) => {
+                    AnyGeometry::MultiSphericalPolygon(self.split(&point))
+                }
+                AnyGeometry::MultiSphericalPoint(multipoint) => {
+                    AnyGeometry::MultiSphericalPolygon(self.split(&multipoint))
+                }
+                AnyGeometry::ArcString(arcstring) => {
+                    AnyGeometry::MultiSphericalPolygon(self.split(&arcstring))
+                }
+                AnyGeometry::MultiArcString(multiarcstring) => {
+                    AnyGeometry::MultiSphericalPolygon(self.split(&multiarcstring))
+                }
+                AnyGeometry::SphericalPolygon(polygon) => {
+                    AnyGeometry::MultiSphericalPolygon(self.split(&polygon))
+                }
+                AnyGeometry::MultiSphericalPolygon(multipolygon) => {
+                    AnyGeometry::MultiSphericalPolygon(self.split(&multipolygon))
+                }
             }
         }
 
@@ -1375,6 +1491,18 @@ mod py_sphersgeo {
             }
         }
 
+        #[pyo3(name = "touches")]
+        fn py_touches(&self, other: AnyGeometry) -> bool {
+            match other {
+                AnyGeometry::SphericalPoint(point) => self.touches(&point),
+                AnyGeometry::MultiSphericalPoint(multipoint) => self.touches(&multipoint),
+                AnyGeometry::ArcString(arcstring) => self.touches(&arcstring),
+                AnyGeometry::MultiArcString(multiarcstring) => self.touches(&multiarcstring),
+                AnyGeometry::SphericalPolygon(polygon) => self.touches(&polygon),
+                AnyGeometry::MultiSphericalPolygon(multipolygon) => self.touches(&multipolygon),
+            }
+        }
+
         #[pyo3(name = "crosses")]
         fn py_crosses(&self, other: AnyGeometry) -> bool {
             match other {
@@ -1422,16 +1550,27 @@ mod py_sphersgeo {
                     .map(AnyGeometry::MultiSphericalPolygon),
             }
         }
-
-        #[pyo3(name = "touches")]
-        fn py_touches(&self, other: AnyGeometry) -> bool {
+        #[pyo3(name = "split")]
+        fn py_split(&self, other: AnyGeometry) -> AnyGeometry {
             match other {
-                AnyGeometry::SphericalPoint(point) => self.touches(&point),
-                AnyGeometry::MultiSphericalPoint(multipoint) => self.touches(&multipoint),
-                AnyGeometry::ArcString(arcstring) => self.touches(&arcstring),
-                AnyGeometry::MultiArcString(multiarcstring) => self.touches(&multiarcstring),
-                AnyGeometry::SphericalPolygon(polygon) => self.touches(&polygon),
-                AnyGeometry::MultiSphericalPolygon(multipolygon) => self.touches(&multipolygon),
+                AnyGeometry::SphericalPoint(point) => {
+                    AnyGeometry::MultiSphericalPolygon(self.split(&point))
+                }
+                AnyGeometry::MultiSphericalPoint(multipoint) => {
+                    AnyGeometry::MultiSphericalPolygon(self.split(&multipoint))
+                }
+                AnyGeometry::ArcString(arcstring) => {
+                    AnyGeometry::MultiSphericalPolygon(self.split(&arcstring))
+                }
+                AnyGeometry::MultiArcString(multiarcstring) => {
+                    AnyGeometry::MultiSphericalPolygon(self.split(&multiarcstring))
+                }
+                AnyGeometry::SphericalPolygon(polygon) => {
+                    AnyGeometry::MultiSphericalPolygon(self.split(&polygon))
+                }
+                AnyGeometry::MultiSphericalPolygon(multipolygon) => {
+                    AnyGeometry::MultiSphericalPolygon(self.split(&multipolygon))
+                }
             }
         }
 
@@ -1538,16 +1677,18 @@ mod py_sphersgeo {
         }
 
         #[pyfunction]
-        #[pyo3(name = "spherical_triangle_area")]
+        #[pyo3(name = "spherical_triangle_area", signature=(a, b, c, degrees=true))]
         fn spherical_triangle_area(
             a: PyReadonlyArray1<f64>,
             b: PyReadonlyArray1<f64>,
             c: PyReadonlyArray1<f64>,
+            degrees: bool,
         ) -> f64 {
             crate::sphericalpolygon::spherical_triangle_area(
                 &a.as_array(),
                 &b.as_array(),
                 &c.as_array(),
+                degrees,
             )
         }
 

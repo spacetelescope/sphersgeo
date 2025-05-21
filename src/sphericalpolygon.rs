@@ -26,6 +26,7 @@ pub fn spherical_triangle_area(
     a: &ArrayView1<f64>,
     b: &ArrayView1<f64>,
     c: &ArrayView1<f64>,
+    degrees: bool,
 ) -> f64 {
     // angle_between_vectors(c, a, b, false)
     //     + angle_between_vectors(a, b, c, false)
@@ -35,12 +36,19 @@ pub fn spherical_triangle_area(
     let bc = vector_arc_length(b, c, false);
     let ca = vector_arc_length(c, a, false);
     let s = (ab + bc + ca) / 2.0;
-    4.0 * ((s / 2.0).tan()
-        * ((s - ab) / 2.0).tan()
-        * ((s - bc) / 2.0).tan()
-        * ((s - ca) / 2.0).tan())
-    .sqrt()
-    .atan()
+    let area = 4.0
+        * ((s / 2.0).tan()
+            * ((s - ab) / 2.0).tan()
+            * ((s - bc) / 2.0).tan()
+            * ((s - ca) / 2.0).tan())
+        .sqrt()
+        .atan();
+
+    if degrees {
+        area.to_degrees()
+    } else {
+        area
+    }
 }
 
 // calculate the interior angles of the polygon comprised of the given points
@@ -54,8 +62,13 @@ pub fn spherical_polygon_interior_angles(points: &ArrayView2<f64>) -> Array1<f64
 /// surface area of a spherical polygon via deconstructing into triangles
 /// https://www.math.csi.cuny.edu/abhijit/623/spherical-triangle.pdf
 pub fn spherical_polygon_area(points: &ArrayView2<f64>) -> f64 {
+<<<<<<< Updated upstream
     spherical_polygon_interior_angles(points).sum()
         - ((points.nrows() - 1) as f64 * std::f64::consts::PI).to_degrees()
+=======
+    let interior_angles = spherical_polygon_interior_angles(points, false);
+    interior_angles.sum() - ((interior_angles.len() - 2) as f64 * std::f64::consts::PI)
+>>>>>>> Stashed changes
 }
 
 // use the classical even-crossings ray algorithm for point-in-polygon
@@ -348,8 +361,14 @@ impl Geometry for &SphericalPolygon {
     /// we can calculate the surface area of a spherical polygon by summing its interior angles on the sphere
     /// https://www.math.csi.cuny.edu/abhijit/623/spherical-triangle.pdf
     fn area(&self) -> f64 {
+<<<<<<< Updated upstream
         self.interior_angles().sum()
             - ((self.boundary.points.len() - 1) as f64 * std::f64::consts::PI).to_degrees()
+=======
+        let interior_angles = self.interior_angles(false);
+        (interior_angles.sum() - ((interior_angles.len() - 2) as f64 * std::f64::consts::PI))
+            .to_degrees()
+>>>>>>> Stashed changes
     }
 
     fn length(&self) -> f64 {
@@ -424,6 +443,10 @@ impl GeometricOperations<&SphericalPoint> for &SphericalPolygon {
         false
     }
 
+    fn touches(self, other: &SphericalPoint) -> bool {
+        self.boundary.contains(other)
+    }
+
     fn crosses(self, _: &SphericalPoint) -> bool {
         false
     }
@@ -436,8 +459,8 @@ impl GeometricOperations<&SphericalPoint> for &SphericalPolygon {
         other.intersection(self)
     }
 
-    fn touches(self, other: &SphericalPoint) -> bool {
-        self.boundary.contains(other)
+    fn split(self, other: &SphericalPoint) -> MultiSphericalPolygon {
+        MultiSphericalPolygon::from(vec![self.to_owned()])
     }
 }
 
@@ -468,6 +491,10 @@ impl GeometricOperations<&MultiSphericalPoint> for &SphericalPolygon {
 
     fn within(self, _: &MultiSphericalPoint) -> bool {
         false
+    }
+
+    fn touches(self, other: &MultiSphericalPoint) -> bool {
+        self.boundary.intersects(other)
     }
 
     fn crosses(self, _: &MultiSphericalPoint) -> bool {
@@ -512,8 +539,8 @@ impl GeometricOperations<&MultiSphericalPoint> for &SphericalPolygon {
         }
     }
 
-    fn touches(self, other: &MultiSphericalPoint) -> bool {
-        self.boundary.intersects(other)
+    fn split(self, other: &MultiSphericalPoint) -> MultiSphericalPolygon {
+        MultiSphericalPolygon::from(vec![self.to_owned()])
     }
 }
 
@@ -543,6 +570,10 @@ impl GeometricOperations<&ArcString> for &SphericalPolygon {
         false
     }
 
+    fn touches(self, other: &ArcString) -> bool {
+        self.boundary.touches(other)
+    }
+
     fn crosses(self, other: &ArcString) -> bool {
         self.boundary.crosses(other)
     }
@@ -552,72 +583,112 @@ impl GeometricOperations<&ArcString> for &SphericalPolygon {
     }
 
     fn intersection(self, other: &ArcString) -> Option<MultiArcString> {
-        let mut arcs = vec![];
+        let mut arcstrings = vec![];
 
         if other.within(self) {
-            arcs.push(other.to_owned());
+            arcstrings.push(other.to_owned());
         } else if other.crosses(self) {
             // split arcstring by the polygon boundary
-            let mut candidate_arcs: Vec<ArcString> = vec![];
-            let start_index = if other.closed { -1 } else { 0 };
-
-            let mut index = start_index;
-            let mut arc = ArcString::from(
-                MultiSphericalPoint::try_from(
-                    other.points.xyz.slice(s![index..index + 1, ..]).to_owned(),
-                )
-                .unwrap(),
-            );
-            loop {
-                index += 1;
-                if index == other.points.xyz.nrows() as isize - 1 {
-                    break;
-                }
-
-                // if the current arc crosses the boundary, split it and start a new one
-                if let Some(points) = arc.intersection(&self.boundary) {
-                    // the current arc can only cross the boundary once, due to the nature of this algorithm
-                    let split_xyz = points.xyz.slice(s![0, ..]);
-
-                    // add the completed arc to the list
-                    arc.points.xyz.push_row(split_xyz).unwrap();
-
-                    // start a new arc from the crossing point
-                    arc = ArcString::from(
-                        MultiSphericalPoint::try_from(
-                            stack(
-                                Axis(0),
-                                &[split_xyz, other.points.xyz.slice(s![index + 1, ..])],
-                            )
-                            .unwrap(),
-                        )
-                        .unwrap(),
-                    );
-                } else {
-                    // otherwise continue to add points to the current arc
-                    arc.points
-                        .xyz
-                        .push_row(other.points.xyz.slice(s![index, ..]))
-                        .unwrap();
-                }
-            }
-
-            for arc in candidate_arcs {
-                if self.contains(&arc) {
-                    arcs.push(arc);
+            for arcstring in other.split(self).arcstrings {
+                // only include arcstrings inside the polygon
+                if arcstring.within(self) {
+                    arcstrings.push(arcstring);
                 }
             }
         }
 
-        if arcs.is_empty() {
+        if arcstrings.is_empty() {
             None
         } else {
-            Some(MultiArcString::from(arcs))
+            Some(MultiArcString::from(arcstrings))
         }
     }
 
-    fn touches(self, other: &ArcString) -> bool {
-        self.boundary.touches(other)
+    fn split(self, other: &ArcString) -> MultiSphericalPolygon {
+        let tolerance = 3e-11;
+
+        // split this polygon into several pieces
+        let mut polygons = MultiSphericalPolygon::from(vec![self.to_owned()]);
+        if let Some(arcstrings) = self.intersection(other) {
+            for arcstring in arcstrings.arcstrings {
+                // each of these arcstrings splits each polygon in two
+                let mut polygon_removal_indices = vec![];
+                let mut new_polygons = vec![];
+                for (index, polygon) in polygons.polygons.iter().enumerate() {
+                    if let Some(crossing_segments) = polygon.intersection(&arcstring) {
+                        for crossing_segment in crossing_segments.arcstrings {
+                            // an arcstring only splits the polygon if it touches the boundary twice
+                            if crate::arcstring::arcstring_contains_point(
+                                &self.boundary,
+                                &crossing_segment.points.xyz.slice(s![0, ..]),
+                            ) && crate::arcstring::arcstring_contains_point(
+                                &self.boundary,
+                                &crossing_segment.points.xyz.slice(s![-1, ..]),
+                            ) {
+                                // this polygon will be split into two
+                                polygon_removal_indices.push(index);
+
+                                let mut boundary_segments: VecDeque<ArcString> =
+                                    polygon.boundary.split(&crossing_segment).arcstrings;
+
+                                // stitch the pieces back together; they should form two complete boundaries
+                                let mut pieces: Vec<ArcString> =
+                                    vec![crossing_segment.to_owned(), crossing_segment.to_owned()];
+                                let mut latest_segments: Vec<ArcString> =
+                                    vec![crossing_segment.to_owned(), crossing_segment.to_owned()];
+
+                                // each segment should be used!
+                                while !boundary_segments.is_empty() {
+                                    let mut found = false;
+                                    let mut segment_removal_indices = vec![];
+                                    for (segment_index, segment) in
+                                        boundary_segments.iter().enumerate()
+                                    {
+                                        for piece_index in 0..pieces.len() {
+                                            let piece = &pieces[piece_index];
+                                            if segment.adjoins(piece)
+                                                && segment.adjoins(&latest_segments[piece_index])
+                                            {
+                                                // if a segment fits onto an existing piece AND is on the working side,
+                                                // attach it to that piece
+                                                latest_segments[piece_index] =
+                                                    boundary_segments[segment_index].to_owned();
+                                                segment_removal_indices.push(segment_index);
+                                                pieces[piece_index] = pieces[piece_index]
+                                                    .join(&latest_segments[piece_index])
+                                                    .unwrap();
+                                                found = true;
+                                            }
+                                        }
+                                    }
+
+                                    // remove attached segments
+                                    for segment_index in segment_removal_indices {
+                                        boundary_segments.swap_remove_back(segment_index);
+                                    }
+
+                                    if !found {
+                                        panic!("cannot fit split segments back together");
+                                    }
+                                }
+
+                                for piece in pieces {
+                                    new_polygons.push(SphericalPolygon::new(piece, None).unwrap());
+                                }
+                            }
+                        }
+                    }
+                }
+
+                for polygon_index in polygon_removal_indices {
+                    polygons.polygons.swap_remove_back(polygon_index);
+                }
+
+                polygons.polygons.extend(new_polygons);
+            }
+        }
+
+        polygons
     }
 }
 
@@ -638,6 +709,10 @@ impl GeometricOperations<&MultiArcString> for &SphericalPolygon {
         false
     }
 
+    fn touches(self, other: &MultiArcString) -> bool {
+        self.boundary.touches(other)
+    }
+
     fn crosses(self, other: &MultiArcString) -> bool {
         self.boundary.crosses(other)
     }
@@ -647,11 +722,29 @@ impl GeometricOperations<&MultiArcString> for &SphericalPolygon {
     }
 
     fn intersection(self, other: &MultiArcString) -> Option<MultiArcString> {
-        todo!()
+        let mut arcstrings = vec![];
+
+        for arcstring in &other.arcstrings {
+            if let Some(intersection) = self.intersection(arcstring) {
+                arcstrings.extend(intersection.arcstrings);
+            }
+        }
+
+        if arcstrings.is_empty() {
+            None
+        } else {
+            Some(MultiArcString::from(arcstrings))
+        }
     }
 
-    fn touches(self, other: &MultiArcString) -> bool {
-        self.boundary.touches(other)
+    fn split(self, other: &MultiArcString) -> MultiSphericalPolygon {
+        let mut polygons = vec![];
+
+        for arcstring in &other.arcstrings {
+            polygons.extend(self.split(arcstring).polygons);
+        }
+
+        MultiSphericalPolygon::from(polygons)
     }
 }
 
@@ -672,6 +765,10 @@ impl GeometricOperations<&SphericalPolygon> for &SphericalPolygon {
         other.contains(self)
     }
 
+    fn touches(self, other: &SphericalPolygon) -> bool {
+        self.boundary.touches(&other.boundary)
+    }
+
     fn crosses(self, other: &SphericalPolygon) -> bool {
         self.boundary.crosses(other)
     }
@@ -681,11 +778,69 @@ impl GeometricOperations<&SphericalPolygon> for &SphericalPolygon {
     }
 
     fn intersection(self, other: &SphericalPolygon) -> Option<MultiSphericalPolygon> {
-        todo!()
+        let mut polygons = vec![];
+        if self.intersects(other) {
+            for polygon in self.split(other).polygons {
+                if polygon.within(other) {
+                    polygons.push(polygon);
+                }
+            }
+        }
+
+        if polygons.is_empty() {
+            None
+        } else {
+            Some(MultiSphericalPolygon::from(polygons))
+        }
     }
 
-    fn touches(self, other: &SphericalPolygon) -> bool {
-        self.boundary.touches(&other.boundary)
+    fn split(self, other: &SphericalPolygon) -> MultiSphericalPolygon {
+        let mut polygons = vec![];
+        if self.intersects(other) {
+            let mut segments = self.boundary.split(&other.boundary).arcstrings;
+            if let Some(other_intersection) = self.intersection(&other.boundary) {
+                segments.extend(other_intersection.arcstrings);
+            }
+
+            // each of these segments connects to two of the other's segments, and vice versa
+            while !segments.is_empty() {
+                let mut segment_removal_indices = vec![];
+                let mut joined_segments = vec![];
+                for (segment_index, segment) in segments.iter().enumerate() {
+                    for (other_segment_index, other_segment) in segments.iter().enumerate() {
+                        if segment_index != other_segment_index {
+                            if let Some(joined) = segment.join(other_segment) {
+                                if joined.closed {
+                                    if let Some(crossings) = joined.crossings_with_self() {
+                                        println!("{}", joined.points.to_lonlat(true));
+                                        println!("{}", crossings.to_lonlat(true));
+                                    }
+                                    polygons.push(SphericalPolygon::new(joined, None).unwrap());
+                                } else {
+                                    joined_segments.push(joined);
+                                    segment_removal_indices.push(segment_index);
+                                    segment_removal_indices.push(other_segment_index);
+                                }
+                            }
+                        }
+                    }
+                }
+
+                for segment_index in segment_removal_indices {
+                    segments.swap_remove_back(segment_index);
+                }
+
+                if joined_segments.is_empty() {
+                    panic!("could not rejoin split segments");
+                }
+
+                segments.extend(joined_segments);
+            }
+        } else {
+            polygons.push(self.to_owned());
+        }
+
+        MultiSphericalPolygon::from(polygons)
     }
 }
 
@@ -706,6 +861,10 @@ impl GeometricOperations<&MultiSphericalPolygon> for &SphericalPolygon {
         other.contains(self)
     }
 
+    fn touches(self, other: &MultiSphericalPolygon) -> bool {
+        self.boundary.touches(other)
+    }
+
     fn crosses(self, other: &MultiSphericalPolygon) -> bool {
         self.boundary.crosses(other)
     }
@@ -715,11 +874,19 @@ impl GeometricOperations<&MultiSphericalPolygon> for &SphericalPolygon {
     }
 
     fn intersection(self, other: &MultiSphericalPolygon) -> Option<MultiSphericalPolygon> {
-        other.intersection(self)
+        other
+            .polygons
+            .par_iter()
+            .map(|other_polygon| self.intersection(other_polygon))
+            .sum()
     }
 
-    fn touches(self, other: &MultiSphericalPolygon) -> bool {
-        self.boundary.touches(other)
+    fn split(self, other: &MultiSphericalPolygon) -> MultiSphericalPolygon {
+        other
+            .polygons
+            .par_iter()
+            .map(|other_polygon| self.split(other_polygon))
+            .sum()
     }
 }
 
@@ -810,7 +977,11 @@ impl Geometry for &MultiSphericalPolygon {
             .par_iter()
             .filter_map(|polygon| polygon.boundary())
             .collect();
-        Some(MultiArcString::from(arcstrings))
+        if arcstrings.is_empty() {
+            None
+        } else {
+            Some(MultiArcString::from(arcstrings))
+        }
     }
 
     fn convex_hull(&self) -> Option<SphericalPolygon> {
@@ -899,6 +1070,12 @@ impl GeometricOperations<&SphericalPoint> for &MultiSphericalPolygon {
         false
     }
 
+    fn touches(self, other: &SphericalPoint) -> bool {
+        self.polygons
+            .par_iter()
+            .any(|polygon| polygon.touches(other))
+    }
+
     fn crosses(self, _: &SphericalPoint) -> bool {
         false
     }
@@ -911,10 +1088,8 @@ impl GeometricOperations<&SphericalPoint> for &MultiSphericalPolygon {
         other.intersection(self)
     }
 
-    fn touches(self, other: &SphericalPoint) -> bool {
-        self.polygons
-            .par_iter()
-            .any(|polygon| polygon.touches(other))
+    fn split(self, other: &SphericalPoint) -> MultiSphericalPolygon {
+        self.to_owned()
     }
 }
 
@@ -933,6 +1108,12 @@ impl GeometricOperations<&MultiSphericalPoint> for &MultiSphericalPolygon {
 
     fn within(self, _: &MultiSphericalPoint) -> bool {
         false
+    }
+
+    fn touches(self, other: &MultiSphericalPoint) -> bool {
+        self.polygons
+            .par_iter()
+            .any(|polygon| polygon.touches(other))
     }
 
     fn crosses(self, _: &MultiSphericalPoint) -> bool {
@@ -955,10 +1136,8 @@ impl GeometricOperations<&MultiSphericalPoint> for &MultiSphericalPolygon {
             .sum()
     }
 
-    fn touches(self, other: &MultiSphericalPoint) -> bool {
-        self.polygons
-            .par_iter()
-            .any(|polygon| polygon.touches(other))
+    fn split(self, other: &MultiSphericalPoint) -> MultiSphericalPolygon {
+        self.to_owned()
     }
 }
 
@@ -981,6 +1160,12 @@ impl GeometricOperations<&ArcString> for &MultiSphericalPolygon {
         false
     }
 
+    fn touches(self, other: &ArcString) -> bool {
+        self.polygons
+            .par_iter()
+            .any(|polygon| polygon.touches(other))
+    }
+
     fn crosses(self, other: &ArcString) -> bool {
         self.polygons
             .par_iter()
@@ -998,10 +1183,11 @@ impl GeometricOperations<&ArcString> for &MultiSphericalPolygon {
             .sum()
     }
 
-    fn touches(self, other: &ArcString) -> bool {
+    fn split(self, other: &ArcString) -> MultiSphericalPolygon {
         self.polygons
             .par_iter()
-            .any(|polygon| polygon.touches(other))
+            .map(|polygon| polygon.split(other))
+            .sum()
     }
 }
 
@@ -1025,6 +1211,12 @@ impl GeometricOperations<&MultiArcString> for &MultiSphericalPolygon {
         false
     }
 
+    fn touches(self, other: &MultiArcString) -> bool {
+        self.polygons
+            .par_iter()
+            .any(|polygon| polygon.touches(other))
+    }
+
     fn crosses(self, other: &MultiArcString) -> bool {
         self.polygons
             .par_iter()
@@ -1036,13 +1228,17 @@ impl GeometricOperations<&MultiArcString> for &MultiSphericalPolygon {
     }
 
     fn intersection(self, other: &MultiArcString) -> Option<MultiArcString> {
-        todo!()
-    }
-
-    fn touches(self, other: &MultiArcString) -> bool {
         self.polygons
             .par_iter()
-            .any(|polygon| polygon.touches(other))
+            .map(|polygon| polygon.intersection(other))
+            .sum()
+    }
+
+    fn split(self, other: &MultiArcString) -> MultiSphericalPolygon {
+        self.polygons
+            .par_iter()
+            .map(|polygon| polygon.split(other))
+            .sum()
     }
 }
 
@@ -1067,6 +1263,12 @@ impl GeometricOperations<&SphericalPolygon> for &MultiSphericalPolygon {
             .all(|polygon| polygon.within(other))
     }
 
+    fn touches(self, other: &SphericalPolygon) -> bool {
+        self.polygons
+            .par_iter()
+            .any(|polygon| polygon.touches(other))
+    }
+
     fn crosses(self, other: &SphericalPolygon) -> bool {
         self.polygons
             .par_iter()
@@ -1080,13 +1282,17 @@ impl GeometricOperations<&SphericalPolygon> for &MultiSphericalPolygon {
     }
 
     fn intersection(self, other: &SphericalPolygon) -> Option<MultiSphericalPolygon> {
-        todo!()
-    }
-
-    fn touches(self, other: &SphericalPolygon) -> bool {
         self.polygons
             .par_iter()
-            .any(|polygon| polygon.touches(other))
+            .map(|polygon| polygon.intersection(other))
+            .sum()
+    }
+
+    fn split(self, other: &SphericalPolygon) -> MultiSphericalPolygon {
+        self.polygons
+            .par_iter()
+            .map(|polygon| polygon.split(other))
+            .sum()
     }
 }
 
@@ -1109,6 +1315,12 @@ impl GeometricOperations<&MultiSphericalPolygon> for &MultiSphericalPolygon {
             .all(|polygon| polygon.within(other))
     }
 
+    fn touches(self, other: &MultiSphericalPolygon) -> bool {
+        self.polygons
+            .par_iter()
+            .any(|polygon| polygon.touches(other))
+    }
+
     fn crosses(self, other: &MultiSphericalPolygon) -> bool {
         self.polygons
             .par_iter()
@@ -1128,24 +1340,10 @@ impl GeometricOperations<&MultiSphericalPolygon> for &MultiSphericalPolygon {
             .sum()
     }
 
-    fn touches(self, other: &MultiSphericalPolygon) -> bool {
+    fn split(self, other: &MultiSphericalPolygon) -> MultiSphericalPolygon {
         self.polygons
             .par_iter()
-            .any(|polygon| polygon.touches(other))
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    #[test]
-    fn test_from_cone() {
-        let lonlat = array![0., 21.];
-        let polygon = SphericalPolygon::from_cone(
-            &crate::sphericalpoint::SphericalPoint::try_from_lonlat(&lonlat.view()).unwrap(),
-            &8.0,
-            64,
-        );
-        assert!(polygon.area() > 0.0);
+            .map(|polygon| polygon.split(other))
+            .sum()
     }
 }

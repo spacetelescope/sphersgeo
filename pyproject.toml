@@ -14,7 +14,7 @@ dynamic = ["version"]
 dependencies = ["numpy"]
 
 [project.optional-dependencies]
-test = ["pytest", "astropy"]
+test = ["pytest", "gwcs"]
 
 [tool.maturin]
 python-source = "python"

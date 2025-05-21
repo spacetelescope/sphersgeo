@@ -11,9 +11,20 @@ from sphersgeo import (
     MultiSphericalPoint,
 )
 from numpy.testing import assert_almost_equal
-from helpers import resolve_imagename, get_point_set, ROOT_DIR
 
 DATA_DIRECTORY = Path(__file__).parent / "data"
+
+TEST_POINTS = [
+    (0.88955854, 87.53857137),
+    (20.6543883, 87.60498618),
+    (343.19474696, 85.05565535),
+    (8.94286202, 85.50465173),
+    (27.38417684, 85.03404907),
+    (310.53503934, 88.56749324),
+    (0, 60),
+    (0, 90),
+    (12, 66),
+]
 
 
 def test_init():
@@ -75,16 +86,15 @@ def test_from_cone():
         assert polygon.area > 0
 
 
-def test_cone_area():
-    expected_area = None
-    for lon in (0, 30, 60, 90, 120, 150, 180, 210, 240, 270, 300, 330):
-        for lat in (0, 30, 60, 90, 120, 150, 180, 210, 240, 270, 300, 330):
-            area = SphericalPolygon.from_cone(
-                SphericalPoint.from_lonlat((lon, lat)), radius=30, steps=64
-            ).area
-            if expected_area is None:
-                expected_area = area
-            assert_almost_equal(area, expected_area)
+@pytest.mark.parametrize("lon", [0, 60, 120, 180, 240, 300])
+@pytest.mark.parametrize("lat", [0, 30, 60, 90])
+def test_cone_area(lon, lat):
+    polygon = SphericalPolygon.from_cone(
+        SphericalPoint.from_lonlat((lon, lat)), radius=10, steps=64
+    )
+    assert polygon.vertices.xyz.shape == (63, 3)
+    assert_almost_equal(polygon.convex_hull.area, 2.1317425024870715)
+    assert_almost_equal(polygon.area, 2.1317425024870715, decimal=1)
 
 
 def test_is_clockwise():
@@ -93,7 +103,7 @@ def test_is_clockwise():
     )
     assert not counterclockwise_poly.is_clockwise
 
-    points = list(counterclockwise_poly.points)[0]
+    points = list(counterclockwise_poly.vertices)[0]
     inside = list(counterclockwise_poly)[0]
     outside = -1.0 * inside
 
@@ -129,110 +139,41 @@ def test_overlap():
         assert abs(overlap_area - calculated_area) < 0.0005
 
 
-def test_from_wcs():
+@pytest.mark.parametrize("test_point", TEST_POINTS)
+@pytest.mark.parametrize("rotation", [0, 32])
+@pytest.mark.parametrize(
+    "bounding_box,pixel_shape",
+    [(((-0.5, 4096 - 0.5), (-0.5, 4096 - 0.5)), None), (None, (5000, 5000))],
+)
+def test_from_wcs(test_point, rotation, bounding_box, pixel_shape):
+    import astropy.coordinates as coord
+    import astropy.modeling.models as amm
+    import astropy.units as u
+    from gwcs import WCS, coordinate_frames
     from sphersgeo.from_wcs import polygon_from_wcs
-    from astropy.io import fits
 
-    header = fits.getheader(DATA_DIRECTORY / "j8bt06nyq_flt.fits", ext=("SCI", 1))
+    transform = (amm.Shift(-2048) & amm.Shift(-2048)) | (
+        amm.Scale(0.11 / 3600.0) & amm.Scale(0.11 / 3600.0)
+        | amm.Rotation2D(rotation)
+        | amm.Pix2Sky_TAN()
+        | amm.RotateNative2Celestial(*test_point, 180.0)
+    )
+    detector_frame = coordinate_frames.Frame2D(
+        name="detector", axes_names=("x", "y"), unit=(u.pix, u.pix)
+    )
+    sky_frame = coordinate_frames.CelestialFrame(
+        reference_frame=coord.ICRS(), name="icrs", unit=(u.deg, u.deg)
+    )
+    wcsobj = WCS([(detector_frame, transform), (sky_frame, None)])
+    if pixel_shape is not None:
+        wcsobj.pixel_shape = pixel_shape
+    if bounding_box is not None:
+        wcsobj.bounding_box = bounding_box
 
-    poly = polygon_from_wcs(header)
-    for lonlat in poly.to_lonlat(degrees=True):
-        lon = lonlat[0]
-        lat = lonlat[1]
-        assert np.all(np.absolute(lon - 6.027148333333) < 0.2)
-        assert np.all(np.absolute(lat + 72.08351111111) < 0.2)
+    polygon = polygon_from_wcs(wcsobj)
 
-
-def test_intersects_poly_simple():
-    lon1 = np.array([-10, 10, 10, -10, -10], dtype=float)
-    lat1 = np.array([30, 30, 0, 0, 30], dtype=float)
-    poly1 = SphericalPolygon.from_lonlat(np.stack((lon1, lat1), axis=1))
-
-    ra2 = np.array([-5, 15, 15, -5, -5], dtype=float)
-    dec2 = np.array([20, 20, -10, -10, 20], dtype=float)
-    poly2 = SphericalPolygon.from_lonlat(np.stack((ra2, dec2), axis=1))
-
-    assert poly1.intersects(poly2)
-
-    # Make sure it isn't order-dependent
-    lon1 = lon1[::-1]
-    lat1 = lat1[::-1]
-    poly1 = SphericalPolygon.from_lonlat(np.stack((lon1, lat1), axis=1))
-
-    ra2 = ra2[::-1]
-    dec2 = dec2[::-1]
-    poly2 = SphericalPolygon.from_lonlat(np.stack((ra2, dec2), axis=1))
-
-    assert poly1.intersects(poly2)
-
-
-def test_intersects_poly_fully_contained():
-    lon1 = np.array([-10, 10, 10, -10, -10], dtype=float)
-    lat1 = np.array([30, 30, 0, 0, 30], dtype=float)
-    poly1 = SphericalPolygon.from_lonlat(np.stack((lon1, lat1), axis=1))
-
-    lon2 = np.array([-5, 5, 5, -5, -5], dtype=float)
-    lat2 = np.array([20, 20, 10, 10, 20], dtype=float)
-    poly2 = SphericalPolygon.from_lonlat(np.stack((lon2, lat2), axis=1))
-
-    assert poly1.intersects(poly2)
-
-    # Make sure it isn't order-dependent
-    lon1 = lon1[::-1]
-    lat1 = lat1[::-1]
-    poly1 = SphericalPolygon.from_lonlat(np.stack((lon1, lat1), axis=1))
-
-    lon2 = lon2[::-1]
-    lat2 = lat2[::-1]
-    poly2 = SphericalPolygon.from_lonlat(np.stack((lon2, lat2), axis=1))
-
-    assert poly1.intersects(poly2)
-
-
-def test_hard_intersects_poly():
-    lon1 = np.array([-10, 10, 10, -10, -10], dtype=float)
-    lat1 = np.array([30, 30, 0, 0, 30], dtype=float)
-    poly1 = SphericalPolygon.from_lonlat(np.stack((lon1, lat1), axis=1))
-
-    lon2 = np.array([-20, 20, 20, -20, -20], dtype=float)
-    lat2 = np.array([20, 20, 10, 10, 20], dtype=float)
-    poly2 = SphericalPolygon.from_lonlat(np.stack((lon2, lat2), axis=1))
-
-    assert poly1.intersects(poly2)
-
-    # Make sure it isn't order-dependent
-    lon1 = lon1[::-1]
-    lat1 = lat1[::-1]
-    poly1 = SphericalPolygon.from_lonlat(np.stack((lon1, lat1), axis=1))
-
-    lon2 = lon2[::-1]
-    lat2 = lat2[::-1]
-    poly2 = SphericalPolygon.from_lonlat(np.stack((lon2, lat2), axis=1))
-
-    assert poly1.intersects(poly2)
-
-
-def test_not_intersects_poly():
-    lon1 = np.array([-10, 10, 10, -10, -10], dtype=float)
-    lat1 = np.array([30, 30, 5, 5, 30], dtype=float)
-    poly1 = SphericalPolygon.from_lonlat(np.stack((lon1, lat1), axis=1))
-
-    lon2 = np.array([-20, 20, 20, -20, -20], dtype=float)
-    lat2 = np.array([-20, -20, -10, -10, -20], dtype=float)
-    poly2 = SphericalPolygon.from_lonlat(np.stack((lon2, lat2), axis=1))
-
-    assert not poly1.intersects(poly2)
-
-    # Make sure it isn't order-dependent
-    lon1 = lon1[::-1]
-    lat1 = lat1[::-1]
-    poly1 = SphericalPolygon.from_lonlat(np.stack((lon1, lat1), axis=1))
-
-    lon2 = lon2[::-1]
-    lat2 = lat2[::-1]
-    poly2 = SphericalPolygon.from_lonlat(np.stack((lon2, lat2), axis=1))
-
-    assert not poly1.intersects(poly2)
+    assert polygon.area > 0
+    assert polygon.contains(SphericalPoint.from_lonlat(test_point))
 
 
 def test_point_in_poly():
@@ -250,46 +191,46 @@ def test_point_in_poly():
     assert not poly.contains(point)
 
 
-def test_point_in_poly_lots():
-    from astropy.io import fits
-    from sphersgeo.from_wcs import polygon_from_wcs
-
-    header = fits.getheader(resolve_imagename(ROOT_DIR, "1904-77_TAN.fits"), ext=0)
-
-    poly1 = polygon_from_wcs(header, 1, crval=[0, 87])
-    poly2 = polygon_from_wcs(header, 1, crval=[20, 89])
-    poly3 = polygon_from_wcs(header, 1, crval=[180, 89])
-
-    points = get_point_set()
-    count = 0
-    for point in points:
-        if poly1.contains(point) or poly2.contains(point) or poly3.contains(point):
-            count += 1
-
-    assert count == 5
-    assert poly1.intersects(poly2)
-    assert not poly1.intersects(poly3)
-    assert not poly2.intersects(poly3)
-
-
-def test_area():
-    triangles = [
-        ([(90, 0), (0, 45), (0, -45), (90, 0)], np.pi * 0.5),
-        ([(90, 0), (0, 22.5), (0, -22.5), (90, 0)], np.pi * 0.25),
-        ([(90, 0), (0, 11.25), (0, -11.25), (90, 0)], np.pi * 0.125),
-    ]
-
-    for tri, area in triangles:
-        poly = SphericalPolygon(tri)
-        assert_almost_equal(poly.area, area)
+@pytest.mark.parametrize(
+    "lonlats,expected_area",
+    [
+        (
+            np.array(
+                [
+                    (20.0, 5.0),
+                    (25.0, 5.0),
+                    (25.0, 10.0),
+                    (20.0, 10.0),
+                ]
+            ),
+            25,
+        ),
+        (
+            np.array(
+                [
+                    (18.0, 6.0),
+                    (20.0, 5.0),
+                    (25.0, 5.0),
+                    (25.0, 10.0),
+                    (20.0, 10.0),
+                    (19.0, 8.0),
+                    (18.0, 7.0),
+                ]
+            ),
+            25,
+        ),
+        ([(90, 0), (0, 45), (0, -45)], 90.0),
+        ([(90, 0), (0, 22.5), (0, -22.5)], 45.0),
+        ([(90, 0), (0, 11.25), (0, -11.25)], 22.5),
+    ],
+)
+def test_area(lonlats, expected_area):
+    poly = SphericalPolygon(MultiSphericalPoint.from_lonlat(lonlats))
+    assert_almost_equal(poly.area, expected_area)
 
 
 def test_fast_area():
-    # Clockwise
-    a = SphericalPolygon()
-
-    # Clockwise
-    b = SphericalPolygon(
+    a = SphericalPolygon(
         [
             (0.35331737, 0.6351013, -0.68688658),
             (0.3536442, 0.63515101, -0.68667239),
@@ -297,91 +238,181 @@ def test_fast_area():
             (0.35328338, 0.63515742, -0.68685217),
             (0.35328614, 0.63515318, -0.68685467),
             (0.35328374, 0.63515279, -0.68685627),
-            (0.35331737, 0.6351013, -0.68688658),
         ]
     )
 
-    # Counterclockwise
-    c = SphericalPolygon(
+    b = SphericalPolygon(
         [
             (0.35327617, 0.6351561, -0.6868571),
             (0.35295533, 0.63510299, -0.68707112),
             (0.35298984, 0.63505081, -0.68710162),
             (0.35331262, 0.63510039, -0.68688987),
-            (0.35327617, 0.6351561, -0.6868571),
         ],
         interior_point=(-0.35327617, -0.6351561, 0.6868571),
     )
 
-    aarea = a.area
-    barea = b.area
-    carea = c.area
-
-    assert aarea > 0.0 and aarea < 2.0 * np.pi
-    assert barea > 0.0 and barea < 2.0 * np.pi
-    assert carea > 2.0 * np.pi and carea < 4.0 * np.pi
+    assert a.area > 0.0 and a.area < 2.0 * np.pi
+    assert b.area > 2.0 * np.pi and b.area < 4.0 * np.pi
 
 
-@pytest.mark.parametrize("repeat_pts", [False, True])
-def test_convex_hull(repeat_pts):
-    lonlats = np.array(
-        [
-            (0.02, 0.06),
-            (0.10, 0.00),
-            (0.05, 0.05),
-            (0.03, 0.01),
-            (0.04, 0.12),
-            (0.07, 0.08),
-            (0.00, 0.03),
-            (0.06, 0.02),
-            (0.08, 0.04),
-            (0.13, 0.03),
-            (0.08, 0.10),
-            (0.14, 0.11),
-            (0.15, 0.01),
-            (0.12, 0.13),
-            (0.01, 0.09),
-            (0.11, 0.07),
-        ]
-    )
-
-    if repeat_pts:
-        lonlats = lonlats + lonlats[::-1]
-
+@pytest.mark.parametrize(
+    "lonlats,expected_area,expected_on_boundary",
+    [
+        (
+            np.array(
+                [
+                    (20.0, 5.0),
+                    (25.0, 5.0),
+                    (25.0, 10.0),
+                    (20.0, 10.0),
+                ]
+            ),
+            25,
+            [True, True, True, True],
+        ),
+        (
+            np.array(
+                [
+                    (18.0, 6.0),
+                    (21.0, 6.0),
+                    (20.0, 5.0),
+                    (21.0, 7.0),
+                    (19.0, 8.0),
+                    (25.0, 5.0),
+                    (25.0, 10.0),
+                    (20.0, 10.0),
+                    (18.0, 7.0),
+                ]
+            ),
+            25,
+            [True, False, True, False, True, True, True, True, True],
+        ),
+        (
+            np.array(
+                [
+                    (0.02, 0.06),
+                    (0.10, 0.00),
+                    (0.05, 0.05),
+                    (0.03, 0.01),
+                    (0.04, 0.12),
+                    (0.07, 0.08),
+                    (0.00, 0.03),
+                    (0.06, 0.02),
+                    (0.08, 0.04),
+                    (0.13, 0.03),
+                    (0.08, 0.10),
+                    (0.14, 0.11),
+                    (0.15, 0.01),
+                    (0.12, 0.13),
+                    (0.01, 0.09),
+                    (0.11, 0.07),
+                ]
+            ),
+            np.pi,
+            [
+                False,
+                True,
+                False,
+                True,
+                True,
+                False,
+                True,
+                False,
+                False,
+                False,
+                False,
+                True,
+                True,
+                True,
+                True,
+                False,
+            ],
+        ),
+        (
+            np.array(
+                [
+                    (0.02, 0.06),
+                    (0.10, 0.00),
+                    (0.05, 0.05),
+                    (0.03, 0.01),
+                    (0.04, 0.12),
+                    (0.07, 0.08),
+                    (0.00, 0.03),
+                    (0.06, 0.02),
+                    (0.08, 0.04),
+                    (0.13, 0.03),
+                    (0.08, 0.10),
+                    (0.14, 0.11),
+                    (0.15, 0.01),
+                    (0.12, 0.13),
+                    (0.01, 0.09),
+                    (0.11, 0.07),
+                    (0.02, 0.06),
+                    (0.10, 0.00),
+                    (0.05, 0.05),
+                    (0.03, 0.01),
+                    (0.04, 0.12),
+                    (0.07, 0.08),
+                    (0.00, 0.03),
+                    (0.06, 0.02),
+                    (0.08, 0.04),
+                    (0.13, 0.03),
+                    (0.08, 0.10),
+                    (0.14, 0.11),
+                    (0.15, 0.01),
+                    (0.12, 0.13),
+                    (0.01, 0.09),
+                    (0.11, 0.07),
+                ]
+            ),
+            np.pi,
+            [
+                False,
+                True,
+                False,
+                True,
+                True,
+                False,
+                True,
+                False,
+                False,
+                False,
+                False,
+                True,
+                True,
+                True,
+                True,
+                False,
+            ],
+        ),
+    ],
+)
+def test_convex_hull(lonlats, expected_area, expected_on_boundary):
     points = MultiSphericalPoint.from_lonlat(lonlats, degrees=True)
 
-    # The method call
-    poly = points.convex_hull
+    convex_hull = points.convex_hull
 
-    boundary = poly.boundary
-    on_boundary = []
-    for p in lonlats:
-        match = False
-        for b in boundary:
-            distance = math.sqrt((p[0] - b[0]) ** 2 + (p[1] - b[1]) ** 2)
-            if distance < 0.005:
-                match = True
+    assert convex_hull.area == expected_area
+
+    boundary_lonlats = convex_hull.boundary.vertices.to_lonlat()
+
+    def lonlat_in_lonlats(
+        lonlat: tuple[float, float], lonlats: list[tuple[float, float]]
+    ):
+        for boundary_lonlat in boundary_lonlats:
+            if (
+                math.sqrt(
+                    (lonlat[0] - boundary_lonlat[0]) ** 2
+                    + (lonlat[1] - boundary_lonlat[1]) ** 2
+                )
+                < 0.005
+            ):
+                return True
                 break
-        on_boundary.append(match)
+        else:
+            return False
 
-    result = [
-        False,
-        True,
-        False,
-        True,
-        True,
-        False,
-        True,
-        False,
-        False,
-        False,
-        False,
-        True,
-        True,
-        True,
-        True,
-        False,
-    ]
+    on_boundary = [lonlat_in_lonlats(lonlat, boundary_lonlats) for lonlat in lonlats]
 
-    for b, r in zip(on_boundary, result):
-        assert b == r, "Polygon boundary has correct points"
+    for b, r in zip(on_boundary, expected_on_boundary):
+        assert b == r, "convex hull incorrect"

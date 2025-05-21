@@ -5,7 +5,9 @@ use crate::{
         MultiSphericalPoint, SphericalPoint,
     },
 };
-use numpy::ndarray::{array, concatenate, s, stack, Array1, Array2, ArrayView1, Axis, Zip};
+use numpy::ndarray::{
+    array, concatenate, s, stack, Array1, Array2, ArrayView1, ArrayView2, Axis, Zip,
+};
 use pyo3::prelude::*;
 use rayon::prelude::*;
 use std::{collections::VecDeque, fmt::Display, iter::Sum};
@@ -107,17 +109,117 @@ pub fn arcstring_contains_point(arcstring: &ArcString, xyz: &ArrayView1<f64>) ->
         return true;
     }
 
-    // iterate over endpoints and check if collinear with the given point
-    for index in 0..xyzs.nrows() - 1 {
-        let a = xyzs.slice(s![index, ..]);
-        let b = xyzs.slice(s![index + 1, ..]);
+    // iterate over individual arcs and check if the given point is collinear with their endpoints
+    let first_vertex_index = if arcstring.closed { -1 } else { 0 };
+    for arc_index in first_vertex_index..(xyzs.nrows() - 1) as isize {
+        let arc_0 = xyzs.slice(s![arc_index, ..]);
+        let arc_1 = xyzs.slice(s![arc_index + 1, ..]);
 
-        if crate::sphericalpoint::vectors_collinear(&a.view(), xyz, &b.view()) {
+        if crate::sphericalpoint::vectors_collinear(&arc_0.view(), xyz, &arc_1.view()) {
             return true;
         }
     }
 
     false
+}
+
+fn split_arcstring_at_points(arcstring: &ArcString, points: &ArrayView2<f64>) -> MultiArcString {
+    let mut arcstrings: Vec<ArcString> = vec![];
+
+    let mut previous_split: Option<ArrayView1<f64>> = None;
+
+    // iterate over individual arcs
+    let mut first_vertex_index = if arcstring.closed { -1 } else { 0 };
+    for arc_index in first_vertex_index..(arcstring.points.xyz.nrows() - 1) as isize {
+        let arc_0 = arcstring.points.xyz.slice(s![arc_index, ..]);
+        let arc_1 = arcstring.points.xyz.slice(s![arc_index + 1, ..]);
+
+        let mut _coerced_array_1: Array2<f64>;
+
+        // iterate over given points
+        for xyz in points.rows() {
+            // if this point exists on the current arc, cut out the arc (from the current starting endpoint to this point)
+            if crate::sphericalpoint::vectors_collinear(&arc_0.view(), &xyz.view(), &arc_1.view()) {
+                // build the slice of points to concatenate
+                let mut xyzs = vec![];
+
+                // add the previous split as the start point of this arcstring, if it exists
+                if let Some(xyz) = &previous_split {
+                    _coerced_array_1 = xyz.to_shape((1, 3)).unwrap().to_owned();
+                    xyzs.push(_coerced_array_1.view());
+                }
+
+                // backfill vertices if the previous split doesn't exist, or if it isn't on this same arc
+                if previous_split.is_none_or(|xyz| {
+                    !crate::sphericalpoint::vectors_collinear(
+                        &arc_0.view(),
+                        &xyz.view(),
+                        &arc_1.view(),
+                    )
+                }) {
+                    let backfill = arcstring
+                        .points
+                        .xyz
+                        .slice(s![first_vertex_index..arc_index, ..]);
+
+                    if backfill.nrows() > 0 {
+                        xyzs.push(backfill);
+                        // set the end point of this arc as the first vertex of the next arcsrtring
+                        first_vertex_index = arc_index + 1;
+                    }
+                }
+
+                // add the current split as the end point of this arcstring
+                let _coerced_array_2 = xyz.to_shape((1, 3)).unwrap();
+                xyzs.push(_coerced_array_2.view());
+
+                // add this newly-cut arcstring to the list of arcstrings
+                arcstrings.push(ArcString::from(
+                    MultiSphericalPoint::try_from(concatenate(Axis(0), xyzs.as_slice()).unwrap())
+                        .unwrap(),
+                ));
+
+                // set the current split as the start point of the next arcstring
+                previous_split = Some(xyz);
+            }
+        }
+
+        // add the final arc
+        if arc_index == (arcstring.points.xyz.nrows() - 2) as isize {
+            // build the slice of points to concatenate
+            let mut xyzs = vec![];
+
+            // add the previous split as the start point of this arcstring, if it exists
+            if let Some(xyz) = &previous_split {
+                _coerced_array_1 = xyz.to_shape((1, 3)).unwrap().to_owned();
+                xyzs.push(_coerced_array_1.view());
+            }
+
+            // backfill vertices if the previous split doesn't exist, or if it isn't on this same arc
+            if previous_split.is_none_or(|xyz| {
+                !crate::sphericalpoint::vectors_collinear(&arc_0.view(), &xyz.view(), &arc_1.view())
+            }) {
+                xyzs.push(
+                    arcstring
+                        .points
+                        .xyz
+                        .slice(s![first_vertex_index..arc_index, ..]),
+                );
+            }
+
+            // add the last point as the end point of this arcstring
+            let _coerced_array_2 = arc_1.to_shape((1, 3)).unwrap();
+            xyzs.push(_coerced_array_2.view());
+
+            // add this newly-cut arcstring to the list of arcstrings
+            arcstrings.push(ArcString::from(
+                MultiSphericalPoint::try_from(concatenate(Axis(0), xyzs.as_slice()).unwrap())
+                    .unwrap(),
+            ));
+        }
+    }
+
+    MultiArcString::from(arcstrings)
 }
 
 /// for arc AB, the closest point T to given point C is
@@ -130,7 +232,7 @@ pub fn arcstring_contains_point(arcstring: &ArcString, xyz: &ArrayView1<f64>) ->
 /// ----------
 /// - https://stackoverflow.com/a/1302268
 fn arc_distance_to_point(a: &ArrayView1<f64>, b: &ArrayView1<f64>, xyz: &ArrayView1<f64>) -> f64 {
-    let g = crate::sphericalpoint::cross_vector(&a, &b);
+    let g = crate::sphericalpoint::cross_vector(a, b);
     let f = crate::sphericalpoint::cross_vector(xyz, &g.view());
     let t = crate::sphericalpoint::cross_vector(&g.view(), &f.view());
     vector_arc_length(&t.view(), xyz, false)
@@ -146,7 +248,12 @@ pub struct ArcString {
 
 impl From<MultiSphericalPoint> for ArcString {
     fn from(points: MultiSphericalPoint) -> Self {
-        let (points, closed) = if points.xyz.slice(s![-1, ..]) == points.xyz.slice(s![0, ..]) {
+        let tolerance = 3e-11;
+        let (points, closed) = if (&points.xyz.slice(s![-1, ..]) - &points.xyz.slice(s![0, ..]))
+            .abs()
+            .sum()
+            < tolerance
+        {
             (
                 MultiSphericalPoint::try_from(points.xyz.slice(s![..-1, ..]).to_owned()).unwrap(),
                 true,
@@ -207,19 +314,40 @@ impl ArcString {
     /// whether this arcstring intersects itself
     pub fn crosses_self(&self) -> bool {
         if self.points.len() >= 4 {
+            let tolerance = 1e-11;
+
             // we can't use the Bentley-Ottmann sweep-line algorithm here :/
             // because a sphere is an enclosed infinite space so there's no good way to sort by longitude
             // so instead we use brute-force and skip visited arcs
-            let start_index = if self.closed { -1 } else { 0 };
-            for a_0_index in start_index..(self.points.len() - 1) as isize {
-                let a_0 = self.points.xyz.slice(s![a_0_index, ..]);
-                let a_1 = self.points.xyz.slice(s![a_0_index + 1, ..]);
+            let first_vertex_index = if self.closed { -1 } else { 0 };
+            for arc_a_index in first_vertex_index..(self.points.len() - 1) as isize {
+                let a_0 = crate::sphericalpoint::normalize_vector(
+                    &self.points.xyz.slice(s![arc_a_index, ..]),
+                );
+                let a_1 = crate::sphericalpoint::normalize_vector(
+                    &self.points.xyz.slice(s![arc_a_index + 1, ..]),
+                );
 
-                for b_0_index in a_0_index + 2..(self.points.len() - 1) as isize {
-                    let b_0 = self.points.xyz.slice(s![b_0_index, ..]);
-                    let b_1 = self.points.xyz.slice(s![b_0_index + 1, ..]);
-                    if let Some(point) = vector_arc_crossing(&a_0, &a_1, &b_0, &b_1) {
-                        return true;
+                for arc_b_index in arc_a_index + 2..(self.points.len() - 1) as isize {
+                    let b_0 = crate::sphericalpoint::normalize_vector(
+                        &self.points.xyz.slice(s![arc_b_index, ..]),
+                    );
+                    let b_1 = crate::sphericalpoint::normalize_vector(
+                        &self.points.xyz.slice(s![arc_b_index + 1, ..]),
+                    );
+                    if let Some(point) =
+                        vector_arc_crossing(&a_0.view(), &a_1.view(), &b_0.view(), &b_1.view())
+                    {
+                        let point = crate::sphericalpoint::normalize_vector(&point.view());
+                        if (&point - &a_0).abs().sum() < tolerance
+                            || (&point - &a_1).abs().sum() < tolerance
+                            || (&point - &b_0).abs().sum() < tolerance
+                            || (&point - &b_1).abs().sum() < tolerance
+                        {
+                            continue;
+                        } else {
+                            return true;
+                        }
                     }
                 }
             }
@@ -231,22 +359,33 @@ impl ArcString {
     /// points of intersection with itself
     pub fn crossings_with_self(&self) -> Option<MultiSphericalPoint> {
         if self.points.len() >= 4 {
+            let tolerance = 1e-11;
+
             let mut crossings = vec![];
 
             // we can't use the Bentley-Ottmann sweep-line algorithm here :/
             // because a sphere is an enclosed infinite space so there's no good way to sort by longitude
             // so instead we use brute-force and skip visited arcs
-            let start_index = if self.closed { -1 } else { 0 };
-            for a_0_index in start_index..(self.points.len() - 1) as isize {
-                let a_0 = self.points.xyz.slice(s![a_0_index, ..]);
-                let a_1 = self.points.xyz.slice(s![a_0_index + 1, ..]);
+            let first_vertex_index = if self.closed { -1 } else { 0 };
+            for arc_a_index in first_vertex_index..(self.points.len() - 1) as isize {
+                let a_0 = self.points.xyz.slice(s![arc_a_index, ..]);
+                let a_1 = self.points.xyz.slice(s![arc_a_index + 1, ..]);
 
-                for b_0_index in a_0_index + 2..(self.points.len() - 1) as isize {
-                    let b_0 = self.points.xyz.slice(s![b_0_index, ..]);
-                    let b_1 = self.points.xyz.slice(s![b_0_index + 1, ..]);
+                for arc_b_index in arc_a_index + 2..(self.points.len() - 1) as isize {
+                    let b_0 = self.points.xyz.slice(s![arc_b_index, ..]);
+                    let b_1 = self.points.xyz.slice(s![arc_b_index + 1, ..]);
 
                     if let Some(point) = vector_arc_crossing(&a_0, &a_1, &b_0, &b_1) {
-                        crossings.push(point);
+                        let point = crate::sphericalpoint::normalize_vector(&point.view());
+                        if (&point - &a_0).abs().sum() < tolerance
+                            || (&point - &a_1).abs().sum() < tolerance
+                            || (&point - &b_0).abs().sum() < tolerance
+                            || (&point - &b_1).abs().sum() < tolerance
+                        {
+                            continue;
+                        } else {
+                            crossings.push(point);
+                        }
                     }
                 }
             }
@@ -263,6 +402,82 @@ impl ArcString {
         Zip::from(self.points.xyz.slice(s![..-1, ..]).rows())
             .and(self.points.xyz.slice(s![1.., ..]).rows())
             .par_map_collect(|a, b| vector_arc_length(&a, &b, false))
+    }
+
+    /// whether this arcstring shares endpoints with another, ignoring closed arcstrings
+    pub fn adjoins(&self, other: &ArcString) -> bool {
+        let tolerance = 3e-11;
+
+        let start = self.points.xyz.slice(s![0, ..]);
+        let end = self.points.xyz.slice(s![-1, ..]);
+        let other_start = other.points.xyz.slice(s![0, ..]);
+        let other_end = other.points.xyz.slice(s![-1, ..]);
+
+        (&start - &other_start).abs().sum() < tolerance
+            || (&start - &other_end).abs().sum() < tolerance
+            || (&end - &other_start).abs().sum() < tolerance
+            || (&end - &other_end).abs().sum() < tolerance
+    }
+
+    /// join this arcstring to another IF they share endpoints, ignoring closing arcs
+    pub fn join(&self, other: &ArcString) -> Option<ArcString> {
+        if self.points.xyz.nrows() > 0 {
+            let tolerance = 3e-11;
+
+            let start = self.points.xyz.slice(s![0, ..]);
+            let end = self.points.xyz.slice(s![-1, ..]);
+
+            if other.points.xyz.nrows() > 0 {
+                let other_start = other.points.xyz.slice(s![0, ..]);
+                let other_end = other.points.xyz.slice(s![-1, ..]);
+
+                if (&start - &other_start).abs().sum() < tolerance
+                    || (&start - &other_end).abs().sum() < tolerance
+                    || (&end - &other_start).abs().sum() < tolerance
+                    || (&end - &other_end).abs().sum() < tolerance
+                {
+                    Some(ArcString::from(
+                        MultiSphericalPoint::try_from(
+                            // flip arcstrings so that they match up end-to-end
+                            if (&start - &other_start).abs().sum() < tolerance {
+                                let mut xyz = self.points.xyz.to_owned();
+                                xyz.invert_axis(Axis(0));
+                                concatenate(
+                                    Axis(0),
+                                    &[xyz.view(), other.points.xyz.slice(s![1.., ..])],
+                                )
+                            } else if (&start - &other_end).abs().sum() < tolerance {
+                                let mut xyz = self.points.xyz.to_owned();
+                                let mut other_xyz = other.points.xyz.to_owned();
+                                xyz.invert_axis(Axis(0));
+                                other_xyz.invert_axis(Axis(0));
+                                concatenate(Axis(0), &[xyz.view(), other_xyz.slice(s![1.., ..])])
+                            } else if (&end - &other_start).abs().sum() < tolerance {
+                                concatenate(
+                                    Axis(0),
+                                    &[self.points.xyz.view(), other.points.xyz.slice(s![1.., ..])],
+                                )
+                            } else {
+                                let mut other_xyz = other.points.xyz.to_owned();
+                                other_xyz.invert_axis(Axis(0));
+                                concatenate(
+                                    Axis(0),
+                                    &[self.points.xyz.view(), other_xyz.slice(s![1.., ..])],
+                                )
+                            }
+                            .unwrap(),
+                        )
+                        .unwrap(),
+                    ))
+                } else {
+                    None
+                }
+            } else {
+                Some(self.to_owned())
+            }
+        } else {
+            None
+        }
     }
 }
 
@@ -352,6 +567,10 @@ impl GeometricOperations<&SphericalPoint> for &ArcString {
         false
     }
 
+    fn touches(self, other: &SphericalPoint) -> bool {
+        self.intersects(other)
+    }
+
     fn crosses(self, _: &SphericalPoint) -> bool {
         false
     }
@@ -368,8 +587,8 @@ impl GeometricOperations<&SphericalPoint> for &ArcString {
         }
     }
 
-    fn touches(self, other: &SphericalPoint) -> bool {
-        self.intersects(other)
+    fn split(self, other: &SphericalPoint) -> MultiArcString {
+        split_arcstring_at_points(self, &other.xyz.to_shape((1, 3)).unwrap().view())
     }
 }
 
@@ -412,6 +631,10 @@ impl GeometricOperations<&MultiSphericalPoint> for &ArcString {
         false
     }
 
+    fn touches(self, other: &MultiSphericalPoint) -> bool {
+        self.intersects(other)
+    }
+
     fn crosses(self, _: &MultiSphericalPoint) -> bool {
         false
     }
@@ -424,8 +647,8 @@ impl GeometricOperations<&MultiSphericalPoint> for &ArcString {
         other.intersection(self)
     }
 
-    fn touches(self, other: &MultiSphericalPoint) -> bool {
-        self.intersects(other)
+    fn split(self, other: &MultiSphericalPoint) -> MultiArcString {
+        split_arcstring_at_points(self, &other.xyz.view())
     }
 }
 
@@ -442,6 +665,12 @@ impl GeometricOperations<&ArcString> for &ArcString {
         Zip::from(self.points.xyz.rows()).all(|xyz| arcstring_contains_point(other, &xyz))
     }
 
+    fn touches(self, other: &ArcString) -> bool {
+        (Zip::from(other.points.xyz.rows()).any(|xyz| arcstring_contains_point(self, &xyz))
+            || Zip::from(self.points.xyz.rows()).any(|xyz| arcstring_contains_point(other, &xyz)))
+            && !self.crosses(other)
+    }
+
     fn crosses(self, other: &ArcString) -> bool {
         if self.within(other) || self.contains(other) {
             return false;
@@ -450,15 +679,15 @@ impl GeometricOperations<&ArcString> for &ArcString {
         // we can't use the Bentley-Ottmann sweep-line algorithm here :/
         // because a sphere is an enclosed infinite space so there's no good way to sort by longitude
         // so instead we use brute-force
-        let start_index = if self.closed { -1 } else { 0 };
-        for arc_index in start_index..(self.points.xyz.nrows() - 1) as isize {
-            let a_0 = self.points.xyz.slice(s![arc_index, ..]);
-            let a_1 = self.points.xyz.slice(s![arc_index + 1, ..]);
+        let first_vertex_index = if self.closed { -1 } else { 0 };
+        for arc_a_index in first_vertex_index..(self.points.xyz.nrows() - 1) as isize {
+            let a_0 = self.points.xyz.slice(s![arc_a_index, ..]);
+            let a_1 = self.points.xyz.slice(s![arc_a_index + 1, ..]);
 
-            let other_start_index = if other.closed { -1 } else { 0 };
-            for other_arc_index in other_start_index..(other.points.xyz.nrows() - 1) as isize {
-                let b_0 = other.points.xyz.slice(s![other_arc_index, ..]);
-                let b_1 = other.points.xyz.slice(s![other_arc_index + 1, ..]);
+            let other_first_vertex_index = if other.closed { -1 } else { 0 };
+            for arc_b_index in other_first_vertex_index..(other.points.xyz.nrows() - 1) as isize {
+                let b_0 = other.points.xyz.slice(s![arc_b_index, ..]);
+                let b_1 = other.points.xyz.slice(s![arc_b_index + 1, ..]);
 
                 if vector_arc_crossing(&a_0, &a_1, &b_0, &b_1).is_some() {
                     return true;
@@ -477,15 +706,15 @@ impl GeometricOperations<&ArcString> for &ArcString {
         let mut intersections = vec![];
 
         // find crossings first
-        let start_index = if self.closed { -1 } else { 0 };
-        for arc_index in start_index..(self.points.xyz.nrows() - 1) as isize {
-            let a_0 = self.points.xyz.slice(s![arc_index, ..]);
-            let a_1 = self.points.xyz.slice(s![arc_index + 1, ..]);
+        let first_vertex_index = if self.closed { -1 } else { 0 };
+        for arc_a_index in first_vertex_index..(self.points.xyz.nrows() - 1) as isize {
+            let a_0 = self.points.xyz.slice(s![arc_a_index, ..]);
+            let a_1 = self.points.xyz.slice(s![arc_a_index + 1, ..]);
 
             let other_start_index = if other.closed { -1 } else { 0 };
-            for other_arc_index in other_start_index..(other.points.xyz.nrows() - 1) as isize {
-                let b_0 = other.points.xyz.slice(s![other_arc_index, ..]);
-                let b_1 = other.points.xyz.slice(s![other_arc_index + 1, ..]);
+            for arc_b_index in other_start_index..(other.points.xyz.nrows() - 1) as isize {
+                let b_0 = other.points.xyz.slice(s![arc_b_index, ..]);
+                let b_1 = other.points.xyz.slice(s![arc_b_index + 1, ..]);
 
                 if let Some(point) = vector_arc_crossing(&a_0, &a_1, &b_0, &b_1) {
                     intersections.push(point);
@@ -509,10 +738,12 @@ impl GeometricOperations<&ArcString> for &ArcString {
         }
     }
 
-    fn touches(self, other: &ArcString) -> bool {
-        (Zip::from(other.points.xyz.rows()).any(|xyz| arcstring_contains_point(self, &xyz))
-            || Zip::from(self.points.xyz.rows()).any(|xyz| arcstring_contains_point(other, &xyz)))
-            && !self.crosses(other)
+    fn split(self, other: &ArcString) -> MultiArcString {
+        if let Some(points) = self.intersection(other) {
+            split_arcstring_at_points(self, &points.xyz.view())
+        } else {
+            MultiArcString::from(vec![self.to_owned()])
+        }
     }
 }
 
@@ -529,6 +760,10 @@ impl GeometricOperations<&MultiArcString> for &ArcString {
         other.contains(self)
     }
 
+    fn touches(self, other: &MultiArcString) -> bool {
+        other.touches(self)
+    }
+
     fn crosses(self, other: &MultiArcString) -> bool {
         other.crosses(self)
     }
@@ -541,8 +776,12 @@ impl GeometricOperations<&MultiArcString> for &ArcString {
         other.intersection(self)
     }
 
-    fn touches(self, other: &MultiArcString) -> bool {
-        other.touches(self)
+    fn split(self, other: &MultiArcString) -> MultiArcString {
+        if let Some(points) = self.intersection(other) {
+            split_arcstring_at_points(self, &points.xyz.view())
+        } else {
+            MultiArcString::from(vec![self.to_owned()])
+        }
     }
 }
 
@@ -557,6 +796,10 @@ impl GeometricOperations<&crate::sphericalpolygon::SphericalPolygon> for &ArcStr
 
     fn within(self, other: &crate::sphericalpolygon::SphericalPolygon) -> bool {
         other.contains(self)
+    }
+
+    fn touches(self, other: &crate::sphericalpolygon::SphericalPolygon) -> bool {
+        other.touches(self)
     }
 
     fn crosses(self, other: &crate::sphericalpolygon::SphericalPolygon) -> bool {
@@ -574,8 +817,12 @@ impl GeometricOperations<&crate::sphericalpolygon::SphericalPolygon> for &ArcStr
         other.intersection(self)
     }
 
-    fn touches(self, other: &crate::sphericalpolygon::SphericalPolygon) -> bool {
-        other.touches(self)
+    fn split(self, other: &crate::sphericalpolygon::SphericalPolygon) -> MultiArcString {
+        if let Some(points) = self.intersection(&other.boundary) {
+            split_arcstring_at_points(self, &points.xyz.view())
+        } else {
+            MultiArcString::from(vec![self.to_owned()])
+        }
     }
 }
 
@@ -590,6 +837,10 @@ impl GeometricOperations<&crate::sphericalpolygon::MultiSphericalPolygon> for &A
 
     fn within(self, other: &crate::sphericalpolygon::MultiSphericalPolygon) -> bool {
         other.contains(self)
+    }
+
+    fn touches(self, other: &crate::sphericalpolygon::MultiSphericalPolygon) -> bool {
+        self.intersects(other)
     }
 
     fn crosses(self, other: &crate::sphericalpolygon::MultiSphericalPolygon) -> bool {
@@ -607,8 +858,16 @@ impl GeometricOperations<&crate::sphericalpolygon::MultiSphericalPolygon> for &A
         other.intersection(self)
     }
 
-    fn touches(self, other: &crate::sphericalpolygon::MultiSphericalPolygon) -> bool {
-        self.intersects(other)
+    fn split(self, other: &crate::sphericalpolygon::MultiSphericalPolygon) -> MultiArcString {
+        if let Some(other_boundary) = other.boundary() {
+            if let Some(points) = self.intersection(&other_boundary) {
+                split_arcstring_at_points(self, &points.xyz.view())
+            } else {
+                MultiArcString::from(vec![self.to_owned()])
+            }
+        } else {
+            MultiArcString::from(vec![self.to_owned()])
+        }
     }
 }
 
@@ -626,15 +885,13 @@ impl From<Vec<ArcString>> for MultiArcString {
     }
 }
 
-impl TryFrom<Vec<MultiSphericalPoint>> for MultiArcString {
-    type Error = String;
-
-    fn try_from(points: Vec<MultiSphericalPoint>) -> Result<Self, Self::Error> {
+impl From<Vec<MultiSphericalPoint>> for MultiArcString {
+    fn from(points: Vec<MultiSphericalPoint>) -> Self {
         let arcstrings: Vec<ArcString> = points
             .par_iter()
             .map(|points| ArcString::from(points.to_owned()))
             .collect();
-        Ok(Self::from(arcstrings))
+        Self::from(arcstrings)
     }
 }
 
@@ -839,6 +1096,12 @@ impl GeometricOperations<&SphericalPoint> for &MultiArcString {
         false
     }
 
+    fn touches(self, other: &SphericalPoint) -> bool {
+        self.arcstrings
+            .par_iter()
+            .any(|arcstring| arcstring.touches(other))
+    }
+
     fn crosses(self, _: &SphericalPoint) -> bool {
         false
     }
@@ -851,10 +1114,16 @@ impl GeometricOperations<&SphericalPoint> for &MultiArcString {
         other.intersection(self)
     }
 
-    fn touches(self, other: &SphericalPoint) -> bool {
-        self.arcstrings
-            .par_iter()
-            .any(|arcstring| arcstring.touches(other))
+    fn split(self, other: &SphericalPoint) -> MultiArcString {
+        let mut arcstrings = vec![];
+        for arcstring in &self.arcstrings {
+            arcstrings.extend(
+                split_arcstring_at_points(arcstring, &other.xyz.to_shape((1, 3)).unwrap().view())
+                    .arcstrings,
+            );
+        }
+
+        MultiArcString::from(arcstrings)
     }
 }
 
@@ -875,6 +1144,12 @@ impl GeometricOperations<&MultiSphericalPoint> for &MultiArcString {
 
     fn within(self, _: &MultiSphericalPoint) -> bool {
         false
+    }
+
+    fn touches(self, other: &MultiSphericalPoint) -> bool {
+        self.arcstrings
+            .par_iter()
+            .any(|arcstring| arcstring.touches(other))
     }
 
     fn crosses(self, _: &MultiSphericalPoint) -> bool {
@@ -899,10 +1174,13 @@ impl GeometricOperations<&MultiSphericalPoint> for &MultiArcString {
         }
     }
 
-    fn touches(self, other: &MultiSphericalPoint) -> bool {
-        self.arcstrings
-            .par_iter()
-            .any(|arcstring| arcstring.touches(other))
+    fn split(self, other: &MultiSphericalPoint) -> MultiArcString {
+        let mut arcstrings = vec![];
+        for arcstring in &self.arcstrings {
+            arcstrings.extend(split_arcstring_at_points(arcstring, &other.xyz.view()).arcstrings);
+        }
+
+        MultiArcString::from(arcstrings)
     }
 }
 
@@ -925,6 +1203,12 @@ impl GeometricOperations<&ArcString> for &MultiArcString {
         self.arcstrings
             .par_iter()
             .all(|arcstring| arcstring.within(other))
+    }
+
+    fn touches(self, other: &ArcString) -> bool {
+        self.arcstrings
+            .par_iter()
+            .any(|arcstring| arcstring.touches(other))
     }
 
     fn crosses(self, other: &ArcString) -> bool {
@@ -953,10 +1237,16 @@ impl GeometricOperations<&ArcString> for &MultiArcString {
         }
     }
 
-    fn touches(self, other: &ArcString) -> bool {
-        self.arcstrings
-            .par_iter()
-            .any(|arcstring| arcstring.touches(other))
+    fn split(self, other: &ArcString) -> MultiArcString {
+        let mut arcstrings = vec![];
+        if let Some(points) = self.intersection(other) {
+            for arcstring in &self.arcstrings {
+                arcstrings
+                    .extend(split_arcstring_at_points(arcstring, &points.xyz.view()).arcstrings);
+            }
+        }
+
+        MultiArcString::from(arcstrings)
     }
 }
 
@@ -979,6 +1269,10 @@ impl GeometricOperations<&MultiArcString> for &MultiArcString {
         self.arcstrings
             .par_iter()
             .all(|arcstring| arcstring.within(other))
+    }
+
+    fn touches(self, other: &MultiArcString) -> bool {
+        self.intersects(other)
     }
 
     fn crosses(self, other: &MultiArcString) -> bool {
@@ -1007,8 +1301,16 @@ impl GeometricOperations<&MultiArcString> for &MultiArcString {
         }
     }
 
-    fn touches(self, other: &MultiArcString) -> bool {
-        self.intersects(other)
+    fn split(self, other: &MultiArcString) -> MultiArcString {
+        let mut arcstrings = vec![];
+        if let Some(points) = self.intersection(other) {
+            for arcstring in &self.arcstrings {
+                arcstrings
+                    .extend(split_arcstring_at_points(arcstring, &points.xyz.view()).arcstrings);
+            }
+        }
+
+        MultiArcString::from(arcstrings)
     }
 }
 
@@ -1029,6 +1331,10 @@ impl GeometricOperations<&crate::sphericalpolygon::SphericalPolygon> for &MultiA
         self.arcstrings
             .par_iter()
             .all(|arcstring| arcstring.within(other))
+    }
+
+    fn touches(self, other: &crate::sphericalpolygon::SphericalPolygon) -> bool {
+        self.intersects(other)
     }
 
     fn crosses(self, other: &crate::sphericalpolygon::SphericalPolygon) -> bool {
@@ -1053,8 +1359,16 @@ impl GeometricOperations<&crate::sphericalpolygon::SphericalPolygon> for &MultiA
             .sum()
     }
 
-    fn touches(self, other: &crate::sphericalpolygon::SphericalPolygon) -> bool {
-        self.intersects(other)
+    fn split(self, other: &crate::sphericalpolygon::SphericalPolygon) -> MultiArcString {
+        let mut arcstrings = vec![];
+        if let Some(points) = self.intersection(&other.boundary) {
+            for arcstring in &self.arcstrings {
+                arcstrings
+                    .extend(split_arcstring_at_points(arcstring, &points.xyz.view()).arcstrings);
+            }
+        }
+
+        MultiArcString::from(arcstrings)
     }
 }
 
@@ -1075,6 +1389,10 @@ impl GeometricOperations<&crate::sphericalpolygon::MultiSphericalPolygon> for &M
         self.arcstrings
             .par_iter()
             .all(|arcstring| arcstring.within(other))
+    }
+
+    fn touches(self, other: &crate::sphericalpolygon::MultiSphericalPolygon) -> bool {
+        self.intersects(other)
     }
 
     fn crosses(self, other: &crate::sphericalpolygon::MultiSphericalPolygon) -> bool {
@@ -1099,7 +1417,18 @@ impl GeometricOperations<&crate::sphericalpolygon::MultiSphericalPolygon> for &M
             .sum()
     }
 
-    fn touches(self, other: &crate::sphericalpolygon::MultiSphericalPolygon) -> bool {
-        self.intersects(other)
+    fn split(self, other: &crate::sphericalpolygon::MultiSphericalPolygon) -> MultiArcString {
+        let mut arcstrings = vec![];
+        if let Some(other_boundary) = other.boundary() {
+            if let Some(points) = self.intersection(&other_boundary) {
+                for arcstring in &self.arcstrings {
+                    arcstrings.extend(
+                        split_arcstring_at_points(arcstring, &points.xyz.view()).arcstrings,
+                    );
+                }
+            }
+        }
+
+        MultiArcString::from(arcstrings)
     }
 }
