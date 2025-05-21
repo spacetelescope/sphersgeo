@@ -88,12 +88,7 @@ pub fn vector_lengths(vectors: &ArrayView2<f64>) -> Array1<f64> {
 /// References:
 /// - Miller, Robert D. Computing the area of a spherical polygon. Graphics Gems IV. p132. 1994. Academic Press. doi:10.5555/180895.180907
 ///   `pdf <https://www.google.com/books/edition/Graphics_Gems_IV/CCqzMm_-WucC?hl=en&gbpv=1&dq=Graphics%20Gems%20IV.%20p132&pg=PA133&printsec=frontcover>`_
-pub fn angle_between_vectors(
-    a: &ArrayView1<f64>,
-    b: &ArrayView1<f64>,
-    c: &ArrayView1<f64>,
-    degrees: bool,
-) -> f64 {
+pub fn angle_between_vectors(a: &ArrayView1<f64>, b: &ArrayView1<f64>, c: &ArrayView1<f64>) -> f64 {
     let tolerance = 3e-11;
 
     // let abx = cross_vector(&a, &b);
@@ -146,11 +141,7 @@ pub fn angle_between_vectors(
         angle = std::f64::consts::PI;
     }
 
-    if degrees {
-        angle.to_degrees()
-    } else {
-        angle
-    }
+    angle.to_degrees()
 }
 
 /// given three arrays of XYZ vectors on the unit sphere (A, B, and C), element-wise retrieve the angles at B between arcs AB and arcs BC
@@ -162,7 +153,6 @@ pub fn angles_between_vectors(
     a: &ArrayView2<f64>,
     b: &ArrayView2<f64>,
     c: &ArrayView2<f64>,
-    degrees: bool,
 ) -> Array1<f64> {
     let abx = cross_vectors(a, b);
     let bcx = cross_vectors(b, c);
@@ -182,11 +172,7 @@ pub fn angles_between_vectors(
             }
         });
 
-    if degrees {
-        angles.to_degrees()
-    } else {
-        angles
-    }
+    angles.to_degrees()
 }
 
 /// whether the three points exist on the same line
@@ -195,9 +181,9 @@ pub fn vectors_collinear(a: &ArrayView1<f64>, b: &ArrayView1<f64>, c: &ArrayView
     // let area = spherical_triangle_area(a, b, c);
     // area.is_nan() || area < tolerance
 
-    let abc = angle_between_vectors(a, b, c, false);
-    let cab = angle_between_vectors(c, a, b, false);
-    let bca = angle_between_vectors(b, c, a, false);
+    let abc = angle_between_vectors(a, b, c);
+    let cab = angle_between_vectors(c, a, b);
+    let bca = angle_between_vectors(b, c, a);
 
     abc < tolerance
         || cab < tolerance
@@ -307,7 +293,7 @@ fn vector_arcs_clockwise_turn(
 /// References
 /// ----------
 /// - Miller, Robert D. Computing the area of a spherical polygon. Graphics Gems IV. 1994. Academic Press. doi:10.5555/180895.180907
-pub fn vector_to_lonlat(xyz: &ArrayView1<f64>, degrees: bool) -> Array1<f64> {
+pub fn vector_to_lonlat(xyz: &ArrayView1<f64>) -> Array1<f64> {
     if xyz.abs().sum() == 0.0 {
         // directionless vector
         return array![f64::NAN, 0.0];
@@ -324,14 +310,10 @@ pub fn vector_to_lonlat(xyz: &ArrayView1<f64>, degrees: bool) -> Array1<f64> {
     let lat = xyz[2].atan2((xyz[0].powi(2) + xyz[1].powi(2)).sqrt());
 
     let radians = array![lon, lat,];
-    if degrees {
-        radians.to_degrees()
-    } else {
-        radians
-    }
+    radians.to_degrees()
 }
 
-pub fn vectors_to_lonlats(xyzs: &ArrayView2<f64>, degrees: bool) -> Array2<f64> {
+pub fn vectors_to_lonlats(xyzs: &ArrayView2<f64>) -> Array2<f64> {
     let mut lons = Zip::from(xyzs.rows()).par_map_collect(|xyz| {
         if xyz.abs().sum() == 0.0 {
             // directionless vector
@@ -360,11 +342,7 @@ pub fn vectors_to_lonlats(xyzs: &ArrayView2<f64>, degrees: bool) -> Array2<f64> 
         .par_map_collect(|xyz| xyz[2].atan2((xyz[0].powi(2) + xyz[1].powi(2)).sqrt()));
 
     let radians = stack(Axis(1), &[lons.view(), lats.view()]).unwrap();
-    if degrees {
-        radians.to_degrees()
-    } else {
-        radians
-    }
+    radians.to_degrees()
 }
 
 pub fn point_within_kdtree(xyz: &ArrayView1<f64>, kdtree: &ImmutableKdTree<f64, 3>) -> bool {
@@ -468,18 +446,11 @@ impl SphericalPoint {
     /// References
     /// ----------
     /// - Miller, Robert D. Computing the area of a spherical polygon. Graphics Gems IV. 1994. Academic Press. doi:10.5555/180895.180907
-    pub fn try_from_lonlat(coordinates: &ArrayView1<f64>, degrees: bool) -> Result<Self, String> {
+    pub fn try_from_lonlat(coordinates: &ArrayView1<f64>) -> Result<Self, String> {
         if coordinates.len() == 2 {
-            let coordinates = if degrees {
-                coordinates.to_radians()
-            } else {
-                coordinates.to_owned()
-            };
-
-            let lon = coordinates[0];
-            let lat = coordinates[1];
-            let (lon_sin, lon_cos) = lon.sin_cos();
-            let (lat_sin, lat_cos) = lat.sin_cos();
+            let coordinates = coordinates.to_radians();
+            let (lon_sin, lon_cos) = coordinates[0].sin_cos();
+            let (lat_sin, lat_cos) = coordinates[1].sin_cos();
 
             Ok(Self::try_from(array![lon_cos * lat_cos, lon_sin * lat_cos, lat_sin]).unwrap())
         } else {
@@ -501,8 +472,8 @@ impl SphericalPoint {
     /// References
     /// ----------
     /// - Miller, Robert D. Computing the area of a spherical polygon. Graphics Gems IV. 1994. Academic Press. doi:10.5555/180895.180907
-    pub fn to_lonlat(&self, degrees: bool) -> Array1<f64> {
-        vector_to_lonlat(&self.xyz.view(), degrees)
+    pub fn to_lonlat(&self) -> Array1<f64> {
+        vector_to_lonlat(&self.xyz.view())
     }
 
     /// normalize this vector to length 1 (the unit sphere) while preserving direction
@@ -524,8 +495,8 @@ impl SphericalPoint {
     }
 
     /// angle on the sphere between this point and two other points
-    pub fn angle_between(&self, a: &SphericalPoint, b: &SphericalPoint, degrees: bool) -> f64 {
-        angle_between_vectors(&a.xyz.view(), &self.xyz.view(), &b.xyz.view(), degrees)
+    pub fn angle_between(&self, a: &SphericalPoint, b: &SphericalPoint) -> f64 {
+        angle_between_vectors(&a.xyz.view(), &self.xyz.view(), &b.xyz.view())
     }
 
     /// whether this point shares a line with two other points
@@ -546,9 +517,7 @@ impl SphericalPoint {
     }
 
     /// rotate this xyz vector by theta angle around another xyz vector
-    pub fn vector_rotate_around(&self, other: &Self, theta: &f64, degrees: bool) -> Self {
-        let theta = if degrees { &theta.to_radians() } else { theta };
-
+    pub fn vector_rotate_around(&self, other: &Self, theta: &f64) -> Self {
         let a = &self.normalized().xyz;
         let ax = a[0];
         let ay = a[1];
@@ -559,10 +528,14 @@ impl SphericalPoint {
         let by = b[1];
         let bz = b[2];
 
+        let theta = theta.to_radians();
+        let theta_sin = theta.sin();
+        let theta_cos = theta.cos();
+
         Self::try_from(
-            -b * -a * b * (1.0 - theta.cos())
-                + a * theta.cos()
-                + array![-bz * ay + by * az, bz * ax - bx * az, -by * ax - bx * ay,] * theta.sin(),
+            -b * -a * b * (1.0 - theta_cos)
+                + a * theta_cos
+                + array![-bz * ay + by * az, bz * ax - bx * az, -by * ax - bx * ay,] * theta_sin,
         )
         .unwrap()
     }
@@ -661,16 +634,11 @@ impl Geometry for SphericalPoint {
 }
 
 impl GeometricOperations<&SphericalPoint> for &SphericalPoint {
-    fn distance(self, other: &SphericalPoint, degrees: bool) -> f64 {
+    fn distance(self, other: &SphericalPoint) -> f64 {
         if self.xyz == other.xyz {
             0.0
         } else {
-            let distance = vector_arc_length(&self.xyz.view(), &other.xyz.view(), false);
-            if degrees {
-                distance.to_degrees()
-            } else {
-                distance
-            }
+            vector_arc_length(&self.xyz.view(), &other.xyz.view(), false).to_degrees()
         }
     }
 
@@ -704,8 +672,8 @@ impl GeometricOperations<&SphericalPoint> for &SphericalPoint {
 }
 
 impl GeometricOperations<&MultiSphericalPoint> for &SphericalPoint {
-    fn distance(self, other: &MultiSphericalPoint, degrees: bool) -> f64 {
-        other.distance(self, degrees)
+    fn distance(self, other: &MultiSphericalPoint) -> f64 {
+        other.distance(self)
     }
 
     fn contains(self, _: &MultiSphericalPoint) -> bool {
@@ -738,8 +706,8 @@ impl GeometricOperations<&MultiSphericalPoint> for &SphericalPoint {
 }
 
 impl GeometricOperations<&crate::arcstring::ArcString> for &SphericalPoint {
-    fn distance(self, other: &crate::arcstring::ArcString, degrees: bool) -> f64 {
-        other.distance(self, degrees)
+    fn distance(self, other: &crate::arcstring::ArcString) -> f64 {
+        other.distance(self)
     }
 
     fn contains(self, _: &crate::arcstring::ArcString) -> bool {
@@ -772,8 +740,8 @@ impl GeometricOperations<&crate::arcstring::ArcString> for &SphericalPoint {
 }
 
 impl GeometricOperations<&crate::arcstring::MultiArcString> for &SphericalPoint {
-    fn distance(self, other: &crate::arcstring::MultiArcString, degrees: bool) -> f64 {
-        other.distance(self, degrees)
+    fn distance(self, other: &crate::arcstring::MultiArcString) -> f64 {
+        other.distance(self)
     }
 
     fn contains(self, _: &crate::arcstring::MultiArcString) -> bool {
@@ -806,8 +774,8 @@ impl GeometricOperations<&crate::arcstring::MultiArcString> for &SphericalPoint 
 }
 
 impl GeometricOperations<&crate::sphericalpolygon::SphericalPolygon> for &SphericalPoint {
-    fn distance(self, other: &crate::sphericalpolygon::SphericalPolygon, degrees: bool) -> f64 {
-        other.distance(self, degrees)
+    fn distance(self, other: &crate::sphericalpolygon::SphericalPolygon) -> f64 {
+        other.distance(self)
     }
 
     fn contains(self, _: &crate::sphericalpolygon::SphericalPolygon) -> bool {
@@ -843,12 +811,8 @@ impl GeometricOperations<&crate::sphericalpolygon::SphericalPolygon> for &Spheri
 }
 
 impl GeometricOperations<&crate::sphericalpolygon::MultiSphericalPolygon> for &SphericalPoint {
-    fn distance(
-        self,
-        other: &crate::sphericalpolygon::MultiSphericalPolygon,
-        degrees: bool,
-    ) -> f64 {
-        other.distance(self, degrees)
+    fn distance(self, other: &crate::sphericalpolygon::MultiSphericalPolygon) -> f64 {
+        other.distance(self)
     }
 
     fn contains(self, _: &crate::sphericalpolygon::MultiSphericalPolygon) -> bool {
@@ -1089,13 +1053,9 @@ impl MultiSphericalPoint {
     /// References
     /// ----------
     /// - Miller, Robert D. Computing the area of a spherical polygon. Graphics Gems IV. 1994. Academic Press. doi:10.5555/180895.180907
-    pub fn try_from_lonlat(coordinates: &ArrayView2<f64>, degrees: bool) -> Result<Self, String> {
+    pub fn try_from_lonlat(coordinates: &ArrayView2<f64>) -> Result<Self, String> {
         if coordinates.shape()[1] == 2 {
-            let coordinates = if degrees {
-                coordinates.to_radians()
-            } else {
-                coordinates.to_owned()
-            };
+            let coordinates = coordinates.to_radians();
 
             let lon = coordinates.slice(s![.., 0]);
             let lat = coordinates.slice(s![.., 1]);
@@ -1160,8 +1120,8 @@ impl MultiSphericalPoint {
     /// References
     /// ----------
     /// - Miller, Robert D. Computing the area of a spherical polygon. Graphics Gems IV. 1994. Academic Press. doi:10.5555/180895.180907
-    pub fn to_lonlat(&self, degrees: bool) -> Array2<f64> {
-        vectors_to_lonlats(&self.xyz.view(), degrees)
+    pub fn to_lonlat(&self) -> Array2<f64> {
+        vectors_to_lonlats(&self.xyz.view())
     }
 
     /// lengths of the underlying xyz vectors
@@ -1177,9 +1137,7 @@ impl MultiSphericalPoint {
     }
 
     /// rotate the underlying vector by theta angle around other vectors
-    pub fn vector_rotate_around(&self, other: &Self, theta: f64, degrees: bool) -> Self {
-        let theta = if degrees { theta.to_radians() } else { theta };
-
+    pub fn vector_rotate_around(&self, other: &Self, theta: f64) -> Self {
         let a = &self.normalized().xyz;
         let ax = a.slice(s![.., 0]);
         let ay = a.slice(s![.., 1]);
@@ -1190,9 +1148,13 @@ impl MultiSphericalPoint {
         let by = b.slice(s![.., 1]);
         let bz = b.slice(s![.., 2]);
 
+        let theta = theta.to_radians();
+        let theta_sin = theta.sin();
+        let theta_cos = theta.cos();
+
         Self::try_from(
-            -b * -a * b * (1.0 - theta.cos())
-                + a * theta.cos()
+            -b * -a * b * (1.0 - theta_cos)
+                + a * theta_cos
                 + stack(
                     Axis(0),
                     &[
@@ -1202,22 +1164,17 @@ impl MultiSphericalPoint {
                     ],
                 )
                 .unwrap()
-                    * theta.sin(),
+                    * theta_sin,
         )
         .unwrap()
     }
 
-    pub fn angles_between(
-        &self,
-        a: &MultiSphericalPoint,
-        b: &MultiSphericalPoint,
-        degrees: bool,
-    ) -> Array1<f64> {
-        // vector_arc_angles(&a.xyz.view(), &self.xyz.view(), &b.xyz.view(), degrees)
+    pub fn angles_between(&self, a: &MultiSphericalPoint, b: &MultiSphericalPoint) -> Array1<f64> {
+        // vector_arc_angles(&a.xyz.view(), &self.xyz.view(), &b.xyz.view())
         Zip::from(self.xyz.rows())
             .and(a.xyz.rows())
             .and(b.xyz.rows())
-            .par_map_collect(|point, a, b| angle_between_vectors(&point, &a, &b, degrees))
+            .par_map_collect(|point, a, b| angle_between_vectors(&point, &a, &b))
     }
 
     pub fn collinear(&self, a: &SphericalPoint, b: &SphericalPoint) -> Array1<bool> {
@@ -1499,11 +1456,11 @@ impl ExtendMultiGeometry<SphericalPoint> for MultiSphericalPoint {
 }
 
 impl GeometricOperations<&SphericalPoint> for &MultiSphericalPoint {
-    fn distance(self, other: &SphericalPoint, degrees: bool) -> f64 {
+    fn distance(self, other: &SphericalPoint) -> f64 {
         SphericalPoint {
             xyz: self.xyz.slice(s![self.nearest(other), ..]).to_owned(),
         }
-        .distance(other, degrees)
+        .distance(other)
     }
 
     fn contains(self, other: &SphericalPoint) -> bool {
@@ -1536,7 +1493,7 @@ impl GeometricOperations<&SphericalPoint> for &MultiSphericalPoint {
 }
 
 impl GeometricOperations<&MultiSphericalPoint> for &MultiSphericalPoint {
-    fn distance(self, other: &MultiSphericalPoint, degrees: bool) -> f64 {
+    fn distance(self, other: &MultiSphericalPoint) -> f64 {
         if let Some(distance) = min_1darray(
             &Zip::from(other.xyz.rows())
                 .par_map_collect(|other_xyz| {
@@ -1554,11 +1511,7 @@ impl GeometricOperations<&MultiSphericalPoint> for &MultiSphericalPoint {
                 })
                 .view(),
         ) {
-            if degrees {
-                distance.to_degrees()
-            } else {
-                distance
-            }
+            distance.to_degrees()
         } else {
             f64::NAN
         }
@@ -1623,8 +1576,8 @@ impl GeometricOperations<&MultiSphericalPoint> for &MultiSphericalPoint {
 }
 
 impl GeometricOperations<&crate::arcstring::ArcString> for &MultiSphericalPoint {
-    fn distance(self, other: &crate::arcstring::ArcString, degrees: bool) -> f64 {
-        other.distance(self, degrees)
+    fn distance(self, other: &crate::arcstring::ArcString) -> f64 {
+        other.distance(self)
     }
 
     fn contains(self, _: &crate::arcstring::ArcString) -> bool {
@@ -1667,8 +1620,8 @@ impl GeometricOperations<&crate::arcstring::ArcString> for &MultiSphericalPoint 
 }
 
 impl GeometricOperations<&crate::arcstring::MultiArcString> for &MultiSphericalPoint {
-    fn distance(self, other: &crate::arcstring::MultiArcString, degrees: bool) -> f64 {
-        other.distance(self, degrees)
+    fn distance(self, other: &crate::arcstring::MultiArcString) -> f64 {
+        other.distance(self)
     }
 
     fn contains(self, other: &crate::arcstring::MultiArcString) -> bool {
@@ -1697,8 +1650,8 @@ impl GeometricOperations<&crate::arcstring::MultiArcString> for &MultiSphericalP
 }
 
 impl GeometricOperations<&crate::sphericalpolygon::SphericalPolygon> for &MultiSphericalPoint {
-    fn distance(self, other: &crate::sphericalpolygon::SphericalPolygon, degrees: bool) -> f64 {
-        other.distance(self, degrees)
+    fn distance(self, other: &crate::sphericalpolygon::SphericalPolygon) -> f64 {
+        other.distance(self)
     }
 
     fn contains(self, _: &crate::sphericalpolygon::SphericalPolygon) -> bool {
@@ -1730,12 +1683,8 @@ impl GeometricOperations<&crate::sphericalpolygon::SphericalPolygon> for &MultiS
 }
 
 impl GeometricOperations<&crate::sphericalpolygon::MultiSphericalPolygon> for &MultiSphericalPoint {
-    fn distance(
-        self,
-        other: &crate::sphericalpolygon::MultiSphericalPolygon,
-        degrees: bool,
-    ) -> f64 {
-        other.distance(self, degrees)
+    fn distance(self, other: &crate::sphericalpolygon::MultiSphericalPolygon) -> f64 {
+        other.distance(self)
     }
 
     fn contains(self, _: &crate::sphericalpolygon::MultiSphericalPolygon) -> bool {

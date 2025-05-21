@@ -19,20 +19,17 @@ class SphericalPoint:
     def from_lonlat(
         cls,
         coordinates: NDArray[float64] | tuple[float, float] | list[float],
-        degrees: bool = True,
     ) -> SphericalPoint: ...
 
     @property
     def xyz(self) -> NDArray[float64]: ...
 
-    def to_lonlat(self, degrees: bool = True) -> NDArray[float64]: ...
+    def to_lonlat(self) -> NDArray[float64]: ...
 
     @property
     def normalized(self) -> SphericalPoint: ...
 
-    def angle_between(
-        self, a: SphericalPoint, b: SphericalPoint, degrees: bool = True
-    ) -> float: ...
+    def angle_between(self, a: SphericalPoint, b: SphericalPoint) -> float: ...
 
     def collinear(self, a: SphericalPoint, b: SphericalPoint) -> bool: ...
 
@@ -40,7 +37,7 @@ class SphericalPoint:
     def vector_length(self) -> float: ...
 
     def vector_rotate_around(
-        self, other: SphericalPoint, theta: float, degrees: bool = True
+        self, other: SphericalPoint, theta: float
     ) -> SphericalPoint: ...
 
     @property
@@ -72,7 +69,6 @@ class SphericalPoint:
         | MultiArcString
         | SphericalPolygon
         | MultiSphericalPolygon,
-        degrees: bool = True,
     ) -> float: ...
 
     def contains(
@@ -163,19 +159,18 @@ class MultiSphericalPoint:
         | tuple[float, float]
         | list[list[float]]
         | list[float],
-        degrees: bool = True,
     ) -> MultiSphericalPoint: ...
 
     @property
     def xyz(self) -> NDArray[float64]: ...
 
-    def to_lonlat(self, degrees: bool = True) -> NDArray[float64]: ...
+    def to_lonlat(self) -> NDArray[float64]: ...
 
     @property
     def normalized(self) -> MultiSphericalPoint: ...
 
     def angles_between(
-        self, a: MultiSphericalPoint, b: MultiSphericalPoint, degrees: bool = True
+        self, a: MultiSphericalPoint, b: MultiSphericalPoint
     ) -> NDArray[float64]: ...
 
     def collinear(
@@ -186,7 +181,7 @@ class MultiSphericalPoint:
     def vector_lengths(self) -> NDArray[float64]: ...
 
     def vector_rotate_around(
-        self, other: MultiSphericalPoint, theta: float, degrees: bool = True
+        self, other: MultiSphericalPoint, theta: float
     ) -> MultiSphericalPoint: ...
 
     def extend(self, other: MultiSphericalPoint): ...
@@ -222,7 +217,6 @@ class MultiSphericalPoint:
         | MultiArcString
         | SphericalPolygon
         | MultiSphericalPolygon,
-        degrees: bool = True,
     ) -> float: ...
 
     def contains(
@@ -346,7 +340,6 @@ class ArcString:
         | MultiArcString
         | SphericalPolygon
         | MultiSphericalPolygon,
-        degrees: bool = True,
     ) -> float: ...
 
     def contains(
@@ -449,7 +442,6 @@ class MultiArcString:
         | MultiArcString
         | SphericalPolygon
         | MultiSphericalPolygon,
-        degrees: bool = True,
     ) -> float: ...
 
     def contains(
@@ -540,7 +532,6 @@ class SphericalPolygon:
         self,
         center: SphericalPoint,
         radius: float,
-        degrees: bool = True,
         steps: int = 16,
     ) -> SphericalPolygon: ...
 
@@ -582,7 +573,6 @@ class SphericalPolygon:
         | MultiArcString
         | SphericalPolygon
         | MultiSphericalPolygon,
-        degrees: bool = True,
     ) -> float: ...
 
     def contains(
@@ -678,7 +668,6 @@ class MultiSphericalPolygon:
         | MultiArcString
         | SphericalPolygon
         | MultiSphericalPolygon,
-        degrees: bool = True,
     ) -> float: ...
 
     def contains(
