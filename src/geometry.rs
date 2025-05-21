@@ -38,7 +38,7 @@ pub trait ExtendMultiGeometry<T: Geometry> {
 
 pub trait GeometricOperations<O: Geometry = Self> {
     /// shortest great-circle distance over the sphere from any part of this geometry to another
-    fn distance(self, other: O, degrees: bool) -> f64;
+    fn distance(self, other: O) -> f64;
 
     /// One geometry contains another if the other geometry is a subset of it and their interiors have at least one point in common.
     /// Contains is the inverse of Within.
