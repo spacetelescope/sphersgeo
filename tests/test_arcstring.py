@@ -6,49 +6,62 @@ import sphersgeo
 
 
 def test_init():
-    vectors_a = [
-        [0.0, 0.0, 1.0],
-        [0.0, 0.0, -1.0],
-        [1.0, 1.0, 0.0],
-        [1.0, -1.0, 0.0],
+    xyzs_a = [
+        (0.0, 0.0, 1.0),
+        (0.0, 0.0, -1.0),
+        (1.0, 1.0, 0.0),
+        (1.0, -1.0, 0.0),
     ]
 
-    vectors_b = [
-        [0.2, 0.5, 0.7],
-        [0.0, 0.0, 0.0],
-        [1.0, 1.2, 0.3],
-        [4.0, -1.0, 0.0],
+    xyzs_b = [
+        (0.2, 0.5, 0.7),
+        (0.0, 0.0, 0.0),
+        (1.0, 1.2, 0.3),
+        (4.0, -1.0, 0.0),
     ]
 
-    single_from_array = ArcString(np.array(vectors_a))
-    single_from_tuple = ArcString([tuple(vector) for vector in vectors_a])
-    single_from_list = ArcString(vectors_a)
-    single_from_flat_list = ArcString(np.array(vectors_a).flatten().tolist())
+    single_from_array = ArcString(xyzs_a)
+    single_from_tuple = ArcString([tuple(vector) for vector in xyzs_a])
+    single_from_list = ArcString(xyzs_a)
 
     assert single_from_tuple == single_from_list
     assert single_from_tuple == single_from_array
     assert single_from_list == single_from_array
-    assert single_from_flat_list == single_from_array
 
     assert ArcString(single_from_array) == single_from_array
 
     multi_from_list_of_arrays = MultiArcString(
-        [np.array(vectors) for vectors in (vectors_a, vectors_b)]
+        [vectors for vectors in (xyzs_a, xyzs_b)]
     )
     multi_from_lists_of_tuples = MultiArcString(
-        [[tuple(vector) for vector in vectors] for vectors in (vectors_a, vectors_b)]
+        [[tuple(vector) for vector in vectors] for vectors in (xyzs_a, xyzs_b)]
     )
-    multi_from_nested_lists = MultiArcString([vectors_a, vectors_b])
-    multi_from_flat_lists = MultiArcString(
-        [np.array(vectors).flatten().tolist() for vectors in (vectors_a, vectors_b)]
-    )
+    multi_from_nested_lists = MultiArcString([xyzs_a, xyzs_b])
 
     assert multi_from_lists_of_tuples == multi_from_nested_lists
-    assert multi_from_lists_of_tuples == multi_from_flat_lists
     assert multi_from_lists_of_tuples == multi_from_list_of_arrays
-    assert multi_from_flat_lists == multi_from_list_of_arrays
 
     assert MultiArcString(multi_from_list_of_arrays) == multi_from_list_of_arrays
+
+
+def test_closed():
+    xyzs_a = [
+        (0.0, 0.0, 1.0),
+        (0.0, 0.0, -1.0),
+        (1.0, 1.0, 0.0),
+        (1.0, -1.0, 0.0),
+    ]
+    xyzs_b = [
+        (0.0, 0.0, 1.0),
+        (0.0, 0.0, -1.0),
+        (1.0, 1.0, 0.0),
+        (1.0, -1.0, 0.0),
+        (0.0, 0.0, 1.0),
+    ]
+
+    assert not ArcString(xyzs_a).closed
+    assert ArcString(xyzs_b).closed
+    assert ArcString(xyzs_a + [xyzs_a[0]]).closed
 
 
 def test_midpoint():
@@ -72,23 +85,23 @@ def test_midpoint():
             B = SphericalPoint.from_lonlat(b)
             mid = ArcString([A, B]).midpoints.parts[0]
             assert_allclose(A.distance(mid), mid.distance(B), atol=tolerance)
-            assert_allclose(mid.angle_between(A, B), 180, rtol=tolerance)
+            assert_allclose(mid.two_arc_angle(A, B), 180, rtol=tolerance)
 
 
 def test_contains():
     diagonal_arc = ArcString(
-        MultiSphericalPoint.from_lonlat([(-30.0, -30.0), (30.0, 30.0)]).xyz
+        MultiSphericalPoint.from_lonlats([(-30.0, -30.0), (30.0, 30.0)]).xyzs
     )
     assert diagonal_arc.contains(SphericalPoint.from_lonlat((0, 0)))
 
     vertical_arc = ArcString(
-        MultiSphericalPoint.from_lonlat([(60.0, 0.0), (60.0, 30.0)]).xyz,
+        MultiSphericalPoint.from_lonlats([(60.0, 0.0), (60.0, 30.0)]).xyzs,
     )
     for latitude in np.arange(1.0, 29.0, 1.0):
         assert vertical_arc.contains(SphericalPoint.from_lonlat((60.0, latitude)))
 
     horizontal_arc = ArcString(
-        MultiSphericalPoint.from_lonlat([(0.0, 60.0), (30.0, 60.0)]).xyz,
+        MultiSphericalPoint.from_lonlats([(0.0, 60.0), (30.0, 60.0)]).xyzs,
     )
     for longitude in np.arange(1.0, 29.0, 1.0):
         assert not horizontal_arc.contains(
@@ -113,7 +126,7 @@ def test_interpolate(a, b):
     ab = ArcString([a, b])
 
     interpolated_points = MultiSphericalPoint(
-        sphersgeo.array.interpolate_points_along_vector_arc(a.xyz, b.xyz, n=10)
+        sphersgeo.array.xyz_interpolate_between(a.xyz, b.xyz, n=10)
     ).parts
 
     assert interpolated_points[0] == a
@@ -126,51 +139,16 @@ def test_interpolate(a, b):
 
     distances = interpolated_arc.lengths
 
-    assert np.allclose(distances, ab.length / len(interpolated_arc), atol=tolerance)
+    assert_allclose(distances, ab.length / len(interpolated_arc), atol=tolerance)
 
 
 def test_adjoins_join():
-    segment1 = ArcString(
-        MultiSphericalPoint.from_lonlat(
-            np.array(
-                [
-                    (20.0, 5.0),
-                    (25.0, 5.0),
-                ]
-            )
-        )
-    )
-    segment2 = ArcString(
-        MultiSphericalPoint.from_lonlat(
-            np.array(
-                [
-                    (25.0, 5.0),
-                    (25.0, 6.0),
-                ]
-            )
-        )
-    )
+    segment1 = ArcString(MultiSphericalPoint.from_lonlats([(20.0, 5.0), (25.0, 5.0)]))
+    segment2 = ArcString(MultiSphericalPoint.from_lonlats([(25.0, 5.0), (25.0, 6.0)]))
     segment3 = ArcString(
-        MultiSphericalPoint.from_lonlat(
-            np.array(
-                [
-                    (25.0, 5.0),
-                    (25.0, 6.0),
-                    (25.0, 7.0),
-                ]
-            )
-        )
+        MultiSphericalPoint.from_lonlats([(25.0, 5.0), (25.0, 6.0), (25.0, 7.0)])
     )
-    segment4 = ArcString(
-        MultiSphericalPoint.from_lonlat(
-            np.array(
-                [
-                    (25.0, 6.0),
-                    (25.0, 7.0),
-                ]
-            )
-        )
-    )
+    segment4 = ArcString(MultiSphericalPoint.from_lonlats([(25.0, 6.0), (25.0, 7.0)]))
 
     assert segment1.adjoins(segment2)
     assert segment2.adjoins(segment3)
@@ -178,13 +156,13 @@ def test_adjoins_join():
     assert not segment4.adjoins(segment1)
 
     joined12 = segment1.join(segment2)
-    print(joined12.vertices.to_lonlat())
+    print(joined12.vertices.to_lonlats())
 
     joined34 = segment3.join(segment4)
-    print(joined34.vertices.to_lonlat())
+    print(joined34.vertices.to_lonlats())
 
     joined1234 = joined12.join(joined34)
-    print(joined1234.vertices.to_lonlat())
+    print(joined1234.vertices.to_lonlats())
 
 
 def test_intersection():
@@ -201,7 +179,7 @@ def test_intersection():
     EF = ArcString([E, F])
     assert AB.intersects(CD)
     assert not AB.intersects(EF)
-    assert_allclose(AB.intersection(CD).to_lonlat(), [(358.316743, -1.708471)])
+    assert_allclose(AB.intersection(CD).to_lonlats(), [(358.316743, -1.708471)])
 
     # intersection with later part
     ABE = ArcString([A, B, E])
@@ -211,7 +189,7 @@ def test_intersection():
     # multi-part geometry intersection
     AB_EF = MultiArcString([AB, EF])
     assert AB_EF.intersects(CD)
-    assert_allclose(AB_EF.intersection(CD).to_lonlat(), [(358.316743, -1.708471)])
+    assert_allclose(AB_EF.intersection(CD).to_lonlats(), [(358.316743, -1.708471)])
 
     # ensure non-intersection of non-parallel pre-terminated arcs
     CE = ArcString([C, E])
@@ -230,22 +208,23 @@ def test_intersection():
 
 def test_closed_not_crosses_self():
     a = ArcString(
-        MultiSphericalPoint.from_lonlat(
-            np.array(
-                [[20.0, 5.0], [25.0, 5.0], [25.0, 10.0], [20.0, 10.0], [20.0, 5.0]]
-            ),
-        )
+        MultiSphericalPoint.from_lonlats(
+            [(20.0, 5.0), (25.0, 5.0), (25.0, 10.0), (20.0, 10.0)]
+        ),
+        closed=True,
     )
     b = ArcString(
-        MultiSphericalPoint.from_lonlat(
-            np.array([[18.0, 6.0], [21.0, 6.0], [21.0, 7.0], [18.0, 7.0]]),
-        )
+        MultiSphericalPoint.from_lonlats(
+            [(18.0, 6.0), (21.0, 6.0), (21.0, 7.0), (18.0, 7.0)],
+        ),
+        closed=False,
     )
     c = ArcString(b, closed=True)
     d = ArcString(
-        MultiSphericalPoint.from_lonlat(
-            np.array([[18.0, 6.0], [21.0, 7.0], [21.0, 6.0], [18.0, 7.0]]),
-        )
+        MultiSphericalPoint.from_lonlats(
+            [(18.0, 6.0), (21.0, 7.0), (21.0, 6.0), (18.0, 7.0)],
+        ),
+        closed=False,
     )
 
     assert a.closed
@@ -265,7 +244,7 @@ def test_closed_not_crosses_self():
 
 @pytest.mark.parametrize("lonlats", [[(90, 0), (0, 45), (0, -45)]])
 def test_not_crosses_self(lonlats):
-    arcstring = ArcString(MultiSphericalPoint.from_lonlat(lonlats))
+    arcstring = ArcString(MultiSphericalPoint.from_lonlats(lonlats))
 
     assert not arcstring.crosses_self
     assert arcstring.crossings_with_self is None
@@ -282,16 +261,13 @@ def test_crosses_self():
     # simple self-crossing
     ABCD = ArcString([A, B, C, D])
     assert ABCD.crosses_self
-    assert_allclose(
-        ABCD.crossings_with_self.to_lonlat(),
-        [(358.316743, -1.708471)],
-    )
+    assert_allclose(ABCD.crossings_with_self.to_lonlats(), [(358.316743, -1.708471)])
 
     # longer self-crossing
     ABCDFE = ArcString([A, B, C, D, F, E])
     assert ABCDFE.crosses_self
     len(ABCDFE.crossings_with_self) == 1
-    assert_allclose(ABCDFE.crossings_with_self.to_lonlat(), [(358.316743, -1.708471)])
+    assert_allclose(ABCDFE.crossings_with_self.to_lonlats(), [(358.316743, -1.708471)])
 
     # double self-crossing
     ABCDFEc = ArcString([A, B, C, D, F, E], closed=True)

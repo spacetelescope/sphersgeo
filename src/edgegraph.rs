@@ -416,7 +416,7 @@ impl<'a> GeometryGraph<'a, SphericalPolygon> for EdgeGraph<'a, SphericalPolygon>
                 node.edges.insert(prev_node_index, vec![geometry_index]);
             }
 
-            let next_node_index = node_indices[if xyz_index < node_indices.len() {
+            let next_node_index = node_indices[if xyz_index < node_indices.len() - 1 {
                 xyz_index + 1
             } else {
                 0
@@ -479,20 +479,22 @@ impl<'a> GeometryGraph<'a, ArcString> for EdgeGraph<'a, ArcString> {
         for xyz_index in 0..node_indices.len() - if arcstring.closed { 0 } else { 1 } {
             let node = self.nodes.get_mut(node_indices[xyz_index]).unwrap();
 
-            let prev_node_index = node_indices[if !arcstring.closed || xyz_index > 0 {
-                xyz_index - 1
-            } else {
-                node_indices.len() - 1
-            }];
-            if let Some(edge) = node.edges.get_mut(&prev_node_index) {
-                if !edge.contains(&geometry_index) {
-                    edge.push(geometry_index);
+            if xyz_index > 0 || arcstring.closed {
+                let prev_node_index = node_indices[if xyz_index > 0 {
+                    xyz_index - 1
+                } else {
+                    node_indices.len() - 1
+                }];
+                if let Some(edge) = node.edges.get_mut(&prev_node_index) {
+                    if !edge.contains(&geometry_index) {
+                        edge.push(geometry_index);
+                    }
+                } else {
+                    node.edges.insert(prev_node_index, vec![geometry_index]);
                 }
-            } else {
-                node.edges.insert(prev_node_index, vec![geometry_index]);
             }
 
-            let next_node_index = node_indices[if xyz_index < node_indices.len() {
+            let next_node_index = node_indices[if xyz_index < node_indices.len() - 1 {
                 xyz_index + 1
             } else {
                 0

@@ -94,7 +94,7 @@ pub fn arcstring_contains_point(arcstring: &ArcString, xyz: &[f64; 3]) -> bool {
     // iterate over individual arcs and check if the given point is collinear with their endpoints
     for arc_index in 0..xyzs.len() - if arcstring.closed { 0 } else { 1 } {
         let arc_0 = xyzs[arc_index];
-        let arc_1 = xyzs[if arc_index < xyzs.len() {
+        let arc_1 = xyzs[if arc_index < xyzs.len() - 1 {
             arc_index + 1
         } else {
             0
@@ -142,7 +142,7 @@ pub fn split_arcstring_at_points(arcstring: &ArcString, points: Vec<&[f64; 3]>) 
             let arcstring = arcstrings[arcstring_index].to_owned();
             for arc_index in 0..arcstring.points.len() - if arcstring.closed { 0 } else { 1 } {
                 let arc_0 = points[arc_index];
-                let arc_1 = points[if arc_index < arcstring.points.len() {
+                let arc_1 = points[if arc_index < arcstring.points.len() - 1 {
                     arc_index + 1
                 } else {
                     0
@@ -204,16 +204,17 @@ impl TryFrom<MultiSphericalPoint> for ArcString {
                 "cannot build an arcstring with less than 2 points (received {num_points})",
             ))
         } else {
-            let (points, closed) = if xyz_eq(&points.xyzs[0], &points.xyzs[num_points - 1]) {
-                (
-                    MultiSphericalPoint::try_from(points.xyzs[..num_points].to_vec())?,
-                    true,
-                )
+            Ok(if xyz_eq(&points.xyzs[0], &points.xyzs[num_points - 1]) {
+                Self {
+                    points: MultiSphericalPoint::try_from(points.xyzs[..num_points - 1].to_vec())?,
+                    closed: true,
+                }
             } else {
-                (points, false)
-            };
-
-            Ok(Self { points, closed })
+                Self {
+                    points,
+                    closed: false,
+                }
+            })
         }
     }
 }
@@ -289,9 +290,11 @@ impl From<&ArcString> for Vec<ArcString> {
 }
 
 impl ArcString {
-    pub fn new(points: MultiSphericalPoint, closed: bool) -> Result<Self, String> {
+    pub fn try_new(points: MultiSphericalPoint, closed: Option<bool>) -> Result<Self, String> {
         let mut instance = Self::try_from(points)?;
-        instance.closed = closed;
+        if let Some(closed) = closed {
+            instance.closed = closed;
+        }
         Ok(instance)
     }
 
@@ -368,7 +371,8 @@ impl ArcString {
                     arc_index + 2..self.points.len() - if self.closed { 0 } else { 1 }
                 {
                     let other_arc_start = self.points.xyzs[other_arc_index];
-                    let other_arc_end = self.points.xyzs[if other_arc_index < self.points.len() {
+                    let other_arc_end = self.points.xyzs[if other_arc_index < self.points.len() - 1
+                    {
                         other_arc_index + 1
                     } else {
                         0
@@ -462,7 +466,7 @@ impl ArcString {
             let end = self.points.xyzs[self.points.len() - 1];
 
             let other_start = other.points.xyzs[0];
-            let other_end = other.points.xyzs[self.points.len() - 1];
+            let other_end = other.points.xyzs[other.points.len() - 1];
 
             xyz_eq(&end, &other_start)
                 || xyz_eq(&other_end, &start)
@@ -514,7 +518,7 @@ impl PartialEq for ArcString {
 
 impl Display for ArcString {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "ArcString({:?})", self.points)
+        write!(f, "ArcString({:?})", self.points.xyzs)
     }
 }
 
@@ -739,7 +743,7 @@ impl GeometricOperations<ArcString> for ArcString {
         // so I guess the best we can do instead is use brute-force
         for arc_index in 0..self.points.len() - if self.closed { 0 } else { 1 } {
             let arc_start = self.points.xyzs[arc_index];
-            let arc_end = self.points.xyzs[if arc_index < self.points.len() {
+            let arc_end = self.points.xyzs[if arc_index < self.points.len() - 1 {
                 arc_index + 1
             } else {
                 0
@@ -747,7 +751,7 @@ impl GeometricOperations<ArcString> for ArcString {
 
             for other_arc_index in 0..other.points.len() - if other.closed { 0 } else { 1 } {
                 let other_arc_start = other.points.xyzs[other_arc_index];
-                let other_arc_end = other.points.xyzs[if other_arc_index < other.points.len() {
+                let other_arc_end = other.points.xyzs[if other_arc_index < other.points.len() - 1 {
                     other_arc_index + 1
                 } else {
                     0
@@ -783,7 +787,7 @@ impl GeometricOperations<ArcString> for ArcString {
         // so I guess the best we can do instead is use brute-force
         for arc_index in 0..self.points.len() - if self.closed { 0 } else { 1 } {
             let arc_start = self.points.xyzs[arc_index];
-            let arc_end = self.points.xyzs[if arc_index < self.points.len() {
+            let arc_end = self.points.xyzs[if arc_index < self.points.len() - 1 {
                 arc_index + 1
             } else {
                 0
@@ -791,7 +795,7 @@ impl GeometricOperations<ArcString> for ArcString {
 
             for other_arc_index in 0..other.points.len() - if other.closed { 0 } else { 1 } {
                 let other_arc_start = other.points.xyzs[other_arc_index];
-                let other_arc_end = other.points.xyzs[if other_arc_index < other.points.len() {
+                let other_arc_end = other.points.xyzs[if other_arc_index < other.points.len() - 1 {
                     other_arc_index + 1
                 } else {
                     0

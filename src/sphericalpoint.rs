@@ -290,7 +290,7 @@ pub fn xyzs_collinear(a: &[f64; 3], b: &[f64; 3], c: &[f64; 3]) -> bool {
 
 pub fn point_within_kdtree(xyz: &[f64; 3], kdtree: &ImmutableKdTree<f64, 3>) -> bool {
     // take advantage of the kdtree's distance function in 3D space
-    kdtree.nearest_one::<SquaredEuclidean>(xyz).distance < 1e-10
+    kdtree.nearest_one::<SquaredEuclidean>(xyz).distance < 2e-8
 }
 
 /// 3D Cartesian vector representing a point on the unit sphere
@@ -1046,15 +1046,19 @@ impl MultiSphericalPoint {
         Self::try_from(lonlats.iter().map(lonlat_to_xyz).collect::<Vec<[f64; 3]>>())
     }
 
-    pub fn nearest(&self, point: &SphericalPoint) -> usize {
+    /// retrieve the nearest of these points to the given point, along with the normalized 3D Cartesian distance to that point
+    pub fn nearest(&self, other: &SphericalPoint) -> (SphericalPoint, f64) {
         // since the kdtree is over normalized vectors, the nearest vector in 3D space is also the nearest in angular distance
         let nearest = self.kdtree.nearest_one::<SquaredEuclidean>(&[
-            point.xyz[0],
-            point.xyz[1],
-            point.xyz[2],
+            other.xyz[0],
+            other.xyz[1],
+            other.xyz[2],
         ]);
 
-        nearest.item as usize
+        (
+            SphericalPoint::from(self.xyzs[nearest.item as usize]),
+            nearest.distance,
+        )
     }
 
     fn recreate_kdtree(&mut self) {
@@ -1079,7 +1083,7 @@ impl MultiSphericalPoint {
     /// lengths of the underlying xyz vectors
     ///
     ///     r = sqrt(x^2 + y^2 + z^2)
-    pub fn vector_lengths(&self) -> Vec<f64> {
+    pub fn vectors_lengths(&self) -> Vec<f64> {
         self.xyzs.iter().map(xyz_length).collect()
     }
 
@@ -1095,7 +1099,7 @@ impl MultiSphericalPoint {
     }
 
     /// rotate the underlying vectors by theta angle around other vectors
-    pub fn vector_rotate_around(&self, other: &Self, theta: f64) -> Self {
+    pub fn vectors_rotate_around(&self, other: &Self, theta: f64) -> Self {
         Self::try_from(
             self.xyzs
                 .iter()
@@ -1317,7 +1321,7 @@ impl MultiGeometry<SphericalPoint> for MultiSphericalPoint {
 
 impl GeometricOperations<SphericalPoint, SphericalPoint> for MultiSphericalPoint {
     fn distance(&self, other: &SphericalPoint) -> f64 {
-        SphericalPoint::from(self.xyzs[self.nearest(other)]).distance(other)
+        self.nearest(other).0.distance(other)
     }
 
     fn contains(&self, other: &SphericalPoint) -> bool {
@@ -1355,20 +1359,26 @@ impl GeometricOperations<SphericalPoint, SphericalPoint> for MultiSphericalPoint
 
 impl GeometricOperations<MultiSphericalPoint, SphericalPoint> for MultiSphericalPoint {
     fn distance(&self, other: &MultiSphericalPoint) -> f64 {
-        // retrieve the nearest point in the other multipoint to this multipoint
-        // using the normalized 3D Cartesian distance is much faster than angular distance
-        let nearest = SphericalPoint::from(
-            self.xyzs[other
-                .xyzs
-                .iter()
-                .map(|xyz| self.kdtree.nearest_one::<SquaredEuclidean>(xyz))
-                .min_by(|a, b| a.distance.partial_cmp(&b.distance).unwrap())
-                .unwrap()
-                .item as usize],
-        );
+        // find the shortest distance between any two points between this and the other set,
+        // using the normalized 3D Cartesian distance (much faster than calculating angular distance)
+        let (self_index, other_index, cartesian_distance) = self
+            .xyzs
+            .iter()
+            .enumerate()
+            .map(|(self_index, self_xyz)| {
+                let nearest = other.kdtree.nearest_one::<SquaredEuclidean>(self_xyz);
+                (self_index, nearest.item as usize, nearest.distance)
+            })
+            .min_by(|a, b| a.2.partial_cmp(&b.2).unwrap())
+            .unwrap();
 
-        // get the distance of that point to this multipoint
-        self.distance(&nearest)
+        if cartesian_distance < 2e-8 {
+            0.0
+        } else {
+            // calculate the angular distance
+            SphericalPoint::from(self.xyzs[self_index])
+                .distance(&SphericalPoint::from(other.xyzs[other_index]))
+        }
     }
 
     fn contains(&self, other: &MultiSphericalPoint) -> bool {
