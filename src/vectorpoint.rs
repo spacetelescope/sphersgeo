@@ -1,15 +1,16 @@
 use crate::{
-    arcstring::{angle, arc_length, collinear},
-    collection::GeometryCollection,
-    geometry::{GeometricOperations, Geometry, MultiGeometry, MutableMultiGeometry},
+    arcstring::{angle, arc_length, collinear, ArcString},
+    geometry::{AnyGeometry, ExtendMultiGeometry, GeometricOperations, Geometry, MultiGeometry},
+    geometrycollection::GeometryCollection,
+    sphericalpolygon::{MultiSphericalPolygon, SphericalPolygon},
 };
-use kiddo::ImmutableKdTree;
+use kiddo::{ImmutableKdTree, SquaredEuclidean};
 use numpy::ndarray::{
     array, concatenate, s, stack, Array1, Array2, ArrayView1, ArrayView2, Axis, Zip,
 };
 use pyo3::prelude::*;
-use std::iter::Sum;
 use std::ops::{Add, AddAssign};
+use std::{iter::Sum, num::NonZero};
 
 #[inline(always)]
 pub fn min_1darray(arr: &ArrayView1<f64>) -> Option<f64> {
@@ -161,6 +162,16 @@ impl Into<MultiVectorPoint> for &VectorPoint {
 
 impl VectorPoint {
     /// from the given coordinates, build an xyz vector representing a point on the sphere
+    ///
+    /// With radius *r*, longitude *l*, and latitude *b*:
+    ///
+    ///     x = r * cos(l) * cos(b)
+    ///     y = r * sin(l) * cos(b)
+    ///     z = r * sin(b)
+    ///
+    /// References
+    /// ----------
+    /// - Miller, Robert D. Computing the area of a spherical polygon. Graphics Gems IV. 1994. Academic Press. doi:10.5555/180895.180907
     pub fn try_from_lonlat(coordinates: &ArrayView1<f64>, degrees: bool) -> Result<Self, String> {
         if coordinates.len() == 2 {
             let coordinates = if degrees {
@@ -184,6 +195,16 @@ impl VectorPoint {
     }
 
     /// convert this point on the sphere to angular coordinates
+    ///
+    /// With radius *r*, longitude *l*, and latitude *b*:
+    ///
+    ///     r = sqrt(x^2 + y^2 + z^2)
+    ///     l = arctan(y / x)
+    ///     b = arcsin(z / r)
+    ///
+    /// References
+    /// ----------
+    /// - Miller, Robert D. Computing the area of a spherical polygon. Graphics Gems IV. 1994. Academic Press. doi:10.5555/180895.180907
     pub fn to_lonlat(&self, degrees: bool) -> Array1<f64> {
         let mut lon = self.xyz[1].atan2(self.xyz[0]);
         let full_rotation = 2.0 * std::f64::consts::PI;
@@ -225,7 +246,9 @@ impl VectorPoint {
     }
 
     /// length of the underlying xyz vector
-    pub fn vector_length(&self) -> f64 {
+    ///
+    ///     r = sqrt(x^2 + y^2 + z^2)
+    pub fn vector_radius(&self) -> f64 {
         self.xyz.pow2().sum().sqrt()
     }
 
@@ -355,13 +378,124 @@ impl GeometricOperations<&VectorPoint> for &VectorPoint {
         (&other.xyz - &self.xyz).abs().sum() < tolerance
     }
 
-    #[allow(refining_impl_trait)]
     fn intersection(self, other: &VectorPoint) -> GeometryCollection {
         if self.intersects(other) {
             GeometryCollection {
-                geometries: vec![Box::new(unsafe {
+                geometries: vec![AnyGeometry::VectorPoint(unsafe {
                     VectorPoint::try_from(self.xyz.to_owned()).unwrap_unchecked()
                 })],
+            }
+        } else {
+            GeometryCollection::empty()
+        }
+    }
+}
+
+impl GeometricOperations<&MultiVectorPoint> for &VectorPoint {
+    fn distance(self, other: &MultiVectorPoint) -> f64 {
+        other.distance(self)
+    }
+
+    fn contains(self, _: &MultiVectorPoint) -> bool {
+        false
+    }
+
+    fn within(self, other: &MultiVectorPoint) -> bool {
+        other.contains(self)
+    }
+
+    fn intersects(self, other: &MultiVectorPoint) -> bool {
+        self.within(other)
+    }
+
+    fn intersection(self, other: &MultiVectorPoint) -> GeometryCollection {
+        if self.within(other) {
+            GeometryCollection {
+                geometries: vec![AnyGeometry::VectorPoint(self.to_owned())],
+            }
+        } else {
+            GeometryCollection::empty()
+        }
+    }
+}
+
+impl GeometricOperations<&ArcString> for &VectorPoint {
+    fn distance(self, other: &ArcString) -> f64 {
+        other.distance(self)
+    }
+
+    fn contains(self, _: &ArcString) -> bool {
+        false
+    }
+
+    fn within(self, other: &ArcString) -> bool {
+        other.contains(self)
+    }
+
+    fn intersects(self, other: &ArcString) -> bool {
+        self.within(other)
+    }
+
+    fn intersection(self, other: &ArcString) -> GeometryCollection {
+        if self.within(other) {
+            GeometryCollection {
+                geometries: vec![AnyGeometry::VectorPoint(self.to_owned())],
+            }
+        } else {
+            GeometryCollection::empty()
+        }
+    }
+}
+
+impl GeometricOperations<&SphericalPolygon> for &VectorPoint {
+    fn distance(self, other: &SphericalPolygon) -> f64 {
+        other.distance(self)
+    }
+
+    fn contains(self, _: &SphericalPolygon) -> bool {
+        false
+    }
+
+    fn within(self, other: &SphericalPolygon) -> bool {
+        other.contains(self)
+    }
+
+    fn intersects(self, other: &SphericalPolygon) -> bool {
+        self.within(other)
+    }
+
+    fn intersection(self, other: &SphericalPolygon) -> GeometryCollection {
+        if self.within(other) {
+            GeometryCollection {
+                geometries: vec![AnyGeometry::VectorPoint(self.to_owned())],
+            }
+        } else {
+            GeometryCollection::empty()
+        }
+    }
+}
+
+impl GeometricOperations<&MultiSphericalPolygon> for &VectorPoint {
+    fn distance(self, other: &MultiSphericalPolygon) -> f64 {
+        other.distance(self)
+    }
+
+    fn contains(self, _: &MultiSphericalPolygon) -> bool {
+        false
+    }
+
+    fn within(self, other: &MultiSphericalPolygon) -> bool {
+        other.contains(self)
+    }
+
+    fn intersects(self, other: &MultiSphericalPolygon) -> bool {
+        self.within(other)
+    }
+
+    fn intersection(self, other: &MultiSphericalPolygon) -> GeometryCollection {
+        if self.intersects(other) {
+            GeometryCollection {
+                geometries: vec![AnyGeometry::VectorPoint(self.to_owned())],
             }
         } else {
             GeometryCollection::empty()
@@ -374,7 +508,7 @@ impl GeometricOperations<&VectorPoint> for &VectorPoint {
 #[derive(Clone, Debug)]
 pub struct MultiVectorPoint {
     pub xyz: Array2<f64>,
-    kdtree: ImmutableKdTree<f64, 3>,
+    tree: ImmutableKdTree<f64, 3>,
 }
 
 impl From<Vec<VectorPoint>> for MultiVectorPoint {
@@ -407,15 +541,15 @@ impl TryFrom<Array2<f64>> for MultiVectorPoint {
         if xyz.shape()[1] != 3 {
             Err(format!("array should be Nx3, not Nx{:?}", xyz.shape()[1]))
         } else {
-            let points = xyz
+            let vec_xyz: Vec<[f64; 3]> = xyz
                 .rows()
                 .into_iter()
                 .map(|point| [point[0], point[1], point[2]])
-                .collect::<Vec<[f64; 3]>>();
+                .collect();
 
             Ok(Self {
                 xyz,
-                kdtree: points.as_slice().into(),
+                tree: vec_xyz.as_slice().into(),
             })
         }
     }
@@ -437,7 +571,11 @@ impl<'p> Into<ArrayView2<'p, f64>> for &'p MultiVectorPoint {
 
 impl From<Vec<[f64; 3]>> for MultiVectorPoint {
     fn from(xyz: Vec<[f64; 3]>) -> Self {
-        unsafe { Self::try_from(Array2::<f64>::from(xyz)).unwrap_unchecked() }
+        let kdtree = ImmutableKdTree::<f64, 3>::from(xyz.as_slice());
+        Self {
+            xyz: xyz.into(),
+            tree: kdtree,
+        }
     }
 }
 
@@ -453,6 +591,16 @@ impl Into<Vec<[f64; 3]>> for &MultiVectorPoint {
 
 impl MultiVectorPoint {
     /// from the given coordinates, build xyz vectors representing points on the sphere
+    ///
+    /// With radius *r*, longitude *l*, and latitude *b*:
+    ///
+    ///     x = r * cos(l) * cos(b)
+    ///     y = r * sin(l) * cos(b)
+    ///     z = r * sin(b)
+    ///
+    /// References
+    /// ----------
+    /// - Miller, Robert D. Computing the area of a spherical polygon. Graphics Gems IV. 1994. Academic Press. doi:10.5555/180895.180907
     pub fn try_from_lonlats(coordinates: &ArrayView2<f64>, degrees: bool) -> Result<Self, String> {
         if coordinates.shape()[1] == 2 {
             let coordinates = if degrees {
@@ -498,9 +646,20 @@ impl MultiVectorPoint {
     }
 
     /// convert to angle coordinates along the sphere
+    ///
+    /// With radius *r*, longitude *l*, and latitude *b*:
+    ///
+    ///     r = sqrt(x^2 + y^2 + z^2)
+    ///     l = arctan(y / x)
+    ///     b = arcsin(z / r)
+    ///
+    /// References
+    /// ----------
+    /// - Miller, Robert D. Computing the area of a spherical polygon. Graphics Gems IV. 1994. Academic Press. doi:10.5555/180895.180907
     pub fn to_lonlats(&self, degrees: bool) -> Array2<f64> {
-        let mut lons =
-            Zip::from(self.xyz.rows()).par_map_collect(|vector| vector[1].atan2(vector[0]));
+        let mut lons = Zip::from(self.xyz.rows()).par_map_collect(|xyz| xyz[1].atan2(xyz[0]));
+
+        // mod longitudes past a full rotation
         let full_rotation = 2.0 * std::f64::consts::PI;
         lons.par_mapv_inplace(|lon| {
             if lon < 0.0 {
@@ -511,9 +670,13 @@ impl MultiVectorPoint {
                 lon
             }
         });
-        let lats = Zip::from(self.xyz.rows()).par_map_collect(|vector| {
-            vector[2].atan2((vector[0].powi(2) + vector[1].powi(2)).sqrt())
-        });
+
+        let lats = Zip::from(self.xyz.slice(s![.., 2]))
+            .and(&self.vector_radii())
+            .par_map_collect(|z, r| (z / r).asin());
+        // let lats = Zip::from(self.xyz.rows())
+        //     .par_map_collect(|xyz| xyz[2].atan2((xyz[0].powi(2) + xyz[1].powi(2)).sqrt()));
+
         let radians = stack(Axis(1), &[lons.view(), lats.view()]).unwrap();
         if degrees {
             radians.to_degrees()
@@ -522,8 +685,10 @@ impl MultiVectorPoint {
         }
     }
 
-    /// length of the underlying xyz vectors
-    pub fn vector_lengths(&self) -> Array1<f64> {
+    /// lengths of the underlying xyz vectors
+    ///
+    ///     r = sqrt(x^2 + y^2 + z^2)
+    pub fn vector_radii(&self) -> Array1<f64> {
         self.xyz.pow2().sum_axis(Axis(1)).sqrt()
     }
 
@@ -589,8 +754,8 @@ impl Sum for MultiVectorPoint {
         for multipoint in iter {
             xyzs.push(multipoint.xyz);
         }
-        let xyzs: Vec<ArrayView2<f64>> = xyzs.iter().map(|xyz| xyz.view()).collect();
         // TODO: remove duplicates
+        let xyzs: Vec<ArrayView2<f64>> = xyzs.iter().map(|xyz| xyz.view()).collect();
         unsafe {
             MultiVectorPoint::try_from(concatenate(Axis(0), xyzs.as_slice()).unwrap_unchecked())
                 .unwrap_unchecked()
@@ -673,8 +838,35 @@ impl Geometry for &MultiVectorPoint {
     /// belong at the end of the chain (i.e., the chain is monotone in terms of
     /// the angle around O from the starting point).
     /// from https://github.com/google/s2geometry/blob/master/src/s2/s2convex_hull_query.cc#L123
+    /// https://www.researchgate.net/profile/Jayaram-Ma-2/publication/303522254/figure/fig1/AS:365886075621376@1464245446409/Monotone-Chain-Algorithm-and-graphic-illustration.png
     fn convex_hull(&self) -> Option<crate::sphericalpolygon::SphericalPolygon> {
-        None
+        let radians = self.to_lonlats(false);
+
+        let tolerance: f64 = 3e-11;
+        let mut west_points: Vec<ArrayView1<f64>> = vec![];
+        for point in radians.rows() {
+            if west_points.is_empty() || (point[0] - west_points[0][0]).abs() < tolerance {
+                west_points.push(point);
+            } else if point[0] < west_points[0][0] {
+                west_points = vec![point];
+            }
+        }
+
+        // sort points by distance to the starting point, using squared euclidean distance along the 3D cloud to find and test the points
+        let points = self.tree.nearest_n::<SquaredEuclidean>(
+            unsafe {
+                west_points[0]
+                    .as_slice()
+                    .unwrap_unchecked()
+                    .try_into()
+                    .unwrap_unchecked()
+            },
+            unsafe { NonZero::<usize>::try_from(self.len() - 1).unwrap_unchecked() },
+        );
+
+        for point in points {}
+
+        todo!();
     }
 
     fn points(&self) -> MultiVectorPoint {
@@ -716,7 +908,7 @@ impl MultiGeometry for MultiVectorPoint {
     }
 }
 
-impl MutableMultiGeometry<VectorPoint> for MultiVectorPoint {
+impl ExtendMultiGeometry<VectorPoint> for MultiVectorPoint {
     fn extend(&mut self, other: MultiVectorPoint) {
         self.xyz = concatenate(Axis(0), &[self.xyz.view(), other.xyz.view()]).unwrap();
     }
@@ -730,6 +922,69 @@ impl MutableMultiGeometry<VectorPoint> for MultiVectorPoint {
             ],
         )
         .unwrap();
+    }
+}
+
+impl GeometricOperations<&VectorPoint> for &MultiVectorPoint {
+    fn distance(self, other: &VectorPoint) -> f64 {
+        // find the nearest point in 3D space
+        let nearest =
+            self.tree
+                .nearest_one::<SquaredEuclidean>(&[other.xyz[0], other.xyz[1], other.xyz[2]]);
+
+        arc_length(
+            &other.xyz.view(),
+            &self.xyz.slice(s![nearest.item as usize, ..]),
+        )
+
+        // // TODO: write a more efficient algorithm than brute-force
+        // let other_point = other.xyz.view();
+        // min_1darray(
+        //     &Zip::from(self.xyz.rows())
+        //         .par_map_collect(|point| arc_length(&point, &other_point))
+        //         .view(),
+        // )
+        // .unwrap_or(0.)
+    }
+
+    fn contains(self, other: &VectorPoint) -> bool {
+        // find the nearest point in 3D space
+        let nearest =
+            self.tree
+                .nearest_one::<SquaredEuclidean>(&[other.xyz[0], other.xyz[1], other.xyz[2]]);
+
+        let tolerance = 1e-10;
+
+        // use distance from k-d tree
+        nearest.distance < tolerance
+
+        // // compare point coordinates
+        // (&other.xyz.view() - &self.xyz.slice(s![nearest.item as usize, ..])).sum() < tolerance
+    }
+
+    fn within(self, _: &VectorPoint) -> bool {
+        false
+    }
+
+    fn intersects(self, other: &VectorPoint) -> bool {
+        self.contains(other)
+    }
+
+    fn intersection(self, other: &VectorPoint) -> GeometryCollection {
+        let tolerance = 1e-10;
+        let other_point = other.xyz.view();
+
+        for point in self.xyz.rows() {
+            if (&point - &other_point).abs().sum() < tolerance {
+                return GeometryCollection {
+                    geometries: vec![AnyGeometry::VectorPoint(unsafe {
+                        VectorPoint::try_from(point.to_owned()).unwrap_unchecked()
+                    })],
+                };
+            }
+        }
+
+        return GeometryCollection::empty();
     }
 }
 
@@ -763,7 +1018,6 @@ impl GeometricOperations<&MultiVectorPoint> for &MultiVectorPoint {
         self.intersection(other).len() > 0
     }
 
-    #[allow(refining_impl_trait)]
     fn intersection(self, other: &MultiVectorPoint) -> GeometryCollection {
         let tolerance: f64 = 3e-11;
         let other_point = other.xyz.view();
@@ -777,7 +1031,7 @@ impl GeometricOperations<&MultiVectorPoint> for &MultiVectorPoint {
 
         if points.len() > 0 {
             GeometryCollection {
-                geometries: vec![Box::new(unsafe {
+                geometries: vec![AnyGeometry::MultiVectorPoint(unsafe {
                     MultiVectorPoint::try_from(stack(Axis(0), points.as_slice()).unwrap_unchecked())
                         .unwrap_unchecked()
                 })],
@@ -788,48 +1042,69 @@ impl GeometricOperations<&MultiVectorPoint> for &MultiVectorPoint {
     }
 }
 
-impl GeometricOperations<&VectorPoint> for &MultiVectorPoint {
-    fn distance(self, other: &VectorPoint) -> f64 {
-        let other_point = other.xyz.view();
-        // TODO: write a more efficient algorithm than brute-force
-        min_1darray(
-            &Zip::from(self.xyz.rows())
-                .par_map_collect(|point| arc_length(&point, &other_point))
-                .view(),
-        )
-        .unwrap_or(0.)
+impl GeometricOperations<&ArcString> for &MultiVectorPoint {
+    fn distance(self, other: &ArcString) -> f64 {
+        other.distance(self)
     }
 
-    fn contains(self, other: &VectorPoint) -> bool {
-        let tolerance = 1e-10;
-        let other_point = other.xyz.view();
-        Zip::from(self.xyz.rows()).any(|point| (&point - &other_point).abs().sum() < tolerance)
-    }
-
-    fn within(self, _: &VectorPoint) -> bool {
+    fn contains(self, _: &ArcString) -> bool {
         false
     }
 
-    fn intersects(self, other: &VectorPoint) -> bool {
-        self.contains(other)
+    fn within(self, other: &ArcString) -> bool {
+        other.contains(self)
     }
 
-    #[allow(refining_impl_trait)]
-    fn intersection(self, other: &VectorPoint) -> GeometryCollection {
-        let tolerance = 1e-10;
-        let other_point = other.xyz.view();
+    fn intersects(self, other: &ArcString) -> bool {
+        other.intersects(self)
+    }
 
-        for point in self.xyz.rows() {
-            if (&point - &other_point).abs().sum() < tolerance {
-                return GeometryCollection {
-                    geometries: vec![Box::new(VectorPoint {
-                        xyz: point.to_owned(),
-                    })],
-                };
-            }
-        }
+    fn intersection(self, other: &ArcString) -> GeometryCollection {
+        other.intersection(self)
+    }
+}
 
-        return GeometryCollection::empty();
+impl GeometricOperations<&SphericalPolygon> for &MultiVectorPoint {
+    fn distance(self, other: &SphericalPolygon) -> f64 {
+        other.distance(self)
+    }
+
+    fn contains(self, _: &SphericalPolygon) -> bool {
+        false
+    }
+
+    fn within(self, other: &SphericalPolygon) -> bool {
+        other.contains(self)
+    }
+
+    fn intersects(self, other: &SphericalPolygon) -> bool {
+        other.intersects(self)
+    }
+
+    fn intersection(self, other: &SphericalPolygon) -> GeometryCollection {
+        other.intersection(self)
+    }
+}
+
+impl GeometricOperations<&MultiSphericalPolygon> for &MultiVectorPoint {
+    fn distance(self, other: &MultiSphericalPolygon) -> f64 {
+        other.distance(self)
+    }
+
+    fn contains(self, _: &MultiSphericalPolygon) -> bool {
+        false
+    }
+
+    fn within(self, other: &MultiSphericalPolygon) -> bool {
+        other.contains(self)
+    }
+
+    fn intersects(self, other: &MultiSphericalPolygon) -> bool {
+        other.intersects(self)
+    }
+
+    fn intersection(self, other: &MultiSphericalPolygon) -> GeometryCollection {
+        other.intersection(self)
     }
 }
 
@@ -847,13 +1122,13 @@ mod tests {
         .unwrap();
 
         assert_ne!(
-            points.vector_lengths(),
+            points.vector_radii(),
             array![1.0].broadcast(points.xyz.nrows()).unwrap()
         );
 
         let normalized = points.normalized();
 
-        assert!(Zip::from(&normalized.vector_lengths()).all(|length| length == &1.0));
+        assert!(Zip::from(&normalized.vector_radii()).all(|length| length == &1.0));
 
         assert!(Zip::from(&normalized.xyz.powi(2).sum_axis(Axis(1)).sqrt())
             .all(|length| length == &1.0),);

@@ -145,6 +145,33 @@ def test_distance():
     assert_allclose(bc.distance(cd), 0.0, atol=tolerance)
     assert_allclose(ab.distance(cd), np.pi / 2.0, atol=tolerance)
 
+def test_contains():
+    xyz = np.array(
+        [
+            [0.0, 0.0, 1.0],
+            [0.0, 0.0, -1.0],
+            [1.0, 1.0, 0.0],
+            [1.0, -1.0, 0.0],
+        ]
+    )
+
+    a = VectorPoint(xyz[0, :])
+    b = VectorPoint(xyz[1, :])
+    c = VectorPoint(xyz[2, :])
+    d = VectorPoint(xyz[3, :])
+
+    abc = MultiVectorPoint(xyz[:3, :])
+    
+    assert abc.contains(a)
+    assert abc.contains(b)
+    assert abc.contains(c)
+    assert not abc.contains(d)
+
+    assert a.within(abc)
+    assert b.within(abc)
+    assert c.within(abc)
+    assert not d.within(abc)
+
 
 def test_str():
     assert str(VectorPoint(np.array([0.0, 1.0, 2.0]))) == "VectorPoint([0, 1, 2])"

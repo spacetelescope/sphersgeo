@@ -1,6 +1,7 @@
 use crate::{
-    collection::GeometryCollection,
-    geometry::{GeometricOperations, Geometry, MultiGeometry},
+    geometry::{AnyGeometry, GeometricOperations, Geometry, MultiGeometry},
+    geometrycollection::GeometryCollection,
+    sphericalpolygon::{MultiSphericalPolygon, SphericalPolygon},
     vectorpoint::{
         cross_vectors, max_1darray, min_1darray, normalize_vector, MultiVectorPoint, VectorPoint,
     },
@@ -67,13 +68,25 @@ pub fn angle(a: &ArrayView1<f64>, b: &ArrayView1<f64>, c: &ArrayView1<f64>, degr
     let bc = arc_length(b, c);
     let ca = arc_length(c, a);
 
+    println!(
+        "(({:?} - {:?} * {:?}) / ({:?} * {:?})).acos()",
+        ca.cos(),
+        bc.cos(),
+        ab.cos(),
+        bc.sin(),
+        ab.sin()
+    );
+    println!(
+        "(({:?}) / ({:?})).acos()",
+        ca.cos() - bc.cos() * ab.cos(),
+        bc.sin() * ab.sin()
+    );
+
     let angle = if ab > tolerance && bc > tolerance {
         (ca.cos() - bc.cos() * ab.cos()) / (bc.sin() * ab.sin()).acos()
     } else {
         (1.0 - ca.powi(2) / 2.0).acos()
     };
-
-    println!("{:?}", angle);
 
     if degrees {
         angle.to_degrees()
@@ -275,37 +288,9 @@ impl MultiGeometry for &ArcString {
     }
 }
 
-impl GeometricOperations<&ArcString> for &ArcString {
-    fn distance(self, other: &ArcString) -> f64 {
-        // TODO: implement
-        std::f64::NAN
-    }
-
-    fn contains(self, other: &ArcString) -> bool {
-        // TODO: implement
-        false
-    }
-
-    fn within(self, other: &ArcString) -> bool {
-        other.contains(self)
-    }
-
-    fn intersects(self, other: &ArcString) -> bool {
-        // TODO: write an intersects algorithm
-        self.intersection(other).len() > 0
-    }
-
-    #[allow(refining_impl_trait)]
-    fn intersection(self, other: &ArcString) -> GeometryCollection {
-        // TODO: implement
-        GeometryCollection::empty()
-    }
-}
-
 impl GeometricOperations<&VectorPoint> for &ArcString {
     fn distance(self, other: &VectorPoint) -> f64 {
-        // TODO: implement
-        std::f64::NAN
+        self.points.distance(other)
     }
 
     fn contains(self, point: &VectorPoint) -> bool {
@@ -345,7 +330,7 @@ impl GeometricOperations<&VectorPoint> for &ArcString {
         return false;
     }
 
-    fn within(self, other: &VectorPoint) -> bool {
+    fn within(self, _: &VectorPoint) -> bool {
         false
     }
 
@@ -353,10 +338,139 @@ impl GeometricOperations<&VectorPoint> for &ArcString {
         self.intersection(other).len() > 0
     }
 
-    #[allow(refining_impl_trait)]
     fn intersection(self, other: &VectorPoint) -> GeometryCollection {
-        // TODO: implement
-        GeometryCollection::empty()
+        if self.contains(other) {
+            GeometryCollection {
+                geometries: vec![AnyGeometry::VectorPoint(other.to_owned())],
+            }
+        } else {
+            GeometryCollection::empty()
+        }
+    }
+}
+
+impl GeometricOperations<&MultiVectorPoint> for &ArcString {
+    fn distance(self, other: &MultiVectorPoint) -> f64 {
+        todo!()
+    }
+
+    fn contains(self, other: &MultiVectorPoint) -> bool {
+        todo!()
+    }
+
+    fn within(self, _: &MultiVectorPoint) -> bool {
+        false
+    }
+
+    fn intersects(self, other: &MultiVectorPoint) -> bool {
+        todo!()
+    }
+
+    fn intersection(self, other: &MultiVectorPoint) -> GeometryCollection {
+        todo!()
+    }
+}
+
+impl GeometricOperations<&ArcString> for &ArcString {
+    fn distance(self, other: &ArcString) -> f64 {
+        todo!();
+    }
+
+    fn contains(self, other: &ArcString) -> bool {
+        todo!();
+    }
+
+    fn within(self, other: &ArcString) -> bool {
+        other.contains(self)
+    }
+
+    fn intersects(self, other: &ArcString) -> bool {
+        // TODO: write an intersects algorithm
+        self.intersection(other).len() > 0
+    }
+
+    /// Returns the point of intersection between two great circle arcs.
+    ///
+    /// Notes
+    /// -----
+    /// The basic intersection is computed using linear algebra as follows
+    /// [1]_:
+    ///
+    /// .. math::
+    ///
+    ///     T = \lVert(A × B) × (C × D)\rVert
+    ///
+    /// To determine the correct sign (i.e. hemisphere) of the
+    /// intersection, the following four values are computed:
+    ///
+    /// .. math::
+    ///
+    ///     s_1 = ((A × B) × A) \cdot T
+    ///
+    ///     s_2 = (B × (A × B)) \cdot T
+    ///
+    ///     s_3 = ((C × D) × C) \cdot T
+    ///
+    ///     s_4 = (D × (C × D)) \cdot T
+    ///
+    /// For :math:`s_n`, if all positive :math:`T` is returned as-is.  If
+    /// all negative, :math:`T` is multiplied by :math:`-1`.  Otherwise
+    /// the intersection does not exist and is undefined.
+    ///
+    /// References
+    /// ----------
+    ///
+    /// .. [1] Method explained in an `e-mail
+    ///     <http://www.mathworks.com/matlabcentral/newsreader/view_thread/276271>`_
+    ///     by Roger Stafford.
+    ///
+    /// https://spherical-geometry.readthedocs.io/en/latest/api/spherical_geometry.great_circle_arc.intersection.html#rb82e4e1c8654-1
+    fn intersection(self, other: &ArcString) -> GeometryCollection {
+        todo!();
+    }
+}
+
+impl GeometricOperations<&SphericalPolygon> for &ArcString {
+    fn distance(self, other: &SphericalPolygon) -> f64 {
+        other.distance(self)
+    }
+
+    fn contains(self, _: &SphericalPolygon) -> bool {
+        false
+    }
+
+    fn within(self, other: &SphericalPolygon) -> bool {
+        other.contains(self)
+    }
+
+    fn intersects(self, other: &SphericalPolygon) -> bool {
+        other.intersects(self)
+    }
+
+    fn intersection(self, other: &SphericalPolygon) -> GeometryCollection {
+        other.intersection(self)
+    }
+}
+
+impl GeometricOperations<&MultiSphericalPolygon> for &ArcString {
+    fn distance(self, other: &MultiSphericalPolygon) -> f64 {
+        other.distance(self)
+    }
+
+    fn contains(self, _: &MultiSphericalPolygon) -> bool {
+        false
+    }
+
+    fn within(self, other: &MultiSphericalPolygon) -> bool {
+        other.contains(self)
+    }
+
+    fn intersects(self, other: &MultiSphericalPolygon) -> bool {
+        other.intersects(self)
+    }
+
+    fn intersection(self, other: &MultiSphericalPolygon) -> GeometryCollection {
+        other.intersection(self)
     }
 }
 
@@ -491,8 +605,8 @@ mod tests {
         let c = VectorPoint::try_from_lonlat(&array![-25.0, 10.0].view(), true).unwrap();
         let d = VectorPoint::try_from_lonlat(&array![15.0, -10.0].view(), true).unwrap();
 
-        let e = VectorPoint::try_from_lonlat(&array![-20.0, 40.0].view(), true).unwrap();
-        let f = VectorPoint::try_from_lonlat(&array![20.0, 40.0].view(), true).unwrap();
+        // let e = VectorPoint::try_from_lonlat(&array![-20.0, 40.0].view(), true).unwrap();
+        // let f = VectorPoint::try_from_lonlat(&array![20.0, 40.0].view(), true).unwrap();
 
         let reference_intersection = array![0.99912414, -0.02936109, -0.02981403];
 

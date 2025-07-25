@@ -1,5 +1,6 @@
-use crate::{collection::GeometryCollection, vectorpoint::MultiVectorPoint};
+use crate::{geometrycollection::GeometryCollection, vectorpoint::MultiVectorPoint};
 use kiddo::traits::DistanceMetric;
+use pyo3::prelude::*;
 
 pub trait Geometry {
     /// area of this geometry
@@ -22,11 +23,11 @@ pub trait MultiGeometry {
     fn len(&self) -> usize;
 }
 
-pub trait MutableMultiGeometry<T: Geometry> {
-    /// extend this collection with elements from the other collection
+pub trait ExtendMultiGeometry<T: Geometry> {
+    /// extend this collection with geometries from the other collection
     fn extend(&mut self, other: Self);
 
-    /// extend this collection with elements from the other collection
+    /// append the geometry to this collection
     fn push(&mut self, other: T);
 }
 
@@ -47,31 +48,70 @@ pub trait GeometricOperations<OtherGeometry: Geometry = Self> {
     fn intersection(self, other: OtherGeometry) -> GeometryCollection;
 }
 
-pub struct AnyGeometry(dyn Geometry);
+#[pyclass]
+#[derive(Debug)]
+pub enum AnyGeometry {
+    VectorPoint(crate::vectorpoint::VectorPoint),
+    MultiVectorPoint(crate::vectorpoint::MultiVectorPoint),
+    ArcString(crate::arcstring::ArcString),
+    SphericalPolygon(crate::sphericalpolygon::SphericalPolygon),
+    MultiSphericalPolygon(crate::sphericalpolygon::MultiSphericalPolygon),
+}
 
 impl Geometry for AnyGeometry {
     fn area(&self) -> f64 {
-        self.0.area()
+        match self {
+            Self::VectorPoint(point) => point.area(),
+            Self::MultiVectorPoint(multipoint) => multipoint.area(),
+            Self::ArcString(arcstring) => arcstring.area(),
+            Self::SphericalPolygon(polygon) => polygon.area(),
+            Self::MultiSphericalPolygon(multipolygon) => multipolygon.area(),
+        }
     }
 
     fn length(&self) -> f64 {
-        self.0.length()
+        match self {
+            Self::VectorPoint(point) => point.length(),
+            Self::MultiVectorPoint(multipoint) => multipoint.length(),
+            Self::ArcString(arcstring) => arcstring.length(),
+            Self::SphericalPolygon(polygon) => polygon.length(),
+            Self::MultiSphericalPolygon(multipolygon) => multipolygon.length(),
+        }
     }
 
     fn bounds(&self, degrees: bool) -> [f64; 4] {
-        self.0.bounds(degrees)
+        match self {
+            Self::VectorPoint(point) => point.bounds(degrees),
+            Self::MultiVectorPoint(multipoint) => multipoint.bounds(degrees),
+            Self::ArcString(arcstring) => arcstring.bounds(degrees),
+            Self::SphericalPolygon(polygon) => polygon.bounds(degrees),
+            Self::MultiSphericalPolygon(multipolygon) => multipolygon.bounds(degrees),
+        }
     }
 
     fn convex_hull(&self) -> Option<crate::sphericalpolygon::SphericalPolygon> {
-        self.0.convex_hull()
+        match self {
+            Self::VectorPoint(point) => point.convex_hull(),
+            Self::MultiVectorPoint(multipoint) => multipoint.convex_hull(),
+            Self::ArcString(arcstring) => arcstring.convex_hull(),
+            Self::SphericalPolygon(polygon) => polygon.convex_hull(),
+            Self::MultiSphericalPolygon(multipolygon) => multipolygon.convex_hull(),
+        }
     }
 
-    fn points(&self) -> MultiVectorPoint {
-        self.0.points()
+    fn points(&self) -> crate::vectorpoint::MultiVectorPoint {
+        match self {
+            Self::VectorPoint(point) => point.points(),
+            Self::MultiVectorPoint(multipoint) => multipoint.points(),
+            Self::ArcString(arcstring) => arcstring.points(),
+            Self::SphericalPolygon(polygon) => polygon.points(),
+            Self::MultiSphericalPolygon(multipolygon) => multipolygon.points(),
+        }
     }
 }
 
-pub struct SphericalDistanceMetric {}
+/// define angular separation between 3D vectors
+pub struct AngularSeparation {}
 
 #[inline]
 fn normalize(vector: &[f64; 3]) -> [f64; 3] {
@@ -79,12 +119,13 @@ fn normalize(vector: &[f64; 3]) -> [f64; 3] {
     [vector[0] / l, vector[1] / l, vector[2] / l]
 }
 
-impl DistanceMetric<f64, 3> for SphericalDistanceMetric {
+impl DistanceMetric<f64, 3> for AngularSeparation {
     #[inline]
     fn dist(a: &[f64; 3], b: &[f64; 3]) -> f64 {
         let a = normalize(a);
         let b = normalize(b);
-        a[0] * b[0] + a[1] * b[1] + a[2] * b[2]
+        // radians subtended
+        (a[0] * b[0] + a[1] * b[1] + a[2] * b[2]).acos()
     }
 
     #[inline]
