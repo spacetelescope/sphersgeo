@@ -71,6 +71,9 @@ pub trait GeometricOperations<O: Geometry = Self> {
     /// it will ONLY return the lower order of geometry being compared
     /// and will NOT handle touching, collinear overlap, or degenerate cases
     fn intersection(self, other: O) -> Option<impl Geometry>;
+
+    /// split this geometry into a multi-geometry, at the crossing with the given geometry
+    fn split(self, other: O) -> impl MultiGeometry;
 }
 
 #[derive(FromPyObject, IntoPyObject, Debug, Clone, PartialEq)]
@@ -147,24 +150,22 @@ impl Geometry for AnyGeometry {
 
     fn boundary(&self) -> Option<AnyGeometry> {
         match self {
-            AnyGeometry::SphericalPoint(point) => point
-                .boundary()
-                .map(|boundary| AnyGeometry::SphericalPoint(boundary)),
-            AnyGeometry::MultiSphericalPoint(multipoint) => multipoint
-                .boundary()
-                .map(|boundary| AnyGeometry::MultiSphericalPoint(boundary)),
-            AnyGeometry::ArcString(arcstring) => arcstring
-                .boundary()
-                .map(|boundary| AnyGeometry::MultiSphericalPoint(boundary)),
+            AnyGeometry::SphericalPoint(point) => point.boundary().map(AnyGeometry::SphericalPoint),
+            AnyGeometry::MultiSphericalPoint(multipoint) => {
+                multipoint.boundary().map(AnyGeometry::MultiSphericalPoint)
+            }
+            AnyGeometry::ArcString(arcstring) => {
+                arcstring.boundary().map(AnyGeometry::MultiSphericalPoint)
+            }
             AnyGeometry::MultiArcString(multiarcstring) => multiarcstring
                 .boundary()
-                .map(|boundary| AnyGeometry::MultiSphericalPoint(boundary)),
-            AnyGeometry::SphericalPolygon(polygon) => polygon
-                .boundary()
-                .map(|boundary| AnyGeometry::ArcString(boundary)),
-            AnyGeometry::MultiSphericalPolygon(multipolygon) => multipolygon
-                .boundary()
-                .map(|boundary| AnyGeometry::MultiArcString(boundary)),
+                .map(AnyGeometry::MultiSphericalPoint),
+            AnyGeometry::SphericalPolygon(polygon) => {
+                polygon.boundary().map(AnyGeometry::ArcString)
+            }
+            AnyGeometry::MultiSphericalPolygon(multipolygon) => {
+                multipolygon.boundary().map(AnyGeometry::MultiArcString)
+            }
         }
     }
 

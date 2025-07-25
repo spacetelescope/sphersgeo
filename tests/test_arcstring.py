@@ -178,6 +178,49 @@ def test_intersection():
     assert AB.intersects(AB)
 
 
+def test_closed_not_crosses_self():
+    a = ArcString(
+        MultiSphericalPoint.from_lonlat(
+            np.array(
+                [[20.0, 5.0], [25.0, 5.0], [25.0, 10.0], [20.0, 10.0], [20.0, 5.0]]
+            ),
+        )
+    )
+    b = ArcString(
+        MultiSphericalPoint.from_lonlat(
+            np.array([[18.0, 6.0], [21.0, 6.0], [21.0, 7.0], [18.0, 7.0]]),
+        )
+    )
+    c = ArcString(b, closed=True)
+    d = ArcString(
+        MultiSphericalPoint.from_lonlat(
+            np.array([[18.0, 6.0], [21.0, 7.0], [21.0, 6.0], [18.0, 7.0]]),
+        )
+    )
+
+    assert a.closed
+    assert not b.closed
+    assert c.closed
+    assert not d.closed
+
+    assert not a.crosses_self
+    assert not b.crosses_self
+    assert not c.crosses_self
+    assert d.crosses_self
+
+    assert a.intersects(b)
+    assert a.intersects(c)
+    assert a.intersects(d)
+
+
+@pytest.mark.parametrize("lonlats", [[(90, 0), (0, 45), (0, -45)]])
+def test_not_crosses_self(lonlats):
+    arcstring = ArcString(MultiSphericalPoint.from_lonlat(lonlats))
+
+    assert not arcstring.crosses_self
+    assert arcstring.crossings_with_self is None
+
+
 def test_crosses_self():
     A = SphericalPoint.from_lonlat((-10.0, -10.0), degrees=True)
     B = SphericalPoint.from_lonlat((10.0, 10.0), degrees=True)
