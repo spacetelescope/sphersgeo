@@ -1,5 +1,5 @@
 use crate::geometry::{GeometricOperations, Geometry};
-use numpy::ndarray::{array, s};
+use numpy::ndarray::{array, s, Array1};
 use pyo3::prelude::*;
 
 /// an ortholinear rectangle aligned with the angular axes of the sphere
@@ -25,9 +25,15 @@ impl From<[f64; 4]> for AngularBounds {
     }
 }
 
-impl Into<[f64; 4]> for AngularBounds {
+impl Into<[f64; 4]> for &AngularBounds {
     fn into(self) -> [f64; 4] {
         [self.min_x, self.min_y, self.max_x, self.max_y]
+    }
+}
+
+impl Into<Array1<f64>> for &AngularBounds {
+    fn into(self) -> Array1<f64> {
+        array![self.min_x, self.min_y, self.max_x, self.max_y]
     }
 }
 
@@ -41,65 +47,85 @@ impl AngularBounds {
             degrees,
         }
     }
+
+    pub fn to_radians(&self) -> Self {
+        if self.degrees {
+            Self {
+                min_x: self.min_x.to_radians(),
+                min_y: self.min_y.to_radians(),
+                max_x: self.max_x.to_radians(),
+                max_y: self.max_y.to_radians(),
+                degrees: false,
+            }
+        } else {
+            self.to_owned()
+        }
+    }
+
+    pub fn to_degrees(&self) -> Self {
+        if !self.degrees {
+            Self {
+                min_x: self.min_x.to_radians(),
+                min_y: self.min_y.to_radians(),
+                max_x: self.max_x.to_radians(),
+                max_y: self.max_y.to_radians(),
+                degrees: false,
+            }
+        } else {
+            self.to_owned()
+        }
+    }
+}
+
+impl ToString for AngularBounds {
+    fn to_string(&self) -> String {
+        let this: [f64; 4] = self.into();
+        format!("AngularBounds({:?}, degrees: {})", this, self.degrees)
+    }
+}
+
+impl PartialEq for AngularBounds {
+    fn eq(&self, other: &AngularBounds) -> bool {
+        let tolerance = 3e-11;
+        let this: Array1<f64> = self.into();
+        let other: Array1<f64> = other.into();
+        (this - other).abs().sum() < tolerance
+    }
 }
 
 impl Geometry for &AngularBounds {
     fn area(&self) -> f64 {
-        let points = self.points();
-        crate::angularpolygon::spherical_triangle_area(
-            &points.xyz.slice(s![0, ..]),
-            &points.xyz.slice(s![1, ..]),
-            &points.xyz.slice(s![2, ..]),
-        ) + crate::angularpolygon::spherical_triangle_area(
-            &points.xyz.slice(s![1, ..]),
-            &points.xyz.slice(s![2, ..]),
-            &points.xyz.slice(s![3, ..]),
+        let xyz = self.points().xyz;
+        crate::sphericalpolygon::spherical_triangle_area(
+            &xyz.slice(s![0, ..]),
+            &xyz.slice(s![1, ..]),
+            &xyz.slice(s![2, ..]),
+        ) + crate::sphericalpolygon::spherical_triangle_area(
+            &xyz.slice(s![2, ..]),
+            &xyz.slice(s![3, ..]),
+            &xyz.slice(s![0, ..]),
         )
     }
 
     fn length(&self) -> f64 {
-        crate::arcstring::arc_length(
+        crate::arcstring::arc_length_from_vectors(
             &array![self.min_x, self.min_y].view(),
             &array![self.max_x, self.max_y].view(),
         )
     }
 
     fn bounds(&self, degrees: bool) -> AngularBounds {
-        let min_x;
-        let min_y;
-        let max_x;
-        let max_y;
-
-        if degrees != self.degrees {
-            if degrees {
-                min_x = self.min_x.to_degrees();
-                min_y = self.min_y.to_degrees();
-                max_x = self.max_x.to_degrees();
-                max_y = self.max_y.to_degrees();
-            } else {
-                min_x = self.min_x.to_radians();
-                min_y = self.min_y.to_radians();
-                max_x = self.max_x.to_radians();
-                max_y = self.max_y.to_radians();
-            }
+        if degrees == self.degrees {
+            (*self).to_owned()
+        } else if degrees {
+            self.to_degrees()
         } else {
-            min_x = self.min_x;
-            min_y = self.min_y;
-            max_x = self.max_x;
-            max_y = self.max_y;
-        }
-
-        AngularBounds {
-            min_x,
-            min_y,
-            max_x,
-            max_y,
-            degrees,
+            self.to_radians()
         }
     }
 
-    fn convex_hull(&self) -> Option<crate::angularpolygon::AngularPolygon> {
-        Some(crate::angularpolygon::AngularPolygon::try_from(self.points()).unwrap())
+    fn convex_hull(&self) -> Option<crate::sphericalpolygon::SphericalPolygon> {
+        crate::sphericalpolygon::SphericalPolygon::try_from(self.points()).ok()
     }
 
     fn points(&self) -> crate::vectorpoint::MultiVectorPoint {
@@ -134,23 +160,21 @@ impl Geometry for AngularBounds {
         (&self).points()
     }
 
-    fn convex_hull(&self) -> Option<crate::angularpolygon::AngularPolygon> {
+    fn convex_hull(&self) -> Option<crate::sphericalpolygon::SphericalPolygon> {
         (&self).convex_hull()
     }
 }
 
 impl GeometricOperations<&crate::vectorpoint::VectorPoint> for &AngularBounds {
     fn distance(self, other: &crate::vectorpoint::VectorPoint) -> f64 {
-        self.convex_hull().unwrap().distance(other)
+        match self.convex_hull() {
+            Some(hull) => hull.distance(other),
+            None => self.points().distance(other),
+        }
     }
 
     fn contains(self, other: &crate::vectorpoint::VectorPoint) -> bool {
-        let point = other.to_lonlat(self.degrees);
-
-        point[0] >= self.min_x
-            && point[1] >= self.min_y
-            && point[0] <= self.max_x
-            && point[1] <= self.max_y
+        other.within(self)
     }
 
     fn within(self, _: &crate::vectorpoint::VectorPoint) -> bool {
@@ -219,76 +243,153 @@ impl GeometricOperations<&crate::arcstring::ArcString> for &AngularBounds {
     }
 }
 
-impl GeometricOperations<&crate::vectorpoint::MultiVectorPoint> for &AngularBounds {
-    fn distance(self, other: &crate::vectorpoint::MultiVectorPoint) -> f64 {
+impl GeometricOperations<&crate::arcstring::MultiArcString> for &AngularBounds {
+    fn distance(self, other: &crate::arcstring::MultiArcString) -> f64 {
         todo!()
     }
 
-    fn contains(self, other: &crate::vectorpoint::MultiVectorPoint) -> bool {
+    fn contains(self, other: &crate::arcstring::MultiArcString) -> bool {
         todo!()
     }
 
-    fn within(self, _: &crate::vectorpoint::MultiVectorPoint) -> bool {
-        false
+    fn within(self, other: &crate::arcstring::MultiArcString) -> bool {
+        todo!()
     }
 
-    fn intersects(self, other: &crate::vectorpoint::MultiVectorPoint) -> bool {
-        other.intersects(self)
+    fn intersects(self, other: &crate::arcstring::MultiArcString) -> bool {
+        todo!()
     }
 
     fn intersection(
         self,
-        other: &crate::vectorpoint::MultiVectorPoint,
+        other: &crate::arcstring::MultiArcString,
     ) -> crate::geometrycollection::GeometryCollection {
         todo!()
     }
 }
 
-impl GeometricOperations<&crate::angularpolygon::AngularPolygon> for &AngularBounds {
-    fn distance(self, other: &crate::angularpolygon::AngularPolygon) -> f64 {
+impl GeometricOperations<&AngularBounds> for &AngularBounds {
+    fn distance(self, other: &AngularBounds) -> f64 {
+        self.points().distance(&other.points())
+    }
+
+    fn contains(self, other: &AngularBounds) -> bool {
+        other.within(self)
+    }
+
+    fn within(self, other: &AngularBounds) -> bool {
+        other.min_x > self.min_x
+            && other.min_y > self.min_y
+            && other.max_x < self.max_x
+            && other.max_y < self.max_y
+    }
+
+    fn intersects(self, other: &AngularBounds) -> bool {
+        let other = if self.degrees == other.degrees {
+            other
+        } else if other.degrees {
+            &other.to_radians()
+        } else {
+            &other.to_degrees()
+        };
+
+        other.min_x < self.max_x
+            || other.max_x > self.min_x
+            || other.min_y < self.max_y
+            || other.max_y > self.min_y
+    }
+
+    fn intersection(self, other: &AngularBounds) -> crate::geometrycollection::GeometryCollection {
+        let other = if self.degrees == other.degrees {
+            other
+        } else if other.degrees {
+            &other.to_radians()
+        } else {
+            &other.to_degrees()
+        };
+
+        if self.intersects(other) {
+            let min_x = if other.min_x > self.min_x {
+                other.min_x
+            } else {
+                self.min_x
+            };
+            let min_y = if other.min_y > self.min_y {
+                other.min_y
+            } else {
+                self.min_y
+            };
+            let max_x = if other.max_x < self.max_x {
+                other.max_x
+            } else {
+                self.max_x
+            };
+            let max_y = if other.max_y < self.max_y {
+                other.max_y
+            } else {
+                self.max_y
+            };
+
+            crate::geometrycollection::GeometryCollection::from(vec![
+                crate::geometry::AnyGeometry::AngularBounds(AngularBounds {
+                    min_x,
+                    min_y,
+                    max_x,
+                    max_y,
+                    degrees: self.degrees,
+                }),
+            ])
+        } else {
+            crate::geometrycollection::GeometryCollection::empty()
+        }
+    }
+}
+
+impl GeometricOperations<&crate::sphericalpolygon::SphericalPolygon> for &AngularBounds {
+    fn distance(self, other: &crate::sphericalpolygon::SphericalPolygon) -> f64 {
         todo!()
     }
 
-    fn contains(self, other: &crate::angularpolygon::AngularPolygon) -> bool {
+    fn contains(self, other: &crate::sphericalpolygon::SphericalPolygon) -> bool {
         todo!()
     }
 
-    fn within(self, other: &crate::angularpolygon::AngularPolygon) -> bool {
+    fn within(self, other: &crate::sphericalpolygon::SphericalPolygon) -> bool {
         todo!()
     }
 
-    fn intersects(self, other: &crate::angularpolygon::AngularPolygon) -> bool {
+    fn intersects(self, other: &crate::sphericalpolygon::SphericalPolygon) -> bool {
         todo!()
     }
 
     fn intersection(
         self,
-        other: &crate::angularpolygon::AngularPolygon,
+        other: &crate::sphericalpolygon::SphericalPolygon,
     ) -> crate::geometrycollection::GeometryCollection {
         todo!()
     }
 }
 
-impl GeometricOperations<&crate::angularpolygon::MultiAngularPolygon> for &AngularBounds {
-    fn distance(self, other: &crate::angularpolygon::MultiAngularPolygon) -> f64 {
+impl GeometricOperations<&crate::sphericalpolygon::MultiSphericalPolygon> for &AngularBounds {
+    fn distance(self, other: &crate::sphericalpolygon::MultiSphericalPolygon) -> f64 {
         todo!()
     }
 
-    fn contains(self, other: &crate::angularpolygon::MultiAngularPolygon) -> bool {
+    fn contains(self, other: &crate::sphericalpolygon::MultiSphericalPolygon) -> bool {
         todo!()
     }
 
-    fn within(self, other: &crate::angularpolygon::MultiAngularPolygon) -> bool {
+    fn within(self, other: &crate::sphericalpolygon::MultiSphericalPolygon) -> bool {
         todo!()
     }
 
-    fn intersects(self, other: &crate::angularpolygon::MultiAngularPolygon) -> bool {
+    fn intersects(self, other: &crate::sphericalpolygon::MultiSphericalPolygon) -> bool {
         todo!()
     }
 
     fn intersection(
         self,
-        other: &crate::angularpolygon::MultiAngularPolygon,
+        other: &crate::sphericalpolygon::MultiSphericalPolygon,
     ) -> crate::geometrycollection::GeometryCollection {
         todo!()
     }

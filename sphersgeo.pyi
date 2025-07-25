@@ -2,100 +2,697 @@ from numpy import float64
 from numpy.typing import NDArray
 
 
-def normalize_vector(xyz: NDArray[float64]) -> NDArray[float64]: ...
-
-
-def normalize_vectors(xyz: NDArray[float64]) -> NDArray[float64]: ...
-
-
-def cross_vector(a: NDArray[float64], b: NDArray[float64]) -> NDArray[float64]: ...
-
-
-def cross_vectors(a: NDArray[float64], b: NDArray[float64]) -> NDArray[float64]: ...
-
-
 class VectorPoint:
-    def __init__(self, xyz: NDArray[float64]): ...
+    def __init__(
+        self,
+        point: NDArray[float64]
+        | tuple[float, float, float]
+        | list[float]
+        | VectorPoint,
+    ): ...
+
+    @classmethod
+    def normalize(
+        cls,
+        point: NDArray[float64]
+        | tuple[float, float, float]
+        | list[float]
+        | VectorPoint,
+    ) -> VectorPoint: ...
 
     @classmethod
     def from_lonlat(
-        cls, coordinates: NDArray[float64], degrees: bool = True
+        cls,
+        coordinates: NDArray[float64] | tuple[float, float] | list[float],
+        degrees: bool,
     ) -> VectorPoint: ...
 
     @property
     def xyz(self) -> NDArray[float64]: ...
 
-    def to_lonlat(self, degrees: bool = True) -> NDArray[float64]: ...
-
-    def to_multi(self) -> MultiVectorPoint: ...
-
-    @property
-    def length(self) -> float: ...
+    def to_lonlat(self, degrees: bool) -> NDArray[float64]: ...
 
     @property
     def normalized(self) -> VectorPoint: ...
 
-    def rotate_around(
-        self, other: VectorPoint, theta: float, degrees: bool = True
+    def angle(self, a: VectorPoint, b: VectorPoint, degrees: bool) -> float: ...
+
+    def collinear(self, a: VectorPoint, b: VectorPoint) -> bool: ...
+
+    @property
+    def vector_radius(self) -> float: ...
+
+    def vector_rotate_around(
+        self, other: VectorPoint, theta: float, degrees: bool
     ) -> VectorPoint: ...
+
+    def combine(self, other: VectorPoint) -> MultiVectorPoint: ...
+
+    @property
+    def area(self) -> float: ...
+
+    @property
+    def length(self) -> float: ...
+
+    def bounds(self, degrees: bool) -> AngularBounds: ...
+
+    @property
+    def convex_hull(self) -> AngularPolygon | None: ...
+
+    @property
+    def points(self) -> MultiVectorPoint: ...
+
+    def distance(
+        self,
+        other: VectorPoint
+        | MultiVectorPoint
+        | ArcString
+        | MultiArcString
+        | AngularBounds
+        | AngularPolygon
+        | MultiAngularPolygon,
+    ) -> float: ...
+
+    def contains(
+        self,
+        other: VectorPoint
+        | MultiVectorPoint
+        | ArcString
+        | MultiArcString
+        | AngularBounds
+        | AngularPolygon
+        | MultiAngularPolygon,
+    ) -> bool: ...
+
+    def within(
+        self,
+        other: VectorPoint
+        | MultiVectorPoint
+        | ArcString
+        | MultiArcString
+        | AngularBounds
+        | AngularPolygon
+        | MultiAngularPolygon,
+    ) -> bool: ...
+
+    def intersects(
+        self,
+        other: VectorPoint
+        | MultiVectorPoint
+        | ArcString
+        | MultiArcString
+        | AngularBounds
+        | AngularPolygon
+        | MultiAngularPolygon,
+    ) -> bool: ...
+
+    def intersection(
+        self,
+        other: VectorPoint
+        | MultiVectorPoint
+        | ArcString
+        | MultiArcString
+        | AngularBounds
+        | AngularPolygon
+        | MultiAngularPolygon,
+    ) -> GeometryCollection: ...
+
+    def __add__(self, other: VectorPoint) -> MultiVectorPoint: ...
 
 
 class MultiVectorPoint:
-    def __init__(self, xyz: NDArray[float64]): ...
+    def __init__(
+        self,
+        points: NDArray[float64]
+        | list[tuple[float, float, float]]
+        | list[list[float]]
+        | list[float]
+        | MultiVectorPoint,
+    ): ...
+
+    @classmethod
+    def normalize(
+        cls,
+        points: NDArray[float64]
+        | list[tuple[float, float, float]]
+        | list[list[float]]
+        | list[float]
+        | MultiVectorPoint,
+    ) -> MultiVectorPoint: ...
 
     @classmethod
     def from_lonlats(
-        cls, coordinates: NDArray[float64], degrees: bool = True
+        cls,
+        coordinates: NDArray[float64]
+        | tuple[float, float]
+        | list[list[float]]
+        | list[float],
+        degrees: bool,
     ) -> MultiVectorPoint: ...
 
     @property
     def xyz(self) -> NDArray[float64]: ...
 
-    @property
-    def vectors(self) -> list[VectorPoint]: ...
+    def to_lonlats(self, degrees: bool) -> NDArray[float64]: ...
 
-    def to_lonlats(self, degrees: bool = True) -> NDArray[float64]: ...
+    @property
+    def normalized(self) -> MultiVectorPoint: ...
+
+    def angles(
+        self, a: MultiVectorPoint, b: MultiVectorPoint, degrees: bool
+    ) -> NDArray[float64]: ...
+
+    def collinear(self, a: MultiVectorPoint, b: MultiVectorPoint) -> NDArray[bool]: ...
+
+    @property
+    def vector_radii(self) -> NDArray[float64]: ...
+
+    def vector_rotate_around(
+        self, other: MultiVectorPoint, theta: float, degrees: bool
+    ) -> MultiVectorPoint: ...
+
+    def extend(self, other: MultiVectorPoint): ...
+
+    def append(self, other: VectorPoint): ...
+
+    @property
+    def area(self) -> float: ...
+
+    @property
+    def length(self) -> float: ...
+
+    def bounds(self, degrees: bool) -> AngularBounds: ...
+
+    @property
+    def convex_hull(self) -> AngularPolygon | None: ...
+
+    @property
+    def points(self) -> MultiVectorPoint: ...
+
+    def distance(
+        self,
+        other: VectorPoint
+        | MultiVectorPoint
+        | ArcString
+        | MultiArcString
+        | AngularBounds
+        | AngularPolygon
+        | MultiAngularPolygon,
+    ) -> float: ...
+
+    def contains(
+        self,
+        other: VectorPoint
+        | MultiVectorPoint
+        | ArcString
+        | MultiArcString
+        | AngularBounds
+        | AngularPolygon
+        | MultiAngularPolygon,
+    ) -> bool: ...
+
+    def within(
+        self,
+        other: VectorPoint
+        | MultiVectorPoint
+        | ArcString
+        | MultiArcString
+        | AngularBounds
+        | AngularPolygon
+        | MultiAngularPolygon,
+    ) -> bool: ...
+
+    def intersects(
+        self,
+        other: VectorPoint
+        | MultiVectorPoint
+        | ArcString
+        | MultiArcString
+        | AngularBounds
+        | AngularPolygon
+        | MultiAngularPolygon,
+    ) -> bool: ...
+
+    def intersection(
+        self,
+        other: VectorPoint
+        | MultiVectorPoint
+        | ArcString
+        | MultiArcString
+        | AngularBounds
+        | AngularPolygon
+        | MultiAngularPolygon,
+    ) -> GeometryCollection: ...
+
+    def __add__(self, other: MultiVectorPoint) -> MultiVectorPoint: ...
+
+    def __iadd__(self, other: MultiVectorPoint): ...
+
+
+class ArcString:
+    def __init__(
+        self,
+        points: NDArray[float64]
+        | MultiVectorPoint
+        | list[tuple[float, float, float]]
+        | list[list[float]]
+        | list[float]
+        | ArcString,
+    ): ...
+
+    @classmethod
+    def normalize(
+        cls,
+        points: NDArray[float64]
+        | MultiVectorPoint
+        | list[tuple[float, float, float]]
+        | list[list[float]]
+        | list[float]
+        | ArcString,
+    ) -> ArcString: ...
+
+    @classmethod
+    def from_lonlats(
+        cls,
+        coordinates: NDArray[float64]
+        | tuple[float, float]
+        | list[list[float]]
+        | list[float],
+        degrees: bool,
+    ) -> ArcString: ...
 
     @property
     def lengths(self) -> NDArray[float64]: ...
 
     @property
-    def normalized(self) -> MultiVectorPoint: ...
-
-    def rotate_around(
-        self, other: MultiVectorPoint, theta: float, degrees: bool = True
-    ) -> MultiVectorPoint: ...
-
-
-class ArcString:
-    def __init__(self, a: VectorPoint, b: VectorPoint): ...
+    def midpoints(self) -> MultiVectorPoint: ...
 
     @property
-    def a(self) -> VectorPoint: ...
-
-    @property
-    def b(self) -> VectorPoint: ...
+    def area(self) -> float: ...
 
     @property
     def length(self) -> float: ...
 
+    def bounds(self, degrees: bool) -> AngularBounds: ...
+
     @property
-    def midpoint(self) -> VectorPoint: ...
+    def convex_hull(self) -> AngularPolygon | None: ...
 
-    def contains(self, point: VectorPoint) -> bool: ...
+    @property
+    def points(self) -> MultiVectorPoint: ...
 
-    def intersects(self, other: ArcString) -> bool: ...
+    def distance(
+        self,
+        other: VectorPoint
+        | MultiVectorPoint
+        | ArcString
+        | MultiArcString
+        | AngularBounds
+        | AngularPolygon
+        | MultiAngularPolygon,
+    ) -> float: ...
 
-    def intersection(self, other: ArcString) -> VectorPoint: ...
+    def contains(
+        self,
+        other: VectorPoint
+        | MultiVectorPoint
+        | ArcString
+        | MultiArcString
+        | AngularBounds
+        | AngularPolygon
+        | MultiAngularPolygon,
+    ) -> bool: ...
 
-    def interpolate(self, n: int = 50) -> MultiVectorPoint: ...
+    def within(
+        self,
+        other: VectorPoint
+        | MultiVectorPoint
+        | ArcString
+        | MultiArcString
+        | AngularBounds
+        | AngularPolygon
+        | MultiAngularPolygon,
+    ) -> bool: ...
+
+    def intersects(
+        self,
+        other: VectorPoint
+        | MultiVectorPoint
+        | ArcString
+        | MultiArcString
+        | AngularBounds
+        | AngularPolygon
+        | MultiAngularPolygon,
+    ) -> bool: ...
+
+    def intersection(
+        self,
+        other: VectorPoint
+        | MultiVectorPoint
+        | ArcString
+        | MultiArcString
+        | AngularBounds
+        | AngularPolygon
+        | MultiAngularPolygon,
+    ) -> GeometryCollection: ...
 
 
-def angle(
-    a: NDArray[float64], b: NDArray[float64], c: NDArray[float64], degrees: bool = True
-) -> NDArray[float64]: ...
+class MultiArcString:
+    def __init__(
+        self,
+        arcstrings: list[NDArray[float64]]
+        | list[MultiVectorPoint]
+        | list[list[tuple[float64, float64, float64]]]
+        | list[list[list[float64]]]
+        | MultiArcString,
+    ): ...
+
+    @property
+    def area(self) -> float: ...
+
+    @property
+    def length(self) -> float: ...
+
+    def bounds(self, degrees: bool) -> AngularBounds: ...
+
+    @property
+    def convex_hull(self) -> AngularPolygon | None: ...
+
+    @property
+    def points(self) -> MultiVectorPoint: ...
+
+    def distance(
+        self,
+        other: VectorPoint
+        | MultiVectorPoint
+        | ArcString
+        | MultiArcString
+        | AngularBounds
+        | AngularPolygon
+        | MultiAngularPolygon,
+    ) -> float: ...
+
+    def contains(
+        self,
+        other: VectorPoint
+        | MultiVectorPoint
+        | ArcString
+        | MultiArcString
+        | AngularBounds
+        | AngularPolygon
+        | MultiAngularPolygon,
+    ) -> bool: ...
+
+    def within(
+        self,
+        other: VectorPoint
+        | MultiVectorPoint
+        | ArcString
+        | MultiArcString
+        | AngularBounds
+        | AngularPolygon
+        | MultiAngularPolygon,
+    ) -> bool: ...
+
+    def intersects(
+        self,
+        other: VectorPoint
+        | MultiVectorPoint
+        | ArcString
+        | MultiArcString
+        | AngularBounds
+        | AngularPolygon
+        | MultiAngularPolygon,
+    ) -> bool: ...
+
+    def intersection(
+        self,
+        other: VectorPoint
+        | MultiVectorPoint
+        | ArcString
+        | MultiArcString
+        | AngularBounds
+        | AngularPolygon
+        | MultiAngularPolygon,
+    ) -> GeometryCollection: ...
 
 
-def angles(
-    a: NDArray[float64], b: NDArray[float64], c: NDArray[float64], degrees: bool = True
-) -> NDArray[float64]: ...
+class AngularBounds:
+    def __init__(
+        self,
+        min_x: float,
+        min_y: float,
+        max_x: float,
+        max_y: float,
+        degrees: bool,
+    ): ...
+
+    @property
+    def area(self) -> float: ...
+
+    @property
+    def length(self) -> float: ...
+
+    def bounds(self, degrees: bool) -> AngularBounds: ...
+
+    @property
+    def convex_hull(self) -> AngularPolygon | None: ...
+
+    @property
+    def points(self) -> MultiVectorPoint: ...
+
+    def distance(
+        self,
+        other: VectorPoint
+        | MultiVectorPoint
+        | ArcString
+        | MultiArcString
+        | AngularBounds
+        | AngularPolygon
+        | MultiAngularPolygon,
+    ) -> float: ...
+
+    def contains(
+        self,
+        other: VectorPoint
+        | MultiVectorPoint
+        | ArcString
+        | MultiArcString
+        | AngularBounds
+        | AngularPolygon
+        | MultiAngularPolygon,
+    ) -> bool: ...
+
+    def within(
+        self,
+        other: VectorPoint
+        | MultiVectorPoint
+        | ArcString
+        | MultiArcString
+        | AngularBounds
+        | AngularPolygon
+        | MultiAngularPolygon,
+    ) -> bool: ...
+
+    def intersects(
+        self,
+        other: VectorPoint
+        | MultiVectorPoint
+        | ArcString
+        | MultiArcString
+        | AngularBounds
+        | AngularPolygon
+        | MultiAngularPolygon,
+    ) -> bool: ...
+
+    def intersection(
+        self,
+        other: VectorPoint
+        | MultiVectorPoint
+        | ArcString
+        | MultiArcString
+        | AngularBounds
+        | AngularPolygon
+        | MultiAngularPolygon,
+    ) -> GeometryCollection: ...
+
+
+class AngularPolygon:
+    def __init__(
+        self,
+        arcstring: ArcString
+        | NDArray[float64]
+        | MultiVectorPoint
+        | list[tuple[float, float, float]]
+        | list[list[float]]
+        | list[float],
+        interior: None
+        | VectorPoint
+        | NDArray[float64]
+        | tuple[float, float, float]
+        | list[float],
+        holes: None
+        | MultiArcString
+        | list[NDArray[float64]]
+        | list[MultiVectorPoint]
+        | list[list[tuple[float64, float64, float64]]]
+        | list[list[list[float64]]],
+    ): ...
+
+    @property
+    def area(self) -> float: ...
+
+    @property
+    def length(self) -> float: ...
+
+    def bounds(self, degrees: bool) -> AngularBounds: ...
+
+    @property
+    def convex_hull(self) -> AngularPolygon | None: ...
+
+    @property
+    def points(self) -> MultiVectorPoint: ...
+
+    def distance(
+        self,
+        other: VectorPoint
+        | MultiVectorPoint
+        | ArcString
+        | MultiArcString
+        | AngularBounds
+        | AngularPolygon
+        | MultiAngularPolygon,
+    ) -> float: ...
+
+    def contains(
+        self,
+        other: VectorPoint
+        | MultiVectorPoint
+        | ArcString
+        | MultiArcString
+        | AngularBounds
+        | AngularPolygon
+        | MultiAngularPolygon,
+    ) -> bool: ...
+
+    def within(
+        self,
+        other: VectorPoint
+        | MultiVectorPoint
+        | ArcString
+        | MultiArcString
+        | AngularBounds
+        | AngularPolygon
+        | MultiAngularPolygon,
+    ) -> bool: ...
+
+    def intersects(
+        self,
+        other: VectorPoint
+        | MultiVectorPoint
+        | ArcString
+        | MultiArcString
+        | AngularBounds
+        | AngularPolygon
+        | MultiAngularPolygon,
+    ) -> bool: ...
+
+    def intersection(
+        self,
+        other: VectorPoint
+        | MultiVectorPoint
+        | ArcString
+        | MultiArcString
+        | AngularBounds
+        | AngularPolygon
+        | MultiAngularPolygon,
+    ) -> GeometryCollection: ...
+
+
+class MultiAngularPolygon:
+    def __init__(self, polygons: list[AngularPolygon] | MultiAngularPolygon): ...
+
+    @property
+    def area(self) -> float: ...
+
+    @property
+    def length(self) -> float: ...
+
+    def bounds(self, degrees: bool) -> AngularBounds: ...
+
+    @property
+    def convex_hull(self) -> AngularPolygon | None: ...
+
+    @property
+    def points(self) -> MultiVectorPoint: ...
+
+    def distance(
+        self,
+        other: VectorPoint
+        | MultiVectorPoint
+        | ArcString
+        | MultiArcString
+        | AngularBounds
+        | AngularPolygon
+        | MultiAngularPolygon,
+    ) -> float: ...
+
+    def contains(
+        self,
+        other: VectorPoint
+        | MultiVectorPoint
+        | ArcString
+        | MultiArcString
+        | AngularBounds
+        | AngularPolygon
+        | MultiAngularPolygon,
+    ) -> bool: ...
+
+    def within(
+        self,
+        other: VectorPoint
+        | MultiVectorPoint
+        | ArcString
+        | MultiArcString
+        | AngularBounds
+        | AngularPolygon
+        | MultiAngularPolygon,
+    ) -> bool: ...
+
+    def intersects(
+        self,
+        other: VectorPoint
+        | MultiVectorPoint
+        | ArcString
+        | MultiArcString
+        | AngularBounds
+        | AngularPolygon
+        | MultiAngularPolygon,
+    ) -> bool: ...
+
+    def intersection(
+        self,
+        other: VectorPoint
+        | MultiVectorPoint
+        | ArcString
+        | MultiArcString
+        | AngularBounds
+        | AngularPolygon
+        | MultiAngularPolygon,
+    ) -> GeometryCollection: ...
+
+
+class GeometryCollection:
+    @property
+    def area(self) -> float: ...
+
+    @property
+    def length(self) -> float: ...
+
+    def bounds(self, degrees: bool) -> AngularBounds: ...
+
+    @property
+    def convex_hull(self) -> AngularPolygon | None: ...
+
+    @property
+    def points(self) -> MultiVectorPoint: ...
