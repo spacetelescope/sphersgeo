@@ -275,15 +275,15 @@ mod py_sphersgeo {
                     Self::try_from(xyz.as_array().to_owned())
                         .map_err(|err| PyValueError::new_err(format!("{:?}", err)))
                 }
-                PyMultiVectorPointInputs::ListOfTuples(list) => Ok(Self::from(list)),
+                PyMultiVectorPointInputs::ListOfTuples(list) => Ok(Self::from(&list)),
                 PyMultiVectorPointInputs::NestedList(list) => {
-                    Self::try_from(list).map_err(|err| PyValueError::new_err(format!("{:?}", err)))
+                    Self::try_from(&list).map_err(|err| PyValueError::new_err(format!("{:?}", err)))
                 }
                 PyMultiVectorPointInputs::FlatList(list) => {
                     Self::try_from(list).map_err(|err| PyValueError::new_err(format!("{:?}", err)))
                 }
                 PyMultiVectorPointInputs::PointList(list) => {
-                    Self::try_from(list).map_err(|err| PyValueError::new_err(format!("{:?}", err)))
+                    Self::try_from(&list).map_err(|err| PyValueError::new_err(format!("{:?}", err)))
                 }
             }
         }
@@ -543,7 +543,6 @@ mod py_sphersgeo {
         ListOfTuples(Vec<(f64, f64, f64)>),
         NestedList(Vec<Vec<f64>>),
         FlatList(Vec<f64>),
-        ArcString(ArcString),
     }
 
     #[pymethods]
@@ -556,14 +555,11 @@ mod py_sphersgeo {
                         .map_err(|err| PyValueError::new_err(format!("{:?}", err)))?
                 }
                 PyArcStringInputs::MultiPoint(points) => points.to_owned(),
-                PyArcStringInputs::ListOfTuples(list) => MultiVectorPoint::from(list),
-                PyArcStringInputs::NestedList(list) => MultiVectorPoint::try_from(list)
+                PyArcStringInputs::ListOfTuples(list) => MultiVectorPoint::from(&list),
+                PyArcStringInputs::NestedList(list) => MultiVectorPoint::try_from(&list)
                     .map_err(|err| PyValueError::new_err(format!("{:?}", err)))?,
                 PyArcStringInputs::FlatList(list) => MultiVectorPoint::try_from(list)
                     .map_err(|err| PyValueError::new_err(format!("{:?}", err)))?,
-                PyArcStringInputs::ArcString(arcstring) => {
-                    return Ok(arcstring.to_owned());
-                }
             };
 
             Self::try_from(points).map_err(|err| PyValueError::new_err(format!("{:?}", err)))
@@ -727,13 +723,13 @@ mod py_sphersgeo {
                 PyMultiArcStringInputs::ListOfMultiPoints(points) => points.to_owned(),
                 PyMultiArcStringInputs::NestedListOfTuples(list) => list
                     .into_iter()
-                    .map(|points| MultiVectorPoint::from(points))
+                    .map(|points| MultiVectorPoint::from(&points))
                     .collect(),
                 PyMultiArcStringInputs::NestedList(list) => {
                     let mut multipoints = vec![];
                     for points in list {
                         multipoints.push(
-                            MultiVectorPoint::try_from(points)
+                            MultiVectorPoint::try_from(&points)
                                 .map_err(|err| PyValueError::new_err(format!("{:?}", err)))?,
                         )
                     }

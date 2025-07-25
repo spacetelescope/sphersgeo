@@ -172,7 +172,7 @@ def test_contains():
     c = VectorPoint(xyz[2, :])
     d = VectorPoint(xyz[3, :])
 
-    abc = MultiVectorPoint(xyz[:4, :])
+    abc = MultiVectorPoint(xyz[:3, :])
 
     assert abc.contains(a)
     assert abc.contains(b)
@@ -209,13 +209,13 @@ def test_add():
     cd = MultiVectorPoint(xyz[2:4])
     da = MultiVectorPoint(np.stack([xyz[-1], xyz[0]]))
 
-    # assert a + b == ab
-    # assert b + c == bc
-    # assert c + d == cd
-    # assert d + a == da
+    assert a + b == ab
+    assert b + c == bc
+    assert c + d == cd
+    assert d + a == da
 
     a += b
     c += d
 
-    # assert a == ab
-    # assert c == cd
+    assert a == ab
+    assert c == cd
