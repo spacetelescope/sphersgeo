@@ -1,7 +1,7 @@
 use crate::arcstring::{angle, arc_length, collinear};
 use crate::geometry::{BoundingBox, Distance};
 use numpy::ndarray::{
-    array, concatenate, s, stack, Array1, Array2, ArrayView1, ArrayView2, Axis, Zip,
+    Array1, Array2, ArrayView1, ArrayView2, Axis, Zip, array, concatenate, s, stack,
 };
 use pyo3::prelude::*;
 use std::ops::Add;
@@ -211,6 +211,12 @@ impl VectorPoint {
         }
     }
 
+    pub fn combine(&self, other: &Self) -> MultiVectorPoint {
+        MultiVectorPoint {
+            xyz: stack(Axis(0), &[self.xyz.view(), other.xyz.view()]).unwrap(),
+        }
+    }
+
     /// angle on the sphere between this point and two other points
     pub fn angle(&self, a: &VectorPoint, b: &VectorPoint, degrees: bool) -> f64 {
         angle(&a.into(), &self.into(), &b.into(), degrees)
@@ -261,7 +267,8 @@ impl ToString for VectorPoint {
 
 impl PartialEq for VectorPoint {
     fn eq(&self, other: &VectorPoint) -> bool {
-        &self == &other
+        let tolerance = 3e-11;
+        (&self.xyz - &other.xyz).sum() < tolerance
     }
 }
 
@@ -276,13 +283,7 @@ impl Add for VectorPoint {
     type Output = MultiVectorPoint;
 
     fn add(self, rhs: Self) -> Self::Output {
-        MultiVectorPoint {
-            xyz: stack(
-                Axis(0),
-                &[self.xyz.to_owned().view(), rhs.xyz.to_owned().view()],
-            )
-            .unwrap(),
-        }
+        self.combine(&rhs)
     }
 }
 
@@ -290,7 +291,7 @@ impl Add<&VectorPoint> for VectorPoint {
     type Output = MultiVectorPoint;
 
     fn add(self, rhs: &Self) -> Self::Output {
-        &self + rhs
+        self.combine(rhs)
     }
 }
 
@@ -298,9 +299,7 @@ impl Add<&VectorPoint> for &VectorPoint {
     type Output = MultiVectorPoint;
 
     fn add(self, rhs: &VectorPoint) -> MultiVectorPoint {
-        MultiVectorPoint {
-            xyz: stack(Axis(0), &[self.xyz.view(), rhs.xyz.view()]).unwrap(),
-        }
+        self.combine(rhs)
     }
 }
 
@@ -308,13 +307,7 @@ impl Add<&MultiVectorPoint> for &VectorPoint {
     type Output = MultiVectorPoint;
 
     fn add(self, rhs: &MultiVectorPoint) -> MultiVectorPoint {
-        MultiVectorPoint {
-            xyz: concatenate(
-                Axis(0),
-                &[self.xyz.broadcast((1, 3)).unwrap().view(), rhs.xyz.view()],
-            )
-            .unwrap(),
-        }
+        rhs.append(self)
     }
 }
 
@@ -474,8 +467,27 @@ impl MultiVectorPoint {
         }
     }
 
+    pub fn extend(&self, other: &Self) -> Self {
+        Self {
+            xyz: concatenate(Axis(0), &[self.xyz.view(), other.xyz.view()]).unwrap(),
+        }
+    }
+
+    pub fn append(&self, other: &VectorPoint) -> Self {
+        Self {
+            xyz: concatenate(
+                Axis(0),
+                &[
+                    self.xyz.to_owned().view(),
+                    other.xyz.to_owned().broadcast((1, 3)).unwrap().view(),
+                ],
+            )
+            .unwrap(),
+        }
+    }
+
     /// number of points in this collection
-    pub fn length(&self) -> usize {
+    pub fn len(&self) -> usize {
         self.xyz.nrows()
     }
 
@@ -551,7 +563,8 @@ impl ToString for MultiVectorPoint {
 
 impl PartialEq for MultiVectorPoint {
     fn eq(&self, other: &MultiVectorPoint) -> bool {
-        &self == &other
+        let tolerance = 3e-11;
+        (&self.xyz - &other.xyz).sum() < tolerance
     }
 }
 
@@ -566,7 +579,7 @@ impl Add for MultiVectorPoint {
     type Output = Self;
 
     fn add(self, rhs: Self) -> Self::Output {
-        &self + &rhs
+        self.extend(&rhs)
     }
 }
 
@@ -574,7 +587,7 @@ impl Add<&MultiVectorPoint> for MultiVectorPoint {
     type Output = Self;
 
     fn add(self, rhs: &MultiVectorPoint) -> Self::Output {
-        &self + rhs
+        self.extend(rhs)
     }
 }
 
@@ -582,9 +595,7 @@ impl Add<&MultiVectorPoint> for &MultiVectorPoint {
     type Output = MultiVectorPoint;
 
     fn add(self, rhs: &MultiVectorPoint) -> Self::Output {
-        Self::Output {
-            xyz: concatenate(Axis(0), &[self.xyz.view(), rhs.xyz.view()]).unwrap(),
-        }
+        self.extend(rhs)
     }
 }
 
@@ -592,13 +603,7 @@ impl Add<&VectorPoint> for &MultiVectorPoint {
     type Output = MultiVectorPoint;
 
     fn add(self, rhs: &VectorPoint) -> Self::Output {
-        Self::Output {
-            xyz: concatenate(
-                Axis(0),
-                &[self.xyz.view(), rhs.xyz.broadcast((1, 3)).unwrap().view()],
-            )
-            .unwrap(),
-        }
+        self.append(rhs)
     }
 }
 
@@ -638,8 +643,6 @@ impl Distance for &MultiVectorPoint {
 
 #[cfg(test)]
 mod tests {
-    
-
     use super::*;
     use crate::geometry::Distance;
     use crate::vectorpoint::{MultiVectorPoint, VectorPoint};
@@ -661,8 +664,10 @@ mod tests {
 
         assert!(Zip::from(&normalized.vector_lengths()).all(|length| length == &1.0));
 
-        assert!(Zip::from(&normalized.xyz.powi(2).sum_axis(Axis(1)).sqrt())
-            .all(|length| length == &1.0),);
+        assert!(
+            Zip::from(&normalized.xyz.powi(2).sum_axis(Axis(1)).sqrt())
+                .all(|length| length == &1.0),
+        );
     }
 
     #[test]
@@ -705,9 +710,11 @@ mod tests {
         )
         .unwrap();
 
-        assert!(Zip::from(multi_equator.xyz.rows())
-            .and(&equators)
-            .all(|multi, single| multi == single.xyz));
+        assert!(
+            Zip::from(multi_equator.xyz.rows())
+                .and(&equators)
+                .all(|multi, single| multi == single.xyz)
+        );
 
         assert_eq!(
             multi_equator.xyz.slice(s![.., 2]),
@@ -730,24 +737,28 @@ mod tests {
         )
         .unwrap();
 
-        assert!(Zip::from(multi_north_pole.xyz.rows())
-            .and(&north_poles)
-            .all(|multi, single| multi == single.xyz));
+        assert!(
+            Zip::from(multi_north_pole.xyz.rows())
+                .and(&north_poles)
+                .all(|multi, single| multi == single.xyz)
+        );
 
-        assert!(Zip::from(multi_north_pole.xyz.view())
-            .and(
-                stack(
-                    Axis(1),
-                    &[
-                        Array1::<f64>::zeros(multi_north_pole.xyz.nrows()).view(),
-                        Array1::<f64>::zeros(multi_north_pole.xyz.nrows()).view(),
-                        Array1::<f64>::ones(multi_north_pole.xyz.nrows()).view()
-                    ]
+        assert!(
+            Zip::from(multi_north_pole.xyz.view())
+                .and(
+                    stack(
+                        Axis(1),
+                        &[
+                            Array1::<f64>::zeros(multi_north_pole.xyz.nrows()).view(),
+                            Array1::<f64>::zeros(multi_north_pole.xyz.nrows()).view(),
+                            Array1::<f64>::ones(multi_north_pole.xyz.nrows()).view()
+                        ]
+                    )
+                    .unwrap()
+                    .view()
                 )
-                .unwrap()
-                .view()
-            )
-            .all(|test, reference| (test - reference).abs() < tolerance));
+                .all(|test, reference| (test - reference).abs() < tolerance)
+        );
 
         let south_pole_lat = array![-90.0];
         let south_pole_lats = south_pole_lat.broadcast(lons.len()).unwrap();
@@ -765,24 +776,28 @@ mod tests {
         )
         .unwrap();
 
-        assert!(Zip::from(multi_south_pole.xyz.rows())
-            .and(&south_poles)
-            .all(|multi, single| multi == single.xyz));
+        assert!(
+            Zip::from(multi_south_pole.xyz.rows())
+                .and(&south_poles)
+                .all(|multi, single| multi == single.xyz)
+        );
 
-        assert!(Zip::from(multi_south_pole.xyz.view())
-            .and(
-                stack(
-                    Axis(1),
-                    &[
-                        Array1::<f64>::zeros(multi_north_pole.xyz.nrows()).view(),
-                        Array1::<f64>::zeros(multi_north_pole.xyz.nrows()).view(),
-                        (-1.0 * Array1::<f64>::ones(multi_north_pole.xyz.nrows())).view()
-                    ]
+        assert!(
+            Zip::from(multi_south_pole.xyz.view())
+                .and(
+                    stack(
+                        Axis(1),
+                        &[
+                            Array1::<f64>::zeros(multi_north_pole.xyz.nrows()).view(),
+                            Array1::<f64>::zeros(multi_north_pole.xyz.nrows()).view(),
+                            (-1.0 * Array1::<f64>::ones(multi_north_pole.xyz.nrows())).view()
+                        ]
+                    )
+                    .unwrap()
+                    .view()
                 )
-                .unwrap()
-                .view()
-            )
-            .all(|test, reference| (test - reference).abs() < tolerance));
+                .all(|test, reference| (test - reference).abs() < tolerance)
+        );
     }
 
     #[test]
@@ -913,9 +928,27 @@ mod tests {
             xyz: stack(Axis(0), &[xyz.slice(s![3, ..]), xyz.slice(s![0, ..])]).unwrap(),
         };
 
+        assert_eq!(a.combine(&b), ab);
         assert_eq!(&a + &b, ab);
+
+        assert_eq!(b.combine(&c), bc);
         assert_eq!(&b + &c, bc);
+
+        assert_eq!(c.combine(&d), cd);
         assert_eq!(&c + &d, cd);
+
+        assert_eq!(d.combine(&a), da);
         assert_eq!(&d + &a, da);
+
+        let abc = MultiVectorPoint {
+            xyz: xyz.slice(s![..3, ..]).to_owned(),
+        };
+        let abcd = MultiVectorPoint { xyz };
+
+        assert_eq!(ab.append(&c), abc);
+        assert_eq!(&ab + &c, abc);
+
+        assert_eq!(ab.extend(&bc), abcd);
+        assert_eq!(&ab + &bc, abcd);
     }
 }

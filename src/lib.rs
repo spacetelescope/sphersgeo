@@ -220,7 +220,7 @@ pub mod sphersgeo {
         }
 
         fn __len__(&self) -> usize {
-            self.length()
+            self.len()
         }
 
         fn __getitem__(&self, index: usize) -> VectorPoint {
