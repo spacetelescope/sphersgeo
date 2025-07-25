@@ -118,7 +118,7 @@ impl ExtendMultiGeometry<AnyGeometry> for GeometryCollection {
     }
 
     fn push(&mut self, other: AnyGeometry) {
-        self.geometries.push(other.into());
+        self.geometries.push(other);
     }
 }
 

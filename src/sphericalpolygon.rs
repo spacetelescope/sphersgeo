@@ -76,7 +76,7 @@ pub fn point_in_polygon_exterior(
         let arc_0 = exterior_arcstring_points.slice(s![arc_index, ..]);
         let arc_1 = exterior_arcstring_points.slice(s![arc_index + 1, ..]);
 
-        if vector_arc_crossings(&point, &polygon_interior_point, &arc_0, &arc_1).is_some() {
+        if vector_arc_crossings(point, polygon_interior_point, &arc_0, &arc_1).is_some() {
             crossings += 1;
         }
     }
@@ -202,7 +202,7 @@ impl SphericalPolygon {
         spokes.invert_axis(Axis(0));
 
         let vertices = Zip::from(&spokes)
-            .par_map_collect(|spoke| xyz.vector_rotate_around(&center, spoke, false).xyz)
+            .par_map_collect(|spoke| xyz.vector_rotate_around(center, spoke, false).xyz)
             .to_vec();
 
         Self::new(
@@ -262,7 +262,7 @@ impl Geometry for SphericalPolygon {
     }
 
     fn coords(&self) -> crate::sphericalpoint::MultiSphericalPoint {
-        (&self).exterior.coords()
+        self.exterior.coords()
     }
 
     fn boundary(&self) -> Option<ArcString> {
@@ -369,7 +369,7 @@ impl GeometricOperations<&MultiSphericalPoint> for &SphericalPolygon {
         }
 
         // if none of the points returned false
-        return true;
+        true
     }
 
     fn within(self, _: &MultiSphericalPoint) -> bool {
@@ -410,7 +410,7 @@ impl GeometricOperations<&MultiSphericalPoint> for &SphericalPolygon {
         }
 
         // if no points returned true
-        return false;
+        false
     }
 
     fn intersection(self, other: &MultiSphericalPoint) -> Option<MultiSphericalPoint> {
@@ -444,7 +444,7 @@ impl GeometricOperations<&MultiSphericalPoint> for &SphericalPolygon {
             }
         }
 
-        if intersections.len() > 0 {
+        if !intersections.is_empty() {
             Some(unsafe {
                 MultiSphericalPoint::try_from(
                     stack(Axis(0), intersections.as_slice()).unwrap_unchecked(),
@@ -712,7 +712,7 @@ impl PartialEq<MultiSphericalPolygon> for MultiSphericalPolygon {
             }
         }
 
-        return true;
+        true
     }
 }
 
@@ -728,7 +728,7 @@ impl PartialEq<Vec<SphericalPolygon>> for MultiSphericalPolygon {
             }
         }
 
-        return true;
+        true
     }
 }
 

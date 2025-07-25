@@ -26,15 +26,15 @@ impl From<[f64; 4]> for AngularBounds {
     }
 }
 
-impl Into<[f64; 4]> for &AngularBounds {
-    fn into(self) -> [f64; 4] {
-        [self.min_x, self.min_y, self.max_x, self.max_y]
+impl From<&AngularBounds> for [f64; 4] {
+    fn from(bounds: &AngularBounds) -> Self {
+        [bounds.min_x, bounds.min_y, bounds.max_x, bounds.max_y]
     }
 }
 
-impl Into<Array1<f64>> for &AngularBounds {
-    fn into(self) -> Array1<f64> {
-        array![self.min_x, self.min_y, self.max_x, self.max_y]
+impl From<&AngularBounds> for Array1<f64> {
+    fn from(bounds: &AngularBounds) -> Self {
+        array![bounds.min_x, bounds.min_y, bounds.max_x, bounds.max_y]
     }
 }
 
@@ -499,7 +499,7 @@ impl GeometricOperations<&crate::sphericalpolygon::SphericalPolygon> for &Angula
 
     fn crosses(self, other: &crate::sphericalpolygon::SphericalPolygon) -> bool {
         self.convex_hull()
-            .map_or(false, |convex_hull| convex_hull.crosses(other))
+            .is_some_and(|convex_hull| convex_hull.crosses(other))
     }
 
     fn intersects(self, other: &crate::sphericalpolygon::SphericalPolygon) -> bool {
