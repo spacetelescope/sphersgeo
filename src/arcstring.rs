@@ -72,8 +72,8 @@ pub fn vector_arcs_angle_between(
     c: &ArrayView1<f64>,
     degrees: bool,
 ) -> f64 {
-    let abx = normalize_vector(&cross_vector(&a.view(), &b.view()).view());
-    let bcx = normalize_vector(&cross_vector(&b.view(), &c.view()).view());
+    let abx = normalize_vector(&cross_vector(&a, &b).view());
+    let bcx = normalize_vector(&cross_vector(&b, &c).view());
 
     let tolerance = 3e-11;
     let angle = if vector_length(&abx.view()) < tolerance || vector_length(&bcx.view()) < tolerance
@@ -185,14 +185,6 @@ pub fn vectors_collinear(a: &ArrayView1<f64>, b: &ArrayView1<f64>, c: &ArrayView
     // }
 }
 
-fn arcstring_is_closed(xyzs: &ArrayView2<f64>) -> bool {
-    let tolerance = 1e-10;
-
-    let first = normalize_vector(&xyzs.slice(s![0, ..]));
-    let last = normalize_vector(&xyzs.slice(s![xyzs.nrows() - 1, ..]));
-    (&first - &last).abs().sum() < tolerance
-}
-
 /// Given xyz vectors of the endpoints of two great circle arcs, find the point at which the arcs cross
 ///
 /// References
@@ -235,7 +227,7 @@ pub fn arcstring_contains_point(arcstring: &ArcString, xyz: &ArrayView1<f64>) ->
     let xyzs = &arcstring.points.xyz;
 
     // if the arcstring is not closed, make sure the point is not one of the terminal endpoints
-    if !arcstring.closed() {
+    if !arcstring.closed {
         let tolerance = 1e-10;
         let normalized = normalize_vector(xyz);
         if (&normalize_vector(&xyzs.slice(s![0, ..])) - &normalized)
@@ -281,11 +273,15 @@ pub fn arcstring_contains_point(arcstring: &ArcString, xyz: &ArrayView1<f64>) ->
 #[derive(Clone, Debug, PartialEq)]
 pub struct ArcString {
     pub points: MultiSphericalPoint,
+    pub closed: bool,
 }
 
 impl From<MultiSphericalPoint> for ArcString {
     fn from(points: MultiSphericalPoint) -> Self {
-        Self { points }
+        Self {
+            points,
+            closed: false,
+        }
     }
 }
 
@@ -305,6 +301,7 @@ impl From<&ArcString> for Vec<ArcString> {
                     vectors.slice(s![index..index + 1, ..]).to_owned(),
                 )
                 .unwrap(),
+                closed: false,
             })
         }
 
@@ -315,7 +312,7 @@ impl From<&ArcString> for Vec<ArcString> {
 impl ArcString {
     pub fn midpoints(&self) -> MultiSphericalPoint {
         MultiSphericalPoint::try_from(
-            (&self.points.xyz.slice(s![..-1, ..]) + &self.points.xyz.slice(s![1.., ..]) / 2.0)
+            ((&self.points.xyz.slice(s![..-1, ..]) + &self.points.xyz.slice(s![1.., ..])) / 2.0)
                 .to_owned(),
         )
         .unwrap()
@@ -395,19 +392,6 @@ impl ArcString {
             .and(self.points.xyz.slice(s![1.., ..]).rows())
             .par_map_collect(|a, b| vector_arc_length(&a, &b))
     }
-
-    pub fn closed(&self) -> bool {
-        arcstring_is_closed(&self.points.xyz.view())
-    }
-
-    pub fn close(&mut self) {
-        if !self.closed() {
-            self.points.push(unsafe {
-                SphericalPoint::try_from(self.points.xyz.slice(s![0, ..]).to_owned())
-                    .unwrap_unchecked()
-            });
-        }
-    }
 }
 
 impl ToString for ArcString {
@@ -423,6 +407,10 @@ impl Geometry for &ArcString {
 
     fn length(&self) -> f64 {
         self.lengths().sum()
+    }
+
+    fn centroid(&self) -> crate::sphericalpoint::SphericalPoint {
+        self.points.centroid()
     }
 
     fn convex_hull(&self) -> Option<crate::sphericalpolygon::SphericalPolygon> {
@@ -449,6 +437,10 @@ impl Geometry for ArcString {
 
     fn length(&self) -> f64 {
         (&self).length()
+    }
+
+    fn centroid(&self) -> crate::sphericalpoint::SphericalPoint {
+        (&self).centroid()
     }
 
     fn convex_hull(&self) -> Option<crate::sphericalpolygon::SphericalPolygon> {
@@ -717,7 +709,7 @@ impl GeometricOperations<&crate::sphericalpolygon::SphericalPolygon> for &ArcStr
     }
 
     fn crosses(self, other: &crate::sphericalpolygon::SphericalPolygon) -> bool {
-        self.crosses(&other.exterior)
+        self.crosses(&other.boundary)
     }
 
     fn intersects(self, other: &crate::sphericalpolygon::SphericalPolygon) -> bool {
@@ -891,6 +883,10 @@ impl Geometry for &MultiArcString {
             .sum()
     }
 
+    fn centroid(&self) -> crate::sphericalpoint::SphericalPoint {
+        self.coords().centroid()
+    }
+
     fn convex_hull(&self) -> Option<crate::sphericalpolygon::SphericalPolygon> {
         self.coords().convex_hull()
     }
@@ -918,6 +914,10 @@ impl Geometry for MultiArcString {
 
     fn length(&self) -> f64 {
         (&self).length()
+    }
+
+    fn centroid(&self) -> crate::sphericalpoint::SphericalPoint {
+        (&self).centroid()
     }
 
     fn bounds(&self, degrees: bool) -> crate::angularbounds::AngularBounds {

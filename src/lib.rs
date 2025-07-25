@@ -51,7 +51,7 @@ mod py_sphersgeo {
                 PySphericalPointInputs::List(list) => Array::from_vec(list),
                 PySphericalPointInputs::AnyGeometry(geometry) => {
                     return match geometry {
-                        AnyGeometry::SphericalPoint(point) => Ok(point.to_owned()),
+                        AnyGeometry::SphericalPoint(point) => Ok(point),
                         _ => Err(PyValueError::new_err(format!(
                             "cannot derive vector point from {geometry:?}",
                         ))),
@@ -69,7 +69,7 @@ mod py_sphersgeo {
             point: PySphericalPointInputs,
         ) -> PyResult<Self> {
             // TODO: normalize vector before passing to constructor
-            Ok(Self::py_new(point)?.py_normalized())
+            Ok(Self::py_new(point)?.normalized())
         }
 
         /// from the given coordinates, build an xyz vector representing a point on the sphere
@@ -96,8 +96,7 @@ mod py_sphersgeo {
 
         /// xyz vector as a 1-dimensional array of 3 floats
         #[getter]
-        #[pyo3(name = "xyz")]
-        fn py_xyz<'py>(&self, py: Python<'py>) -> Bound<'py, PyArray1<f64>> {
+        fn get_xyz<'py>(&self, py: Python<'py>) -> Bound<'py, PyArray1<f64>> {
             self.xyz.to_pyarray(py)
         }
 
@@ -109,8 +108,7 @@ mod py_sphersgeo {
 
         /// normalize this vector to length 1 (the unit sphere) while preserving direction
         #[getter]
-        #[pyo3(name = "normalized")]
-        fn py_normalized(&self) -> Self {
+        fn get_normalized(&self) -> Self {
             self.normalized()
         }
 
@@ -139,8 +137,7 @@ mod py_sphersgeo {
 
         /// length of the underlying xyz vector
         #[getter]
-        #[pyo3(name = "vector_length")]
-        fn py_vector_length(&self) -> f64 {
+        fn get_vector_length(&self) -> f64 {
             self.vector_length()
         }
 
@@ -156,20 +153,17 @@ mod py_sphersgeo {
         }
 
         #[getter]
-        #[pyo3(name = "area")]
-        fn py_area(&self) -> f64 {
+        fn get_area(&self) -> f64 {
             self.area()
         }
 
         #[getter]
-        #[pyo3(name = "length")]
-        fn py_length(&self) -> f64 {
+        fn get_length(&self) -> f64 {
             self.length()
         }
 
         #[getter]
-        #[pyo3(name = "centroid")]
-        fn py_centroid(&self) -> SphericalPoint {
+        fn get_centroid(&self) -> SphericalPoint {
             self.centroid()
         }
 
@@ -179,26 +173,22 @@ mod py_sphersgeo {
         }
 
         #[getter]
-        #[pyo3(name = "convex_hull")]
-        fn py_convex_hull(&self) -> Option<SphericalPolygon> {
+        fn get_convex_hull(&self) -> Option<SphericalPolygon> {
             self.convex_hull()
         }
 
         #[getter]
-        #[pyo3(name = "coords")]
-        fn py_coords(&self) -> MultiSphericalPoint {
+        fn get_coords(&self) -> MultiSphericalPoint {
             self.coords()
         }
 
         #[getter]
-        #[pyo3(name = "boundary")]
-        fn py_boundary(&self) -> Option<SphericalPoint> {
+        fn get_boundary(&self) -> Option<SphericalPoint> {
             self.boundary()
         }
 
         #[getter]
-        #[pyo3(name = "representative_point")]
-        fn py_representative_point(&self) -> SphericalPoint {
+        fn get_representative_point(&self) -> SphericalPoint {
             self.representative_point()
         }
 
@@ -367,7 +357,7 @@ mod py_sphersgeo {
                 }
                 PyMultiSphericalPointInputs::AnyGeometry(geometry) => match geometry {
                     AnyGeometry::SphericalPoint(point) => Ok(point.coords()),
-                    AnyGeometry::MultiSphericalPoint(multipoint) => Ok(multipoint.to_owned()),
+                    AnyGeometry::MultiSphericalPoint(multipoint) => Ok(multipoint),
                     AnyGeometry::ArcString(arcstring) => Ok(arcstring.coords()),
                     AnyGeometry::MultiArcString(multiarcstring) => Ok(multiarcstring.coords()),
                     AnyGeometry::AngularBounds(bounds) => Ok(bounds.coords()),
@@ -384,7 +374,7 @@ mod py_sphersgeo {
             points: PyMultiSphericalPointInputs,
         ) -> PyResult<Self> {
             // TODO: normalize vectors before passing to constructor
-            Ok(Self::py_new(points)?.py_normalized())
+            Ok(Self::py_new(points)?.normalized())
         }
 
         /// from the given coordinates, build xyz vectors representing points on the sphere
@@ -430,8 +420,7 @@ mod py_sphersgeo {
 
         /// xyz vectors as a 2-dimensional array of Nx3 floats
         #[getter]
-        #[pyo3(name = "xyz")]
-        fn py_xyz<'py>(&self, py: Python<'py>) -> Bound<'py, PyArray2<f64>> {
+        fn get_xyz<'py>(&self, py: Python<'py>) -> Bound<'py, PyArray2<f64>> {
             self.xyz.to_pyarray(py)
         }
 
@@ -443,8 +432,7 @@ mod py_sphersgeo {
 
         /// normalize the underlying vectors to length 1 (the unit sphere) while preserving direction
         #[getter]
-        #[pyo3(name = "normalized")]
-        fn py_normalized(&self) -> Self {
+        fn get_normalized(&self) -> Self {
             self.normalized()
         }
 
@@ -456,8 +444,7 @@ mod py_sphersgeo {
 
         /// lengths of the underlying xyz vectors
         #[getter]
-        #[pyo3(name = "vector_lengths")]
-        fn py_vector_lengths<'py>(&self, py: Python<'py>) -> Bound<'py, PyArray1<f64>> {
+        fn get_vector_lengths<'py>(&self, py: Python<'py>) -> Bound<'py, PyArray1<f64>> {
             self.vector_lengths().into_pyarray(py)
         }
 
@@ -485,20 +472,17 @@ mod py_sphersgeo {
         }
 
         #[getter]
-        #[pyo3(name = "area")]
-        fn py_area(&self) -> f64 {
+        fn get_area(&self) -> f64 {
             self.area()
         }
 
         #[getter]
-        #[pyo3(name = "length")]
-        fn py_length(&self) -> f64 {
+        fn get_length(&self) -> f64 {
             self.length()
         }
 
         #[getter]
-        #[pyo3(name = "centroid")]
-        fn py_centroid(&self) -> SphericalPoint {
+        fn get_centroid(&self) -> SphericalPoint {
             self.centroid()
         }
 
@@ -508,26 +492,22 @@ mod py_sphersgeo {
         }
 
         #[getter]
-        #[pyo3(name = "convex_hull")]
-        fn py_convex_hull(&self) -> Option<SphericalPolygon> {
+        fn get_convex_hull(&self) -> Option<SphericalPolygon> {
             self.convex_hull()
         }
 
         #[getter]
-        #[pyo3(name = "coords")]
-        fn py_coords(&self) -> MultiSphericalPoint {
+        fn get_coords(&self) -> MultiSphericalPoint {
             self.coords()
         }
 
         #[getter]
-        #[pyo3(name = "boundary")]
-        fn py_boundary(&self) -> Option<MultiSphericalPoint> {
+        fn get_boundary(&self) -> Option<MultiSphericalPoint> {
             self.boundary()
         }
 
         #[getter]
-        #[pyo3(name = "representative_point")]
-        fn py_representative_point(&self) -> SphericalPoint {
+        fn get_representative_point(&self) -> SphericalPoint {
             self.representative_point()
         }
 
@@ -638,8 +618,7 @@ mod py_sphersgeo {
         }
 
         #[getter]
-        #[pyo3(name = "parts")]
-        fn py_parts(&self) -> Vec<SphericalPoint> {
+        fn get_parts(&self) -> Vec<SphericalPoint> {
             self.into()
         }
 
@@ -709,11 +688,11 @@ mod py_sphersgeo {
                 PyArcStringInputs::AnyGeometry(geometry) => {
                     return match geometry {
                         AnyGeometry::MultiSphericalPoint(multipoint) => Ok(multipoint.into()),
-                        AnyGeometry::ArcString(arcstring) => Ok(arcstring.to_owned()),
+                        AnyGeometry::ArcString(arcstring) => Ok(arcstring),
                         AnyGeometry::AngularBounds(bounds) => Ok(bounds
                             .boundary()
                             .ok_or(PyValueError::new_err(format!("invalid bounds {bounds:?}")))?),
-                        AnyGeometry::SphericalPolygon(polygon) => Ok(polygon.exterior),
+                        AnyGeometry::SphericalPolygon(polygon) => Ok(polygon.boundary),
                         _ => Err(PyValueError::new_err(format!(
                             "cannot derive arcstring from {geometry:?}",
                         ))),
@@ -731,60 +710,52 @@ mod py_sphersgeo {
 
         /// radians subtended by each arc on the sphere
         #[getter]
-        #[pyo3(name = "lengths")]
-        fn py_lengths<'py>(&self, py: Python<'py>) -> Bound<'py, PyArray1<f64>> {
+        fn get_lengths<'py>(&self, py: Python<'py>) -> Bound<'py, PyArray1<f64>> {
             self.lengths().into_pyarray(py)
         }
 
         /// midpoints of each arc
         #[getter]
-        #[pyo3(name = "midpoints")]
-        fn py_midpoints(&self) -> MultiSphericalPoint {
+        fn get_midpoints(&self) -> MultiSphericalPoint {
             self.midpoints()
         }
 
         /// "close" this arcstring (connect the last vertex to the first)
-        #[pyo3(name = "close")]
-        fn py_close(&mut self) {
-            self.close()
+        #[setter]
+        fn set_closed(&mut self, closed: bool) {
+            self.closed = closed
         }
 
         /// whether this arcstring is "closed" (the last vertex is connected to the first)
         #[getter]
-        #[pyo3(name = "closed")]
-        fn py_closed(&self) -> bool {
-            self.closed()
+        fn get_closed(&self) -> bool {
+            self.closed
         }
 
         /// whether this arcstring crosses itself
         #[getter]
-        #[pyo3(name = "crosses_self")]
-        fn py_crosses_self(&self) -> bool {
+        fn get_crosses_self(&self) -> bool {
             self.crosses_self()
         }
 
         /// points at which this arcstring crosses itself
         #[getter]
-        #[pyo3(name = "crossings_with_self")]
-        fn py_crossings_with_self(&self) -> Option<MultiSphericalPoint> {
+        fn get_crossings_with_self(&self) -> Option<MultiSphericalPoint> {
             self.crossings_with_self()
         }
 
         #[getter]
-        #[pyo3(name = "area")]
-        fn py_area(&self) -> f64 {
+        fn get_area(&self) -> f64 {
             self.area()
         }
 
         #[getter]
-        #[pyo3(name = "length")]
-        fn py_length(&self) -> f64 {
+        fn get_length(&self) -> f64 {
             self.length()
         }
 
         #[getter]
-        #[pyo3(name = "centroid")]
-        fn py_centroid(&self) -> SphericalPoint {
+        fn get_centroid(&self) -> SphericalPoint {
             self.centroid()
         }
 
@@ -794,26 +765,22 @@ mod py_sphersgeo {
         }
 
         #[getter]
-        #[pyo3(name = "convex_hull")]
-        fn py_convex_hull(&self) -> Option<SphericalPolygon> {
+        fn get_convex_hull(&self) -> Option<SphericalPolygon> {
             self.convex_hull()
         }
 
         #[getter]
-        #[pyo3(name = "coords")]
-        fn py_coords(&self) -> MultiSphericalPoint {
+        fn get_coords(&self) -> MultiSphericalPoint {
             self.coords()
         }
 
         #[getter]
-        #[pyo3(name = "boundary")]
-        fn py_boundary(&self) -> Option<MultiSphericalPoint> {
+        fn get_boundary(&self) -> Option<MultiSphericalPoint> {
             self.boundary()
         }
 
         #[getter]
-        #[pyo3(name = "representative_point")]
-        fn py_representative_point(&self) -> SphericalPoint {
+        fn get_representative_point(&self) -> SphericalPoint {
             self.representative_point()
         }
 
@@ -958,63 +925,58 @@ mod py_sphersgeo {
                     Self::try_from(arcstrings)
                         .map_err(|err| PyValueError::new_err(format!("{err}")))
                 }
-                PyMultiArcStringInputs::AnyGeometry(geometry) => match geometry {
-                    AnyGeometry::MultiSphericalPoint(multipoint) => {
-                        Self::try_from(vec![ArcString::from(multipoint)])
-                            .map_err(|err| PyValueError::new_err(format!("{err}")))
-                    }
-                    AnyGeometry::ArcString(arcstring) => Self::try_from(vec![arcstring])
-                        .map_err(|err| PyValueError::new_err(format!("{err}"))),
-                    AnyGeometry::MultiArcString(multiarcstring) => Ok(multiarcstring.to_owned()),
-                    AnyGeometry::AngularBounds(bounds) => {
-                        Self::try_from(vec![bounds
+                PyMultiArcStringInputs::AnyGeometry(geometry) => {
+                    match geometry {
+                        AnyGeometry::MultiSphericalPoint(multipoint) => {
+                            Self::try_from(vec![ArcString::from(multipoint)])
+                                .map_err(|err| PyValueError::new_err(format!("{err}")))
+                        }
+                        AnyGeometry::ArcString(arcstring) => Self::try_from(vec![arcstring])
+                            .map_err(|err| PyValueError::new_err(format!("{err}"))),
+                        AnyGeometry::MultiArcString(multiarcstring) => Ok(multiarcstring),
+                        AnyGeometry::AngularBounds(bounds) => Self::try_from(vec![bounds
                             .boundary()
                             .ok_or(PyValueError::new_err(format!("invalid bounds {bounds:?}")))?])
-                        .map_err(|err| PyValueError::new_err(format!("{err}")))
+                        .map_err(|err| PyValueError::new_err(format!("{err}"))),
+                        AnyGeometry::SphericalPolygon(polygon) => {
+                            Self::try_from(vec![polygon.boundary])
+                                .map_err(|err| PyValueError::new_err(format!("{err}")))
+                        }
+                        AnyGeometry::MultiSphericalPolygon(multipolygon) => {
+                            Ok(multipolygon.boundary().unwrap())
+                        }
+                        _ => Err(PyValueError::new_err(format!(
+                            "cannot derive multiarcstring from {geometry:?}",
+                        ))),
                     }
-                    AnyGeometry::SphericalPolygon(polygon) => {
-                        Self::try_from(vec![polygon.exterior])
-                            .map_err(|err| PyValueError::new_err(format!("{err}")))
-                    }
-                    AnyGeometry::MultiSphericalPolygon(multipolygon) => {
-                        Ok(multipolygon.boundary().unwrap())
-                    }
-                    _ => Err(PyValueError::new_err(format!(
-                        "cannot derive multiarcstring from {geometry:?}",
-                    ))),
-                },
+                }
             }
         }
 
         /// radians subtended by each arcstring on the sphere
         #[getter]
-        #[pyo3(name = "lengths")]
-        fn py_lengths<'py>(&self, py: Python<'py>) -> Bound<'py, PyArray1<f64>> {
+        fn get_lengths<'py>(&self, py: Python<'py>) -> Bound<'py, PyArray1<f64>> {
             self.lengths().into_pyarray(py)
         }
 
         /// midpoints of each arc
         #[getter]
-        #[pyo3(name = "midpoints")]
-        fn py_midpoints(&self) -> MultiSphericalPoint {
+        fn get_midpoints(&self) -> MultiSphericalPoint {
             self.midpoints()
         }
 
         #[getter]
-        #[pyo3(name = "area")]
-        fn py_area(&self) -> f64 {
+        fn get_area(&self) -> f64 {
             self.area()
         }
 
         #[getter]
-        #[pyo3(name = "length")]
-        fn py_length(&self) -> f64 {
+        fn get_length(&self) -> f64 {
             self.length()
         }
 
         #[getter]
-        #[pyo3(name = "centroid")]
-        fn py_centroid(&self) -> SphericalPoint {
+        fn get_centroid(&self) -> SphericalPoint {
             self.centroid()
         }
 
@@ -1024,26 +986,22 @@ mod py_sphersgeo {
         }
 
         #[getter]
-        #[pyo3(name = "convex_hull")]
-        fn py_convex_hull(&self) -> Option<SphericalPolygon> {
+        fn get_convex_hull(&self) -> Option<SphericalPolygon> {
             self.convex_hull()
         }
 
         #[getter]
-        #[pyo3(name = "coords")]
-        fn py_coords(&self) -> MultiSphericalPoint {
+        fn get_coords(&self) -> MultiSphericalPoint {
             self.coords()
         }
 
         #[getter]
-        #[pyo3(name = "boundary")]
-        fn py_boundary(&self) -> Option<MultiSphericalPoint> {
+        fn get_boundary(&self) -> Option<MultiSphericalPoint> {
             self.boundary()
         }
 
         #[getter]
-        #[pyo3(name = "representative_point")]
-        fn py_representative_point(&self) -> SphericalPoint {
+        fn get_representative_point(&self) -> SphericalPoint {
             self.representative_point()
         }
 
@@ -1154,8 +1112,7 @@ mod py_sphersgeo {
         }
 
         #[getter]
-        #[pyo3(name = "parts")]
-        fn py_parts(&self) -> Vec<ArcString> {
+        fn get_parts(&self) -> Vec<ArcString> {
             self.arcstrings.to_owned().into()
         }
 
@@ -1213,38 +1170,32 @@ mod py_sphersgeo {
         }
 
         #[getter]
-        #[pyo3(name = "coords")]
-        fn py_coords(&self) -> MultiSphericalPoint {
+        fn get_coords(&self) -> MultiSphericalPoint {
             self.coords()
         }
 
         #[getter]
-        #[pyo3(name = "boundary")]
-        fn py_boundary(&self) -> Option<ArcString> {
+        fn get_boundary(&self) -> Option<ArcString> {
             self.boundary()
         }
 
         #[getter]
-        #[pyo3(name = "representative_point")]
-        fn py_representative_point(&self) -> SphericalPoint {
+        fn get_representative_point(&self) -> SphericalPoint {
             self.representative_point()
         }
 
         #[getter]
-        #[pyo3(name = "area")]
-        fn py_area(&self) -> f64 {
+        fn get_area(&self) -> f64 {
             self.area()
         }
 
         #[getter]
-        #[pyo3(name = "length")]
-        fn py_length(&self) -> f64 {
+        fn get_length(&self) -> f64 {
             self.length()
         }
 
         #[getter]
-        #[pyo3(name = "centroid")]
-        fn py_centroid(&self) -> SphericalPoint {
+        fn get_centroid(&self) -> SphericalPoint {
             self.centroid()
         }
 
@@ -1254,8 +1205,7 @@ mod py_sphersgeo {
         }
 
         #[getter]
-        #[pyo3(name = "convex_hull")]
-        fn py_convex_hull(&self) -> Option<SphericalPolygon> {
+        fn get_convex_hull(&self) -> Option<SphericalPolygon> {
             self.convex_hull()
         }
 
@@ -1385,20 +1335,24 @@ mod py_sphersgeo {
     impl SphericalPolygon {
         /// an interior point is required because an arcstring divides a sphere into two regions
         #[new]
-        #[pyo3(signature=(exterior, interior_point, holes=None))]
+        #[pyo3(signature=(boundary, interior_point=None, holes=None))]
         fn py_new<'py>(
-            exterior: PyArcStringInputs<'py>,
-            interior_point: PySphericalPointInputs<'py>,
+            boundary: PyArcStringInputs<'py>,
+            interior_point: Option<PySphericalPointInputs<'py>>,
             holes: Option<PyMultiArcStringInputs<'py>>,
         ) -> PyResult<Self> {
-            let exterior = ArcString::py_new(exterior)?;
-            let interior_point = SphericalPoint::py_new(interior_point)?;
+            let boundary = ArcString::py_new(boundary)?;
+            let interior_point = if let Some(interior_point) = interior_point {
+                Some(SphericalPoint::py_new(interior_point)?)
+            } else {
+                None
+            };
             let holes = if let Some(holes) = holes {
                 Some(MultiArcString::py_new(holes)?)
             } else {
                 None
             };
-            Self::new(exterior, interior_point, holes)
+            Self::new(boundary, interior_point, holes)
                 .map_err(|err| PyValueError::new_err(format!("{err}")))
         }
 
@@ -1406,29 +1360,46 @@ mod py_sphersgeo {
         #[pyo3(signature=(center, radius, degrees=true, steps=16))]
         fn py_from_cone(
             _: &Bound<'_, PyType>,
-            center: SphericalPoint,
+            center: PySphericalPointInputs,
             radius: f64,
             degrees: bool,
             steps: usize,
-        ) -> Self {
-            Self::from_cone(&center, &radius, degrees, steps)
+        ) -> PyResult<Self> {
+            Ok(Self::from_cone(
+                &SphericalPoint::py_new(center)?,
+                &radius,
+                degrees,
+                steps,
+            ))
         }
 
         #[getter]
-        #[pyo3(name = "area")]
-        fn py_area(&self) -> f64 {
+        fn get_antipode(&self) -> SphericalPoint {
+            self.antipode()
+        }
+
+        #[getter]
+        fn get_inverse(&self) -> Self {
+            self.inverse()
+        }
+
+        #[getter]
+        fn get_is_clockwise(&self) -> bool {
+            self.is_clockwise()
+        }
+
+        #[getter]
+        fn get_area(&self) -> f64 {
             self.area()
         }
 
         #[getter]
-        #[pyo3(name = "length")]
-        fn py_length(&self) -> f64 {
+        fn get_length(&self) -> f64 {
             self.length()
         }
 
         #[getter]
-        #[pyo3(name = "centroid")]
-        fn py_centroid(&self) -> SphericalPoint {
+        fn get_centroid(&self) -> SphericalPoint {
             self.centroid()
         }
 
@@ -1438,26 +1409,22 @@ mod py_sphersgeo {
         }
 
         #[getter]
-        #[pyo3(name = "convex_hull")]
-        fn py_convex_hull(&self) -> Option<SphericalPolygon> {
+        fn get_convex_hull(&self) -> Option<SphericalPolygon> {
             self.convex_hull()
         }
 
         #[getter]
-        #[pyo3(name = "coords")]
-        fn py_coords(&self) -> MultiSphericalPoint {
+        fn get_coords(&self) -> MultiSphericalPoint {
             self.coords()
         }
 
         #[getter]
-        #[pyo3(name = "boundary")]
-        fn py_boundary(&self) -> Option<ArcString> {
+        fn get_boundary(&self) -> Option<ArcString> {
             self.boundary()
         }
 
         #[getter]
-        #[pyo3(name = "representative_point")]
-        fn py_representative_point(&self) -> SphericalPoint {
+        fn get_representative_point(&self) -> SphericalPoint {
             self.representative_point()
         }
 
@@ -1601,7 +1568,7 @@ mod py_sphersgeo {
                         .ok_or(PyValueError::new_err(String::from("invalid convex hull")))?],
                     AnyGeometry::SphericalPolygon(polygon) => vec![polygon],
                     AnyGeometry::MultiSphericalPolygon(multipolygon) => {
-                        return Ok(multipolygon.to_owned());
+                        return Ok(multipolygon);
                     }
                     _ => {
                         return Err(PyValueError::new_err(format!(
@@ -1615,20 +1582,17 @@ mod py_sphersgeo {
         }
 
         #[getter]
-        #[pyo3(name = "area")]
-        fn py_area(&self) -> f64 {
+        fn get_area(&self) -> f64 {
             self.area()
         }
 
         #[getter]
-        #[pyo3(name = "length")]
-        fn py_length(&self) -> f64 {
+        fn get_length(&self) -> f64 {
             self.length()
         }
 
         #[getter]
-        #[pyo3(name = "centroid")]
-        fn py_centroid(&self) -> SphericalPoint {
+        fn get_centroid(&self) -> SphericalPoint {
             self.centroid()
         }
 
@@ -1638,26 +1602,22 @@ mod py_sphersgeo {
         }
 
         #[getter]
-        #[pyo3(name = "convex_hull")]
-        fn py_convex_hull(&self) -> Option<SphericalPolygon> {
+        fn get_convex_hull(&self) -> Option<SphericalPolygon> {
             self.convex_hull()
         }
 
         #[getter]
-        #[pyo3(name = "coords")]
-        fn py_coords(&self) -> MultiSphericalPoint {
+        fn get_coords(&self) -> MultiSphericalPoint {
             self.coords()
         }
 
         #[getter]
-        #[pyo3(name = "boundary")]
-        fn py_boundary(&self) -> Option<MultiArcString> {
+        fn get_boundary(&self) -> Option<MultiArcString> {
             self.boundary()
         }
 
         #[getter]
-        #[pyo3(name = "representative_point")]
-        fn py_representative_point(&self) -> SphericalPoint {
+        fn get_representative_point(&self) -> SphericalPoint {
             self.representative_point()
         }
 
@@ -1767,8 +1727,7 @@ mod py_sphersgeo {
         }
 
         #[getter]
-        #[pyo3(name = "parts")]
-        fn py_parts(&self) -> Vec<SphericalPolygon> {
+        fn get_parts(&self) -> Vec<SphericalPolygon> {
             self.polygons.to_owned().into()
         }
 
@@ -1842,8 +1801,8 @@ mod py_sphersgeo {
         }
 
         #[pyfunction]
-        #[pyo3(name = "vector_arc_angle", signature=(a, b, c, degrees=true))]
-        fn py_vector_arc_angle(
+        #[pyo3(name = "vector_arc_angle_between", signature=(a, b, c, degrees=true))]
+        fn py_vector_arc_angle_between(
             a: PyReadonlyArray1<f64>,
             b: PyReadonlyArray1<f64>,
             c: PyReadonlyArray1<f64>,

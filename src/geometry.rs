@@ -1,5 +1,4 @@
 use kiddo::traits::DistanceMetric;
-use numpy::ndarray::Axis;
 use pyo3::prelude::*;
 
 pub trait Geometry {
@@ -7,12 +6,8 @@ pub trait Geometry {
 
     fn length(&self) -> f64;
 
-    fn centroid(&self) -> crate::sphericalpoint::SphericalPoint {
-        crate::sphericalpoint::SphericalPoint::try_from(
-            self.coords().xyz.mean_axis(Axis(0)).unwrap(),
-        )
-        .unwrap()
-    }
+    // mean position of all possible points within the geometry
+    fn centroid(&self) -> crate::sphericalpoint::SphericalPoint;
 
     fn bounds(&self, degrees: bool) -> crate::angularbounds::AngularBounds {
         self.coords().bounds(degrees)
@@ -122,6 +117,18 @@ impl Geometry for AnyGeometry {
             AnyGeometry::AngularBounds(bounding_box) => bounding_box.length(),
             AnyGeometry::SphericalPolygon(polygon) => polygon.length(),
             AnyGeometry::MultiSphericalPolygon(multipolygon) => multipolygon.length(),
+        }
+    }
+
+    fn centroid(&self) -> crate::sphericalpoint::SphericalPoint {
+        match self {
+            AnyGeometry::SphericalPoint(point) => point.centroid(),
+            AnyGeometry::MultiSphericalPoint(multipoint) => multipoint.centroid(),
+            AnyGeometry::ArcString(arcstring) => arcstring.centroid(),
+            AnyGeometry::MultiArcString(multiarcstring) => multiarcstring.centroid(),
+            AnyGeometry::AngularBounds(bounding_box) => bounding_box.centroid(),
+            AnyGeometry::SphericalPolygon(polygon) => polygon.centroid(),
+            AnyGeometry::MultiSphericalPolygon(multipolygon) => multipolygon.centroid(),
         }
     }
 

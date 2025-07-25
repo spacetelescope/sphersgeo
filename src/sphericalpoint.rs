@@ -6,6 +6,7 @@ use numpy::ndarray::{
 use pyo3::prelude::*;
 use rayon::prelude::*;
 use std::{
+    collections::VecDeque,
     iter::Sum,
     num::NonZero,
     ops::{Add, AddAssign},
@@ -444,6 +445,9 @@ impl Geometry for &SphericalPoint {
         0.
     }
 
+    fn centroid(&self) -> crate::sphericalpoint::SphericalPoint {
+        (*self).to_owned()
+    }
     fn bounds(&self, degrees: bool) -> crate::angularbounds::AngularBounds {
         let lonlat = self.to_lonlat(degrees);
         [lonlat[0], lonlat[1], lonlat[0], lonlat[1]].into()
@@ -473,6 +477,10 @@ impl Geometry for SphericalPoint {
 
     fn length(&self) -> f64 {
         (&self).length()
+    }
+
+    fn centroid(&self) -> crate::sphericalpoint::SphericalPoint {
+        self.to_owned()
     }
 
     fn bounds(&self, degrees: bool) -> crate::angularbounds::AngularBounds {
@@ -1194,6 +1202,11 @@ impl Geometry for &MultiSphericalPoint {
         0.
     }
 
+    fn centroid(&self) -> crate::sphericalpoint::SphericalPoint {
+        crate::sphericalpoint::SphericalPoint::try_from(self.xyz.mean_axis(Axis(0)).unwrap())
+            .unwrap()
+    }
+
     fn bounds(&self, degrees: bool) -> crate::angularbounds::AngularBounds {
         let coordinates = self.to_lonlats(degrees);
         let x = coordinates.slice(s![.., 0]);
@@ -1222,25 +1235,38 @@ impl Geometry for &MultiSphericalPoint {
             return None;
         }
 
-        let radians = self.to_lonlats(false);
+        // sort points by distance from the mean center, using squared euclidean distance along the 3D cloud
+        let mut points: Vec<ArrayView1<f64>> = self
+            .kdtree
+            .nearest_n::<SquaredEuclidean>(
+                normalize_vector(&self.centroid().xyz.view())
+                    .as_slice()
+                    .unwrap()
+                    .try_into()
+                    .unwrap(),
+                NonZero::<usize>::try_from(self.len() - 1).unwrap(),
+            )
+            .iter()
+            .map(|neighbor| self.xyz.slice(s![neighbor.item as usize, ..]))
+            .collect();
 
-        let tolerance: f64 = 3e-11;
-        let mut west_points: Vec<ArrayView1<f64>> = vec![];
-        for point in radians.rows() {
-            if west_points.is_empty() || (point[0] - west_points[0][0]).abs() < tolerance {
-                west_points.push(point);
-            } else if point[0] < west_points[0][0] {
-                west_points = vec![point];
+        // the farthest point from the mean center must be on the convex hull
+        let mut vertices = vec![points.pop()];
+        points.reverse();
+
+        while !points.is_empty() {
+            let point_a = vertices.last().unwrap();
+            for (index_b, point_b) in points.iter().enumerate() {
+                for (index_c, point_c) in points.iter().enumerate() {
+                    if index_c != index_b {
+                        // if point is on the edge, it shouldn't have a clockwise turn
+                        (&b * &cross_vector(&(&a - &b).view(), &(&c - &b).view()).view())
+                            .sum_axis(Axis(1))
+                            < 0.0
+                    }
+                }
             }
         }
-
-        // sort points by distance to the starting point, using squared euclidean distance along the 3D cloud to find and test the points
-        let points = self.kdtree.nearest_n::<SquaredEuclidean>(
-            west_points[0].as_slice().unwrap().try_into().unwrap(),
-            NonZero::<usize>::try_from(self.len() - 1).unwrap(),
-        );
-
-        for point in points {}
 
         todo!();
     }
@@ -1267,6 +1293,10 @@ impl Geometry for MultiSphericalPoint {
 
     fn length(&self) -> f64 {
         (&self).length()
+    }
+
+    fn centroid(&self) -> crate::sphericalpoint::SphericalPoint {
+        (&self).centroid()
     }
 
     fn bounds(&self, degrees: bool) -> crate::angularbounds::AngularBounds {
@@ -1577,13 +1607,13 @@ impl GeometricOperations<&crate::sphericalpolygon::MultiSphericalPolygon> for &M
     }
 
     fn within(self, other: &crate::sphericalpolygon::MultiSphericalPolygon) -> bool {
-        // TODO: find a better algorithm than brute-force
+        // TODO: find a better algorithm than brute-force; perhaps we can keep a kdtree of centroids for multigeometries?
         self.xyz.rows().into_iter().all(|xyz| {
             other.polygons.par_iter().any(|polygon| {
-                crate::sphericalpolygon::point_in_polygon_exterior(
+                crate::sphericalpolygon::point_in_polygon_boundary(
                     &xyz,
                     &polygon.interior_point.xyz.view(),
-                    &polygon.exterior.points.xyz.view(),
+                    &polygon.boundary.points.xyz.view(),
                 )
             })
         })
@@ -1607,4 +1637,63 @@ impl GeometricOperations<&crate::sphericalpolygon::MultiSphericalPolygon> for &M
     fn touches(self, other: &crate::sphericalpolygon::MultiSphericalPolygon) -> bool {
         other.touches(self)
     }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_angle() {
+        let a = SphericalPoint::from((1.0, 0.0, 0.0));
+        let b = SphericalPoint::from((0.0, 1.0, 0.0));
+        let c = SphericalPoint::from((0.0, 0.0, 1.0));
+        assert_eq!(b.angle_between(&a, &c, false), std::f64::consts::PI / 2.0);
+
+        let a = SphericalPoint::from((1.0, 1.0, 1.0));
+        let b = SphericalPoint::from((0.0, 0.0, 0.0));
+        let c = SphericalPoint::from((-1.0, -1.0, -1.0));
+        assert_eq!(b.angle_between(&a, &c, false), std::f64::consts::PI);
+
+        let a = SphericalPoint::from((1.0, 1.0, 1.0));
+        let b = SphericalPoint::from((0.0, 0.0, 0.0));
+        let c = SphericalPoint::from((1.0, 1.0, 1.0));
+        assert_eq!(b.angle_between(&a, &c, false), 0.0);
+
+        let a = SphericalPoint::try_from_lonlat(&array![60.0, 45.0].view(), true).unwrap();
+        let b = SphericalPoint::try_from_lonlat(&array![0.0, 90.0].view(), true).unwrap();
+        let c = SphericalPoint::try_from_lonlat(&array![30.0, -3.0].view(), true).unwrap();
+        assert_eq!(b.angle_between(&a, &c, true), 30.0);
+
+        // TODO: More angle tests
+    }
+
+    #[test]
+    fn test_angle_domain() {
+        let a = SphericalPoint::from((0.0, 0.0, 0.0));
+        let b = SphericalPoint::from((0.0, 0.0, 0.0));
+        let c = SphericalPoint::from((0.0, 0.0, 0.0));
+        assert_eq!(a.angle_between(&b, &c, false), 0.0);
+    }
+
+    // #[test]
+    // fn test_angle_nearly_coplanar() {
+    //     // test from issue #222 + extra values
+    //     let A = MultiSphericalPoint::from(np.repeat([(1.0, 1.0, 1.0)], 5, axis = 0));
+    //     let B = MultiSphericalPoint::from(np.repeat([(1.0, 0.9999999, 1.0)], 5, axis = 0));
+    //     let C = MultiSphericalPoint::try_from(array![
+    //         [0.0, 0.5, 1.0],
+    //         [0.0, 0.15, 1.0],
+    //         [0.0, 0.001, 1.0],
+    //         [-1.0, -1.0, -1.0],
+    //         [-1.0, 0.1, -1.0],
+    //     ])
+    //     .unwrap();
+    //     let angles = B.angles_between(&A, &C, false);
+
+    //     assert_eq!(angles[0], std::f64::consts::PI / 2.0);
+    //     // assert!(np.isfinite(angles[1:3]).all());
+    //     assert_eq!(angles[3], std::f64::consts::PI / 2.0);
+    //     assert_eq!(angles[4], std::f64::consts::PI);
+    // }
 }
