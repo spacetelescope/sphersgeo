@@ -289,7 +289,7 @@ impl Geometry for &ArcString {
         self.points.convex_hull()
     }
 
-    fn coords(&self) -> MultiSphericalPoint {
+    fn vertices(&self) -> MultiSphericalPoint {
         self.points.to_owned()
     }
 
@@ -319,8 +319,8 @@ impl Geometry for ArcString {
         (&self).convex_hull()
     }
 
-    fn coords(&self) -> MultiSphericalPoint {
-        (&self).coords()
+    fn vertices(&self) -> MultiSphericalPoint {
+        (&self).vertices()
     }
 
     fn boundary(&self) -> Option<MultiSphericalPoint> {
@@ -746,14 +746,14 @@ impl Geometry for &MultiArcString {
     }
 
     fn centroid(&self) -> crate::sphericalpoint::SphericalPoint {
-        self.coords().centroid()
+        self.vertices().centroid()
     }
 
     fn convex_hull(&self) -> Option<crate::sphericalpolygon::SphericalPolygon> {
-        self.coords().convex_hull()
+        self.vertices().convex_hull()
     }
 
-    fn coords(&self) -> crate::sphericalpoint::MultiSphericalPoint {
+    fn vertices(&self) -> crate::sphericalpoint::MultiSphericalPoint {
         self.arcstrings
             .par_iter()
             .map(|arcstring| arcstring.to_owned().points)
@@ -761,7 +761,7 @@ impl Geometry for &MultiArcString {
     }
 
     fn boundary(&self) -> Option<MultiSphericalPoint> {
-        Some(self.coords())
+        Some(self.vertices())
     }
 
     fn representative_point(&self) -> crate::sphericalpoint::SphericalPoint {
@@ -782,8 +782,8 @@ impl Geometry for MultiArcString {
         (&self).centroid()
     }
 
-    fn coords(&self) -> crate::sphericalpoint::MultiSphericalPoint {
-        (&self).coords()
+    fn vertices(&self) -> crate::sphericalpoint::MultiSphericalPoint {
+        (&self).vertices()
     }
 
     fn convex_hull(&self) -> Option<crate::sphericalpolygon::SphericalPolygon> {

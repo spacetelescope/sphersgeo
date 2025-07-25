@@ -163,8 +163,8 @@ mod py_sphersgeo {
         }
 
         #[getter]
-        fn get_coords(&self) -> MultiSphericalPoint {
-            self.coords()
+        fn get_vertices(&self) -> MultiSphericalPoint {
+            self.vertices()
         }
 
         #[getter]
@@ -335,12 +335,12 @@ mod py_sphersgeo {
                 }
                 PyMultiSphericalPointInputs::PointList(list) => Ok(Self::from(&list)),
                 PyMultiSphericalPointInputs::AnyGeometry(geometry) => match geometry {
-                    AnyGeometry::SphericalPoint(point) => Ok(point.coords()),
+                    AnyGeometry::SphericalPoint(point) => Ok(point.vertices()),
                     AnyGeometry::MultiSphericalPoint(multipoint) => Ok(multipoint),
-                    AnyGeometry::ArcString(arcstring) => Ok(arcstring.coords()),
-                    AnyGeometry::MultiArcString(multiarcstring) => Ok(multiarcstring.coords()),
-                    AnyGeometry::SphericalPolygon(polygon) => Ok(polygon.coords()),
-                    AnyGeometry::MultiSphericalPolygon(multipolygon) => Ok(multipolygon.coords()),
+                    AnyGeometry::ArcString(arcstring) => Ok(arcstring.vertices()),
+                    AnyGeometry::MultiArcString(multiarcstring) => Ok(multiarcstring.vertices()),
+                    AnyGeometry::SphericalPolygon(polygon) => Ok(polygon.vertices()),
+                    AnyGeometry::MultiSphericalPolygon(multipolygon) => Ok(multipolygon.vertices()),
                 },
             }
         }
@@ -470,8 +470,8 @@ mod py_sphersgeo {
         }
 
         #[getter]
-        fn get_coords(&self) -> MultiSphericalPoint {
-            self.coords()
+        fn get_vertices(&self) -> MultiSphericalPoint {
+            self.vertices()
         }
 
         #[getter]
@@ -740,8 +740,8 @@ mod py_sphersgeo {
         }
 
         #[getter]
-        fn get_coords(&self) -> MultiSphericalPoint {
-            self.coords()
+        fn get_vertices(&self) -> MultiSphericalPoint {
+            self.vertices()
         }
 
         #[getter]
@@ -942,8 +942,8 @@ mod py_sphersgeo {
         }
 
         #[getter]
-        fn get_coords(&self) -> MultiSphericalPoint {
-            self.coords()
+        fn get_vertices(&self) -> MultiSphericalPoint {
+            self.vertices()
         }
 
         #[getter]
@@ -1154,8 +1154,8 @@ mod py_sphersgeo {
         }
 
         #[getter]
-        fn get_coords(&self) -> MultiSphericalPoint {
-            self.coords()
+        fn get_vertices(&self) -> MultiSphericalPoint {
+            self.vertices()
         }
 
         #[getter]
@@ -1346,8 +1346,8 @@ mod py_sphersgeo {
         }
 
         #[getter]
-        fn get_coords(&self) -> MultiSphericalPoint {
-            self.coords()
+        fn get_vertices(&self) -> MultiSphericalPoint {
+            self.vertices()
         }
 
         #[getter]
