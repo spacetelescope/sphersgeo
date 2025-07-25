@@ -149,7 +149,6 @@ impl Geometry for &AngularBounds {
                 closed: true,
             },
             None,
-            None,
         )
         .ok()
     }
@@ -232,6 +231,14 @@ impl GeometricOperations<&crate::sphericalpoint::SphericalPoint> for &AngularBou
         false
     }
 
+    fn touches(self, other: &crate::sphericalpoint::SphericalPoint) -> bool {
+        let lonlat = other.to_lonlat(self.degrees);
+        let tolerance = 3e-11;
+        ((lonlat[0] - self.min_x).abs() < tolerance || (lonlat[0] - self.max_x).abs() < tolerance)
+            && ((lonlat[1] - self.min_y).abs() < tolerance
+                || (lonlat[1] - self.max_y).abs() < tolerance)
+    }
+
     fn crosses(self, _: &crate::sphericalpoint::SphericalPoint) -> bool {
         false
     }
@@ -245,14 +252,6 @@ impl GeometricOperations<&crate::sphericalpoint::SphericalPoint> for &AngularBou
         other: &crate::sphericalpoint::SphericalPoint,
     ) -> Option<crate::sphericalpoint::SphericalPoint> {
         other.intersection(self)
-    }
-
-    fn touches(self, other: &crate::sphericalpoint::SphericalPoint) -> bool {
-        let lonlat = other.to_lonlat(self.degrees);
-        let tolerance = 3e-11;
-        ((lonlat[0] - self.min_x).abs() < tolerance || (lonlat[0] - self.max_x).abs() < tolerance)
-            && ((lonlat[1] - self.min_y).abs() < tolerance
-                || (lonlat[1] - self.max_y).abs() < tolerance)
     }
 }
 
@@ -276,6 +275,10 @@ impl GeometricOperations<&crate::sphericalpoint::MultiSphericalPoint> for &Angul
 
     fn within(self, _: &crate::sphericalpoint::MultiSphericalPoint) -> bool {
         false
+    }
+
+    fn touches(self, other: &crate::sphericalpoint::MultiSphericalPoint) -> bool {
+        self.boundary().unwrap().touches(other)
     }
 
     fn crosses(self, _: &crate::sphericalpoint::MultiSphericalPoint) -> bool {
@@ -333,10 +336,6 @@ impl GeometricOperations<&crate::sphericalpoint::MultiSphericalPoint> for &Angul
             None
         }
     }
-
-    fn touches(self, other: &crate::sphericalpoint::MultiSphericalPoint) -> bool {
-        self.boundary().unwrap().touches(other)
-    }
 }
 
 impl GeometricOperations<&crate::arcstring::ArcString> for &AngularBounds {
@@ -350,6 +349,10 @@ impl GeometricOperations<&crate::arcstring::ArcString> for &AngularBounds {
 
     fn within(self, _: &crate::arcstring::ArcString) -> bool {
         false
+    }
+
+    fn touches(self, other: &crate::arcstring::ArcString) -> bool {
+        other.touches(self)
     }
 
     fn crosses(self, other: &crate::arcstring::ArcString) -> bool {
@@ -370,10 +373,6 @@ impl GeometricOperations<&crate::arcstring::ArcString> for &AngularBounds {
         } else {
             None
         }
-    }
-
-    fn touches(self, other: &crate::arcstring::ArcString) -> bool {
-        other.touches(self)
     }
 }
 

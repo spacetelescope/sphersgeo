@@ -30,14 +30,7 @@ pub fn interpolate_points_along_vector_arc(
             let mut inverted_offsets = offsets.to_owned();
             inverted_offsets.invert_axis(Axis(0));
 
-            Ok(concatenate(
-                Axis(0),
-                &[
-                    (inverted_offsets * a + offsets * b).view(),
-                    b.to_shape((1, 3)).unwrap().view(),
-                ],
-            )
-            .unwrap())
+            Ok(inverted_offsets * a + offsets * b)
         } else if a.len() == 2 && b.len() == 2 {
             Ok(concatenate(
                 Axis(0),
@@ -188,10 +181,9 @@ impl ArcString {
         Zip::from(self.points.xyz.slice(s![..-1, ..]).view().rows())
             .and(self.points.xyz.slice(s![1.., ..]).rows())
             .par_map_collect(|a, b| {
-                ArcString::from(unsafe {
-                    MultiSphericalPoint::try_from(stack(Axis(0), &[a, b]).unwrap_unchecked())
-                        .unwrap_unchecked()
-                })
+                ArcString::from(
+                    MultiSphericalPoint::try_from(stack(Axis(0), &[a, b]).unwrap()).unwrap(),
+                )
             })
             .to_vec()
     }
@@ -244,9 +236,7 @@ impl ArcString {
             }
 
             if !crossings.is_empty() {
-                return Some(unsafe {
-                    MultiSphericalPoint::try_from(&crossings).unwrap_unchecked()
-                });
+                return Some(MultiSphericalPoint::try_from(&crossings).unwrap());
             }
         }
 

@@ -1,4 +1,5 @@
 import numpy as np
+import pytest
 from numpy.testing import assert_allclose
 from sphersgeo import ArcString, MultiArcString, MultiSphericalPoint, SphericalPoint
 import sphersgeo
@@ -99,11 +100,20 @@ def test_contains():
         )
 
 
-def test_interpolate():
+@pytest.mark.parametrize("a", [(0.0, 0.0), (60.0, 0.0), (23.44, 79.9999)])
+@pytest.mark.parametrize(
+    "b",
+    [
+        (40.0, 30.0),
+        (180.0, 90.0),
+        (-30.0, 110.0),
+    ],
+)
+def test_interpolate(a, b):
     tolerance = 1e-10
 
-    a = SphericalPoint.from_lonlat((60.0, 0.0), degrees=True)
-    b = SphericalPoint.from_lonlat((60.0, 30.0), degrees=True)
+    a = SphericalPoint.from_lonlat(a, degrees=True)
+    b = SphericalPoint.from_lonlat(b, degrees=True)
     ab = ArcString([a, b])
 
     interpolated_points = MultiSphericalPoint(
@@ -116,11 +126,11 @@ def test_interpolate():
     interpolated_arc = ArcString(interpolated_points)
 
     for point in interpolated_points[1:-1]:
-        assert interpolated_arc.contains(point)
+        assert ab.contains(point)
 
     distances = interpolated_arc.lengths
 
-    assert np.allclose(distances, ab.length / 10, atol=tolerance)
+    assert np.allclose(distances, ab.length / len(interpolated_arc), atol=tolerance)
 
 
 def test_intersection():
