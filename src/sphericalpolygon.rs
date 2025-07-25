@@ -110,19 +110,13 @@ impl SphericalPolygon {
         interior_point: SphericalPoint,
         holes: Option<MultiArcString>,
     ) -> Result<Self, String> {
-        if let Some(intersections) = exterior.intersection_with_self() {
-            Err(format!(
-                "arcstring intersects itself: {}",
-                intersections.xyz
-            ))
+        if exterior.crosses_self() {
+            Err(String::from("exterior crosses itself"))
         } else {
             if let Some(holes) = &holes {
                 for hole in &holes.arcstrings {
-                    if let Some(intersections) = hole.intersection_with_self() {
-                        return Err(format!(
-                            "arcstring intersects itself: {}",
-                            intersections.xyz
-                        ));
+                    if hole.crosses_self() {
+                        return Err(String::from("hole crosses itself"));
                     }
 
                     if point_in_polygon_exterior(
@@ -319,7 +313,7 @@ impl GeometricOperations<&SphericalPoint> for &SphericalPolygon {
     }
 
     fn intersects(self, other: &SphericalPoint) -> bool {
-        self.touches(other) || self.contains(other)
+        self.touches(other) || self.contains(other) || self.within(other)
     }
 
     fn intersection(self, other: &SphericalPoint) -> Option<SphericalPoint> {
@@ -487,7 +481,7 @@ impl GeometricOperations<&ArcString> for &SphericalPolygon {
     }
 
     fn intersects(self, other: &ArcString) -> bool {
-        self.touches(other) || self.crosses(other)
+        self.touches(other) || self.crosses(other) || self.contains(other)
     }
 
     fn intersection(self, other: &ArcString) -> Option<MultiArcString> {
@@ -530,7 +524,7 @@ impl GeometricOperations<&MultiArcString> for &SphericalPolygon {
     }
 
     fn intersects(self, other: &MultiArcString) -> bool {
-        self.touches(other) || self.crosses(other)
+        self.touches(other) || self.crosses(other) || other.intersects(self)
     }
 
     fn intersection(self, other: &MultiArcString) -> Option<MultiArcString> {
@@ -573,7 +567,7 @@ impl GeometricOperations<&AngularBounds> for &SphericalPolygon {
     }
 
     fn intersects(self, other: &AngularBounds) -> bool {
-        self.touches(other) || self.crosses(other)
+        self.touches(other) || self.crosses(other) || self.contains(other) || self.within(other)
     }
 
     fn intersection(self, other: &AngularBounds) -> Option<MultiSphericalPolygon> {
@@ -620,7 +614,7 @@ impl GeometricOperations<&SphericalPolygon> for &SphericalPolygon {
     }
 
     fn intersects(self, other: &SphericalPolygon) -> bool {
-        self.touches(other) || self.crosses(other)
+        self.touches(other) || self.crosses(other) || self.contains(other) || self.within(other)
     }
 
     fn intersection(self, other: &SphericalPolygon) -> Option<MultiSphericalPolygon> {
@@ -663,7 +657,7 @@ impl GeometricOperations<&MultiSphericalPolygon> for &SphericalPolygon {
     }
 
     fn intersects(self, other: &MultiSphericalPolygon) -> bool {
-        self.touches(other) || self.crosses(other)
+        self.touches(other) || self.crosses(other) || other.intersects(self) || self.within(other)
     }
 
     fn intersection(self, other: &MultiSphericalPolygon) -> Option<MultiSphericalPolygon> {
@@ -848,7 +842,7 @@ impl GeometricOperations<&SphericalPoint> for &MultiSphericalPolygon {
     }
 
     fn intersects(self, other: &SphericalPoint) -> bool {
-        self.touches(other) || self.crosses(other)
+        self.touches(other) || self.crosses(other) || self.contains(other)
     }
 
     fn intersection(self, other: &SphericalPoint) -> Option<SphericalPoint> {
@@ -884,7 +878,12 @@ impl GeometricOperations<&MultiSphericalPoint> for &MultiSphericalPolygon {
     }
 
     fn intersects(self, other: &MultiSphericalPoint) -> bool {
-        self.touches(other) || self.crosses(other)
+        self.touches(other)
+            || self.crosses(other)
+            || self
+                .polygons
+                .par_iter()
+                .any(|polygon| polygon.intersects(other))
     }
 
     fn intersection(self, other: &MultiSphericalPoint) -> Option<MultiSphericalPoint> {
@@ -927,7 +926,7 @@ impl GeometricOperations<&ArcString> for &MultiSphericalPolygon {
     }
 
     fn intersects(self, other: &ArcString) -> bool {
-        self.touches(other) || self.crosses(other)
+        self.touches(other) || self.crosses(other) || self.contains(other)
     }
 
     fn intersection(self, other: &ArcString) -> Option<MultiArcString> {
@@ -971,7 +970,7 @@ impl GeometricOperations<&MultiArcString> for &MultiSphericalPolygon {
     }
 
     fn intersects(self, other: &MultiArcString) -> bool {
-        self.touches(other) || self.crosses(other)
+        self.touches(other) || self.crosses(other) || other.intersects(self)
     }
 
     fn intersection(self, other: &MultiArcString) -> Option<MultiArcString> {

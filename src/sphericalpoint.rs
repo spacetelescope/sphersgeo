@@ -221,7 +221,7 @@ impl TryFrom<Array1<f64>> for SphericalPoint {
 
     fn try_from(xyz: Array1<f64>) -> Result<Self, Self::Error> {
         if xyz.len() != 3 {
-            Err(format!("array should have length 3, not {:?}", xyz.len()))
+            Err(format!("3D vector should have length 3, not {}", xyz.len()))
         } else {
             Ok(Self { xyz })
         }
@@ -314,7 +314,10 @@ impl SphericalPoint {
 
             Ok(Self::try_from(array![lon_cos * lat_cos, lon_sin * lat_cos, lat_sin]).unwrap())
         } else {
-            Err(String::from("invalid shape"))
+            Err(format!(
+                "lonlat array should have length 2, not {}",
+                coordinates.len()
+            ))
         }
     }
 
@@ -790,7 +793,11 @@ impl TryFrom<Array2<f64>> for MultiSphericalPoint {
 
     fn try_from(xyz: Array2<f64>) -> Result<Self, Self::Error> {
         if xyz.shape()[1] != 3 {
-            Err(format!("array should be Nx3, not Nx{:?}", xyz.shape()[1]))
+            Err(format!(
+                "array of 3D vectors should have shape Nx3, not {}x{}",
+                xyz.shape()[0],
+                xyz.shape()[1]
+            ))
         } else {
             let kdtree = vector_kdtree(&normalize_vectors(&xyz.view()).view());
             Ok(Self { xyz, kdtree })
@@ -851,7 +858,10 @@ impl TryFrom<&Vec<Vec<f64>>> for MultiSphericalPoint {
             if point.len() == 3 {
                 Array1::<f64>::from_vec(point.to_owned()).assign_to(row)
             } else {
-                return Err(format!("invalid shape {}", point.len()));
+                return Err(format!(
+                    "3D vector should have length 3, not {}",
+                    point.len()
+                ));
             }
         }
         Self::try_from(unsafe { xyz.assume_init() })
@@ -868,7 +878,10 @@ impl<'a> TryFrom<&Vec<ArrayView1<'a, f64>>> for MultiSphericalPoint {
             if point.len() == 3 {
                 point.assign_to(row);
             } else {
-                return Err(format!("invalid shape {:?}", point.shape()));
+                return Err(format!(
+                    "3D vector should have length 3, not {}",
+                    point.len()
+                ));
             }
         }
         Self::try_from(unsafe { xyz.assume_init() })
@@ -899,23 +912,23 @@ impl<'a> TryFrom<&ArrayView1<'a, f64>> for MultiSphericalPoint {
     type Error = String;
 
     fn try_from(xyz: &ArrayView1<'a, f64>) -> Result<Self, Self::Error> {
-        if xyz.len() % 3 == 0 {
-            Ok(Self::try_from(
-                xyz.to_shape((xyz.len() / 3, 3))
-                    .map_err(|err| format!("{:?}", err))?
-                    .to_owned(),
-            )?)
-        } else {
-            Err(format!("invalid shape {:?}", xyz.shape()))
-        }
+        Ok(Self::try_from(
+            xyz.to_shape((xyz.len() / 3, 3))
+                .map_err(|err| format!("{:?}", err))?
+                .to_owned(),
+        )?)
     }
 }
 
 impl MultiSphericalPoint {
     /// normalize the given xyz vectors
     pub fn normalize(xyz: &ArrayView2<f64>) -> Result<Self, String> {
-        if xyz.len() != 3 {
-            Err(format!("array should have length 3, not {:?}", xyz.len()))
+        if xyz.shape()[1] != 3 {
+            Err(format!(
+                "array of 3D vectors should have shape Nx3, not {}x{}",
+                xyz.shape()[0],
+                xyz.shape()[1]
+            ))
         } else {
             let normalized = normalize_vectors(xyz);
             let kdtree = vector_kdtree(&normalized.view());
@@ -965,7 +978,11 @@ impl MultiSphericalPoint {
             )
             .unwrap())
         } else {
-            Err(String::from("invalid shape"))
+            Err(format!(
+                "array of lonlats should have shape Nx2, not {}x{}",
+                coordinates.shape()[0],
+                coordinates.shape()[1],
+            ))
         }
     }
 

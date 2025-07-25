@@ -340,7 +340,7 @@ impl GeometricOperations<&crate::arcstring::ArcString> for &AngularBounds {
     }
 
     fn intersects(self, other: &crate::arcstring::ArcString) -> bool {
-        self.touches(other) || self.crosses(other)
+        self.touches(other) || self.crosses(other) || self.contains(other)
     }
 
     fn intersection(
@@ -378,7 +378,7 @@ impl GeometricOperations<&crate::arcstring::MultiArcString> for &AngularBounds {
     }
 
     fn intersects(self, other: &crate::arcstring::MultiArcString) -> bool {
-        self.touches(other) || self.crosses(other)
+        self.touches(other) || self.crosses(other) || other.intersects(self)
     }
 
     fn intersection(
@@ -433,7 +433,7 @@ impl GeometricOperations<&AngularBounds> for &AngularBounds {
     }
 
     fn intersects(self, other: &AngularBounds) -> bool {
-        self.touches(other) || self.crosses(other)
+        self.touches(other) || self.crosses(other) || self.contains(other) || self.within(other)
     }
 
     fn intersection(self, other: &AngularBounds) -> Option<AngularBounds> {
@@ -503,7 +503,7 @@ impl GeometricOperations<&crate::sphericalpolygon::SphericalPolygon> for &Angula
     }
 
     fn intersects(self, other: &crate::sphericalpolygon::SphericalPolygon) -> bool {
-        self.touches(other) || self.crosses(other)
+        self.touches(other) || self.crosses(other) || self.contains(other) || self.within(other)
     }
 
     fn intersection(
@@ -540,7 +540,7 @@ impl GeometricOperations<&crate::sphericalpolygon::MultiSphericalPolygon> for &A
     }
 
     fn intersects(self, other: &crate::sphericalpolygon::MultiSphericalPolygon) -> bool {
-        self.touches(other) || self.crosses(other)
+        self.touches(other) || self.crosses(other) || self.contains(other) || self.within(other)
     }
 
     fn intersection(
