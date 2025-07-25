@@ -206,10 +206,10 @@ impl Geometry for AngularBounds {
 }
 
 impl GeometricOperations<&crate::sphericalpoint::SphericalPoint> for &AngularBounds {
-    fn distance(self, other: &crate::sphericalpoint::SphericalPoint) -> f64 {
+    fn distance(self, other: &crate::sphericalpoint::SphericalPoint, degrees: bool) -> f64 {
         match self.convex_hull() {
-            Some(hull) => hull.distance(other),
-            None => self.coords().distance(other),
+            Some(hull) => hull.distance(other, degrees),
+            None => self.coords().distance(other, degrees),
         }
     }
 
@@ -248,8 +248,8 @@ impl GeometricOperations<&crate::sphericalpoint::SphericalPoint> for &AngularBou
 }
 
 impl GeometricOperations<&crate::sphericalpoint::MultiSphericalPoint> for &AngularBounds {
-    fn distance(self, other: &crate::sphericalpoint::MultiSphericalPoint) -> f64 {
-        self.boundary().unwrap().distance(other)
+    fn distance(self, other: &crate::sphericalpoint::MultiSphericalPoint, degrees: bool) -> f64 {
+        self.boundary().unwrap().distance(other, degrees)
     }
 
     fn contains(self, other: &crate::sphericalpoint::MultiSphericalPoint) -> bool {
@@ -331,8 +331,8 @@ impl GeometricOperations<&crate::sphericalpoint::MultiSphericalPoint> for &Angul
 }
 
 impl GeometricOperations<&crate::arcstring::ArcString> for &AngularBounds {
-    fn distance(self, other: &crate::arcstring::ArcString) -> f64 {
-        self.boundary().unwrap().distance(other)
+    fn distance(self, other: &crate::arcstring::ArcString, degrees: bool) -> f64 {
+        self.boundary().unwrap().distance(other, degrees)
     }
 
     fn contains(self, other: &crate::arcstring::ArcString) -> bool {
@@ -369,8 +369,8 @@ impl GeometricOperations<&crate::arcstring::ArcString> for &AngularBounds {
 }
 
 impl GeometricOperations<&crate::arcstring::MultiArcString> for &AngularBounds {
-    fn distance(self, other: &crate::arcstring::MultiArcString) -> f64 {
-        self.boundary().unwrap().distance(other)
+    fn distance(self, other: &crate::arcstring::MultiArcString, degrees: bool) -> f64 {
+        self.boundary().unwrap().distance(other, degrees)
     }
 
     fn contains(self, other: &crate::arcstring::MultiArcString) -> bool {
@@ -402,8 +402,8 @@ impl GeometricOperations<&crate::arcstring::MultiArcString> for &AngularBounds {
 }
 
 impl GeometricOperations<&AngularBounds> for &AngularBounds {
-    fn distance(self, other: &AngularBounds) -> f64 {
-        self.coords().distance(&other.coords())
+    fn distance(self, other: &AngularBounds, degrees: bool) -> f64 {
+        self.coords().distance(&other.coords(), degrees)
     }
 
     fn contains(self, other: &AngularBounds) -> bool {
@@ -493,8 +493,8 @@ impl GeometricOperations<&AngularBounds> for &AngularBounds {
 }
 
 impl GeometricOperations<&crate::sphericalpolygon::SphericalPolygon> for &AngularBounds {
-    fn distance(self, other: &crate::sphericalpolygon::SphericalPolygon) -> f64 {
-        self.boundary().unwrap().distance(other)
+    fn distance(self, other: &crate::sphericalpolygon::SphericalPolygon, degrees: bool) -> f64 {
+        self.boundary().unwrap().distance(other, degrees)
     }
 
     fn contains(self, other: &crate::sphericalpolygon::SphericalPolygon) -> bool {
@@ -531,8 +531,12 @@ impl GeometricOperations<&crate::sphericalpolygon::SphericalPolygon> for &Angula
 }
 
 impl GeometricOperations<&crate::sphericalpolygon::MultiSphericalPolygon> for &AngularBounds {
-    fn distance(self, other: &crate::sphericalpolygon::MultiSphericalPolygon) -> f64 {
-        self.boundary().unwrap().distance(other)
+    fn distance(
+        self,
+        other: &crate::sphericalpolygon::MultiSphericalPolygon,
+        degrees: bool,
+    ) -> f64 {
+        self.boundary().unwrap().distance(other, degrees)
     }
 
     fn contains(self, other: &crate::sphericalpolygon::MultiSphericalPolygon) -> bool {

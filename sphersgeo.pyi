@@ -43,8 +43,6 @@ class SphericalPoint:
         self, other: SphericalPoint, theta: float, degrees: bool = True
     ) -> SphericalPoint: ...
 
-    def combine(self, other: SphericalPoint) -> MultiSphericalPoint: ...
-
     @property
     def area(self) -> float: ...
 
@@ -68,6 +66,7 @@ class SphericalPoint:
         | AngularBounds
         | SphericalPolygon
         | MultiSphericalPolygon,
+        degrees: bool = True,
     ) -> float: ...
 
     def contains(
@@ -195,6 +194,7 @@ class MultiSphericalPoint:
         | AngularBounds
         | SphericalPolygon
         | MultiSphericalPolygon,
+        degrees: bool = True,
     ) -> float: ...
 
     def contains(
@@ -296,6 +296,7 @@ class ArcString:
         | AngularBounds
         | SphericalPolygon
         | MultiSphericalPolygon,
+        degrees: bool = True,
     ) -> float: ...
 
     def contains(
@@ -376,6 +377,7 @@ class MultiArcString:
         | AngularBounds
         | SphericalPolygon
         | MultiSphericalPolygon,
+        degrees: bool = True,
     ) -> float: ...
 
     def contains(
@@ -456,6 +458,7 @@ class AngularBounds:
         | AngularBounds
         | SphericalPolygon
         | MultiSphericalPolygon,
+        degrees: bool = True,
     ) -> float: ...
 
     def contains(
@@ -566,6 +569,7 @@ class SphericalPolygon:
         | AngularBounds
         | SphericalPolygon
         | MultiSphericalPolygon,
+        degrees: bool = True,
     ) -> float: ...
 
     def contains(
@@ -639,6 +643,7 @@ class MultiSphericalPolygon:
         | AngularBounds
         | SphericalPolygon
         | MultiSphericalPolygon,
+        degrees: bool = True,
     ) -> float: ...
 
     def contains(

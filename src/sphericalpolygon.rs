@@ -1,11 +1,8 @@
 use crate::{
     angularbounds::AngularBounds,
-    arcstring::{
-        vector_arc_crossings, vector_arcs_angle_between, vector_arcs_angles_between, ArcString,
-        MultiArcString,
-    },
+    arcstring::{vector_arc_crossings, ArcString, MultiArcString},
     geometry::{ExtendMultiGeometry, GeometricOperations, Geometry, MultiGeometry},
-    sphericalpoint::{shift_rows, MultiSphericalPoint, SphericalPoint},
+    sphericalpoint::{shift_rows, vector_arc_length, MultiSphericalPoint, SphericalPoint},
 };
 use ndarray::{
     array, concatenate,
@@ -23,20 +20,32 @@ use std::{cmp::Ordering, collections::VecDeque, iter::Sum};
 /// References
 /// ----------
 /// - Klain, D. A. (2019). A probabilistic proof of the spherical excess formula (No. arXiv:1909.04505). arXiv. https://doi.org/10.48550/arXiv.1909.04505
+/// - Miller, Robert D. Computing the area of a spherical polygon. Graphics Gems IV. 1994. Academic Press. doi:10.5555/180895.180907
+/// https://www.google.com/books/edition/Graphics_Gems_IV/CCqzMm_-WucC?hl=en&gbpv=1&dq=Graphics%20Gems%20IV.%20p132&pg=PA133&printsec=frontcover
 pub fn spherical_triangle_area(
     a: &ArrayView1<f64>,
     b: &ArrayView1<f64>,
     c: &ArrayView1<f64>,
 ) -> f64 {
-    vector_arcs_angle_between(c, a, b, false)
-        + vector_arcs_angle_between(a, b, c, false)
-        + vector_arcs_angle_between(b, c, a, false)
-        - std::f64::consts::PI
+    // angle_between_vectors(c, a, b, false)
+    //     + angle_between_vectors(a, b, c, false)
+    //     + angle_between_vectors(b, c, a, false)
+    //     - std::f64::consts::PI
+    let ab = vector_arc_length(a, b);
+    let bc = vector_arc_length(b, c);
+    let ca = vector_arc_length(c, a);
+    let s = (ab + bc + ca) / 2.0;
+    4.0 * ((s / 2.0).tan()
+        * ((s - ab) / 2.0).tan()
+        * ((s - bc) / 2.0).tan()
+        * ((s - ca) / 2.0).tan())
+    .sqrt()
+    .atan()
 }
 
 // calculate the interior angles of the polygon comprised of the given points
 pub fn spherical_polygon_interior_angles(points: &ArrayView2<f64>, degrees: bool) -> Array1<f64> {
-    vector_arcs_angles_between(
+    crate::sphericalpoint::angles_between_vectors(
         &points.slice(s![-2..-2, ..]),
         &shift_rows(points, -2).view(),
         &shift_rows(points, -1).view(),
@@ -487,11 +496,11 @@ impl Geometry for SphericalPolygon {
 }
 
 impl GeometricOperations<&SphericalPoint> for &SphericalPolygon {
-    fn distance(self, other: &SphericalPoint) -> f64 {
+    fn distance(self, other: &SphericalPoint, degrees: bool) -> f64 {
         if self.contains(other) {
             0.0
         } else {
-            self.boundary.distance(other)
+            self.boundary.distance(other, degrees)
         }
     }
 
@@ -537,11 +546,11 @@ impl GeometricOperations<&SphericalPoint> for &SphericalPolygon {
 }
 
 impl GeometricOperations<&MultiSphericalPoint> for &SphericalPolygon {
-    fn distance(self, other: &MultiSphericalPoint) -> f64 {
+    fn distance(self, other: &MultiSphericalPoint, degrees: bool) -> f64 {
         if self.contains(other) {
             0.0
         } else {
-            self.boundary.distance(other)
+            self.boundary.distance(other, degrees)
         }
     }
 
@@ -663,11 +672,11 @@ impl GeometricOperations<&MultiSphericalPoint> for &SphericalPolygon {
 }
 
 impl GeometricOperations<&ArcString> for &SphericalPolygon {
-    fn distance(self, other: &ArcString) -> f64 {
+    fn distance(self, other: &ArcString, degrees: bool) -> f64 {
         if self.contains(other) {
             0.0
         } else {
-            self.boundary.distance(other)
+            self.boundary.distance(other, degrees)
         }
     }
 
@@ -706,11 +715,11 @@ impl GeometricOperations<&ArcString> for &SphericalPolygon {
 }
 
 impl GeometricOperations<&MultiArcString> for &SphericalPolygon {
-    fn distance(self, other: &MultiArcString) -> f64 {
+    fn distance(self, other: &MultiArcString, degrees: bool) -> f64 {
         if self.contains(other) {
             0.0
         } else {
-            self.boundary.distance(other)
+            self.boundary.distance(other, degrees)
         }
     }
 
@@ -749,11 +758,11 @@ impl GeometricOperations<&MultiArcString> for &SphericalPolygon {
 }
 
 impl GeometricOperations<&AngularBounds> for &SphericalPolygon {
-    fn distance(self, other: &AngularBounds) -> f64 {
+    fn distance(self, other: &AngularBounds, degrees: bool) -> f64 {
         if self.contains(other) {
             0.0
         } else {
-            self.boundary.distance(other)
+            self.boundary.distance(other, degrees)
         }
     }
 
@@ -796,11 +805,11 @@ impl GeometricOperations<&AngularBounds> for &SphericalPolygon {
 }
 
 impl GeometricOperations<&SphericalPolygon> for &SphericalPolygon {
-    fn distance(self, other: &SphericalPolygon) -> f64 {
+    fn distance(self, other: &SphericalPolygon, degrees: bool) -> f64 {
         if self.contains(other) {
             0.0
         } else {
-            self.boundary.distance(other)
+            self.boundary.distance(other, degrees)
         }
     }
 
@@ -839,11 +848,11 @@ impl GeometricOperations<&SphericalPolygon> for &SphericalPolygon {
 }
 
 impl GeometricOperations<&MultiSphericalPolygon> for &SphericalPolygon {
-    fn distance(self, other: &MultiSphericalPolygon) -> f64 {
+    fn distance(self, other: &MultiSphericalPolygon, degrees: bool) -> f64 {
         if self.contains(other) {
             0.0
         } else {
-            self.boundary.distance(other)
+            self.boundary.distance(other, degrees)
         }
     }
 
@@ -1039,11 +1048,11 @@ impl ExtendMultiGeometry<SphericalPolygon> for MultiSphericalPolygon {
 }
 
 impl GeometricOperations<&SphericalPoint> for &MultiSphericalPolygon {
-    fn distance(self, other: &SphericalPoint) -> f64 {
+    fn distance(self, other: &SphericalPoint, degrees: bool) -> f64 {
         if self.contains(other) {
             0.0
         } else {
-            self.boundary().unwrap().distance(other)
+            self.boundary().unwrap().distance(other, degrees)
         }
     }
 
@@ -1077,11 +1086,11 @@ impl GeometricOperations<&SphericalPoint> for &MultiSphericalPolygon {
 }
 
 impl GeometricOperations<&MultiSphericalPoint> for &MultiSphericalPolygon {
-    fn distance(self, other: &MultiSphericalPoint) -> f64 {
+    fn distance(self, other: &MultiSphericalPoint, degrees: bool) -> f64 {
         if self.contains(other) {
             0.0
         } else {
-            self.boundary().unwrap().distance(other)
+            self.boundary().unwrap().distance(other, degrees)
         }
     }
 
@@ -1121,11 +1130,11 @@ impl GeometricOperations<&MultiSphericalPoint> for &MultiSphericalPolygon {
 }
 
 impl GeometricOperations<&ArcString> for &MultiSphericalPolygon {
-    fn distance(self, other: &ArcString) -> f64 {
+    fn distance(self, other: &ArcString, degrees: bool) -> f64 {
         if self.contains(other) {
             0.0
         } else {
-            self.boundary().unwrap().distance(other)
+            self.boundary().unwrap().distance(other, degrees)
         }
     }
 
@@ -1164,11 +1173,11 @@ impl GeometricOperations<&ArcString> for &MultiSphericalPolygon {
 }
 
 impl GeometricOperations<&MultiArcString> for &MultiSphericalPolygon {
-    fn distance(self, other: &MultiArcString) -> f64 {
+    fn distance(self, other: &MultiArcString, degrees: bool) -> f64 {
         if self.contains(other) {
             0.0
         } else {
-            self.boundary().unwrap().distance(other)
+            self.boundary().unwrap().distance(other, degrees)
         }
     }
 
@@ -1205,11 +1214,11 @@ impl GeometricOperations<&MultiArcString> for &MultiSphericalPolygon {
 }
 
 impl GeometricOperations<&AngularBounds> for &MultiSphericalPolygon {
-    fn distance(self, other: &AngularBounds) -> f64 {
+    fn distance(self, other: &AngularBounds, degrees: bool) -> f64 {
         if self.contains(other) {
             0.0
         } else {
-            self.boundary().unwrap().distance(other)
+            self.boundary().unwrap().distance(other, degrees)
         }
     }
 
@@ -1250,11 +1259,11 @@ impl GeometricOperations<&AngularBounds> for &MultiSphericalPolygon {
 }
 
 impl GeometricOperations<&SphericalPolygon> for &MultiSphericalPolygon {
-    fn distance(self, other: &SphericalPolygon) -> f64 {
+    fn distance(self, other: &SphericalPolygon, degrees: bool) -> f64 {
         if self.contains(other) {
             0.0
         } else {
-            self.boundary().unwrap().distance(other)
+            self.boundary().unwrap().distance(other, degrees)
         }
     }
 
@@ -1294,11 +1303,11 @@ impl GeometricOperations<&SphericalPolygon> for &MultiSphericalPolygon {
 }
 
 impl GeometricOperations<&MultiSphericalPolygon> for &MultiSphericalPolygon {
-    fn distance(self, other: &MultiSphericalPolygon) -> f64 {
+    fn distance(self, other: &MultiSphericalPolygon, degrees: bool) -> f64 {
         if self.contains(other) {
             0.0
         } else {
-            self.boundary().unwrap().distance(other)
+            self.boundary().unwrap().distance(other, degrees)
         }
     }
 
