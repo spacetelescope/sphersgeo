@@ -1,5 +1,5 @@
 use crate::{
-    edgegraph::{EdgeGraph, GeometryGraph, Graphed},
+    edgegraph::{EdgeGraph, GeometryGraph, ToGraph},
     geometry::{GeometricOperations, Geometry, GeometryCollection, MultiGeometry},
     sphericalpoint::{
         cross_vector, min_1darray, normalize_vector, point_within_kdtree, vector_arc_radians,
@@ -130,11 +130,20 @@ pub fn arcstring_contains_point(arcstring: &ArcString, xyz: &ArrayView1<f64>) ->
 }
 
 pub fn split_arc_at_points(arc: &ArrayView2<f64>, points: &ArrayView2<f64>) -> Vec<Array2<f64>> {
+    let tolerance = 2e-8;
     let mut arcs = vec![arc.to_owned()];
     for point in points.rows() {
         for arc_index in 0..arcs.len() {
             let arc_0 = arcs[arc_index].slice(s![0, ..]);
             let arc_1 = arcs[arc_index].slice(s![1, ..]);
+
+            // skip if the point is equal to one of the endpoints
+            if (&arc_0 - &point).abs().sum() < tolerance
+                || (&point - &arc_1).abs().sum() < tolerance
+            {
+                continue;
+            }
+
             if crate::sphericalpoint::vectors_collinear(&arc_0, &point, &arc_1) {
                 // replace arc with the arc split in two at the collinear point
                 arcs[arc_index] = stack![Axis(0), arcs[arc_index].slice(s![0, ..]), point.view()];
@@ -301,23 +310,45 @@ impl From<ArcString> for MultiSphericalPoint {
 
 impl From<&ArcString> for Vec<ArcString> {
     fn from(arcstring: &ArcString) -> Self {
-        let vectors = &arcstring.points.xyz;
-        let mut arcs = vec![];
-        for index in 0..vectors.nrows() - 1 {
-            arcs.push(ArcString {
-                points: MultiSphericalPoint::try_from(
-                    vectors.slice(s![index..index + 1, ..]).to_owned(),
-                )
-                .unwrap(),
-                closed: false,
-            })
+        if arcstring.points.xyz.nrows() <= 2 {
+            vec![arcstring.to_owned()]
+        } else {
+            // iterate over vertex indices, stopping short of final index if not closed
+            (0..arcstring.points.xyz.nrows() - if arcstring.closed { 0 } else { 1 })
+                .map(|index| {
+                    ArcString::try_from(
+                        MultiSphericalPoint::try_from(
+                            if index != arcstring.points.xyz.nrows() - 1 {
+                                arcstring
+                                    .points
+                                    .xyz
+                                    .slice(s![index..index + 2, ..])
+                                    .to_owned()
+                            } else {
+                                // add additional edge returning to initial point
+                                stack![
+                                    Axis(0),
+                                    arcstring.points.xyz.slice(s![index, ..]),
+                                    arcstring.points.xyz.slice(s![0, ..])
+                                ]
+                            },
+                        )
+                        .unwrap(),
+                    )
+                    .unwrap()
+                })
+                .collect()
         }
-
-        arcs
     }
 }
 
 impl ArcString {
+    pub fn new(points: MultiSphericalPoint, closed: bool) -> Result<Self, String> {
+        let mut instance = Self::try_from(points)?;
+        instance.closed = closed;
+        Ok(instance)
+    }
+
     pub fn midpoints(&self) -> MultiSphericalPoint {
         MultiSphericalPoint::try_from(
             ((&self.points.xyz.slice(s![..-1, ..]) + &self.points.xyz.slice(s![1.., ..])) / 2.0)
@@ -477,57 +508,28 @@ impl ArcString {
 
     /// join this arcstring to another
     pub fn join(&self, other: &ArcString) -> Option<ArcString> {
-        if !self.closed && !other.closed {
-            let tolerance = 2e-8;
+        if self.closed || other.closed {
+            None
+        } else {
+            let mut graph = EdgeGraph::<Self>::from(vec![self, other]);
+            graph.split_edges();
+            graph.prune_overlapping_edges();
+            graph.prune_degenerate_edges();
 
-            let start = self.points.xyz.slice(s![0, ..]);
-            let end = self.points.xyz.slice(s![-1, ..]);
+            for edge in &graph.edges {
+                println!(
+                    "{} {}",
+                    crate::sphericalpoint::vector_to_lonlat(&edge.a.view()),
+                    crate::sphericalpoint::vector_to_lonlat(&edge.b.view())
+                );
+            }
 
-            let other_start = other.points.xyz.slice(s![0, ..]);
-            let other_end = other.points.xyz.slice(s![-1, ..]);
-
-            if (&end - &other_start).abs().sum() < tolerance
-                || (&start - &other_end).abs().sum() < tolerance
-                || (&end - &other_end).abs().sum() < tolerance
-                || (&start - &other_start).abs().sum() < tolerance
-            {
-                ArcString::try_from(
-                    MultiSphericalPoint::try_from(
-                        // flip arcstrings so that they match up end-to-end
-                        if (&end - &other_start).abs().sum() < tolerance {
-                            concatenate![
-                                Axis(0),
-                                self.points.xyz.view(),
-                                other.points.xyz.slice(s![1.., ..]),
-                            ]
-                        } else if (&other_end - &start).abs().sum() < tolerance {
-                            let mut xyz = self.points.xyz.to_owned();
-                            let mut other_xyz = other.points.xyz.to_owned();
-                            xyz.invert_axis(Axis(0));
-                            other_xyz.invert_axis(Axis(0));
-                            concatenate![Axis(0), xyz.view(), other_xyz.slice(s![1.., ..])]
-                        } else if (&end - &other_end).abs().sum() < tolerance {
-                            let mut other_xyz = other.points.xyz.to_owned();
-                            other_xyz.invert_axis(Axis(0));
-                            concatenate![
-                                Axis(0),
-                                self.points.xyz.view(),
-                                other_xyz.slice(s![1.., ..]),
-                            ]
-                        } else {
-                            let mut xyz = self.points.xyz.to_owned();
-                            xyz.invert_axis(Axis(0));
-                            concatenate![Axis(0), xyz.view(), other.points.xyz.slice(s![1.., ..])]
-                        },
-                    )
-                    .unwrap(),
-                )
-                .ok()
+            let arcstrings = graph.find_disjoint_geometries();
+            if arcstrings.len() == 1 {
+                Some(arcstrings[0].to_owned())
             } else {
                 None
             }
-        } else {
-            None
         }
     }
 }
@@ -535,11 +537,12 @@ impl ArcString {
 impl PartialEq for ArcString {
     fn eq(&self, other: &Self) -> bool {
         let tolerance = 2e-8;
-        (&self.points.xyz - &other.points.xyz).abs().sum() < tolerance || {
-            let mut xyz = self.points.xyz.to_owned();
-            xyz.invert_axis(Axis(0));
-            (&xyz - &other.points.xyz).abs().sum() < tolerance
-        }
+        (self.points.xyz.nrows() == other.points.xyz.nrows())
+            && ((&self.points.xyz - &other.points.xyz).abs().sum() < tolerance || {
+                let mut xyz = self.points.xyz.to_owned();
+                xyz.invert_axis(Axis(0));
+                (&xyz - &other.points.xyz).abs().sum() < tolerance
+            })
     }
 }
 
@@ -773,44 +776,33 @@ impl GeometricOperations<ArcString> for ArcString {
 
     fn intersection(&self, other: &ArcString) -> Option<MultiSphericalPoint> {
         let mut intersections = vec![];
-        let tolerance = 1e-11;
+        let tolerance = 2e-8;
 
-        let points = if self.closed {
-            &concatenate![
-                Axis(0),
-                self.points.xyz,
-                self.points.xyz.slice(s![-1, ..]).broadcast((1, 3)).unwrap()
-            ]
-        } else {
-            &self.points.xyz
-        };
-        let other_points = if other.closed {
-            &concatenate![
-                Axis(0),
-                other.points.xyz,
-                other
-                    .points
-                    .xyz
-                    .slice(s![-1, ..])
-                    .broadcast((1, 3))
-                    .unwrap()
-            ]
-        } else {
-            &other.points.xyz
-        };
+        for arc_a_index in 0..self.points.xyz.nrows() - if self.closed { 0 } else { 1 } {
+            let a_0 = self.points.xyz.slice(s![arc_a_index, ..]);
+            let a_1 = self.points.xyz.slice(s![
+                if arc_a_index < self.points.xyz.nrows() - 1 {
+                    arc_a_index + 1
+                } else {
+                    0
+                },
+                ..
+            ]);
 
-        // find crossings first
-        for arc_a_index in 0..points.nrows() - 1 {
-            let a_0 = points.slice(s![arc_a_index, ..]);
-            let a_1 = points.slice(s![arc_a_index + 1, ..]);
+            for arc_b_index in 0..other.points.xyz.nrows() - if other.closed { 0 } else { 1 } {
+                let b_0 = other.points.xyz.slice(s![arc_b_index, ..]);
+                let b_1 = other.points.xyz.slice(s![
+                    if arc_b_index < other.points.xyz.nrows() - 1 {
+                        arc_b_index + 1
+                    } else {
+                        0
+                    },
+                    ..
+                ]);
 
-            for arc_b_index in 0..other_points.nrows() - 1 {
-                let b_0 = other_points.slice(s![arc_b_index, ..]);
-                let b_1 = other_points.slice(s![arc_b_index + 1, ..]);
-
-                if (&a_1 - &b_0).abs().sum() < tolerance
-                    || (&a_1 - &b_0).abs().sum() < tolerance
-                    || crate::sphericalpoint::vectors_collinear(&b_0, &a_1, &b_1)
+                if (&a_1 - &b_0).abs().sum() > tolerance
+                    && (&a_1 - &b_0).abs().sum() > tolerance
+                    && crate::sphericalpoint::vectors_collinear(&b_0, &a_1, &b_1)
                 {
                     intersections.push(a_1.to_owned());
                 } else if let Some(point) = vector_arc_crossing(&a_0, &a_1, &b_0, &b_1) {
@@ -1532,8 +1524,8 @@ impl GeometricOperations<crate::sphericalpolygon::MultiSphericalPolygon, ArcStri
     }
 }
 
-impl Graphed<ArcString> for MultiArcString {
-    fn graph(&self) -> EdgeGraph<ArcString> {
+impl ToGraph<ArcString> for MultiArcString {
+    fn to_graph(&self) -> EdgeGraph<ArcString> {
         let mut graph = EdgeGraph::<ArcString>::default();
         for arcstring in self.arcstrings.iter() {
             graph.push(arcstring);
@@ -1544,25 +1536,21 @@ impl Graphed<ArcString> for MultiArcString {
 
 impl GeometryCollection<ArcString> for MultiArcString {
     fn join(&self) -> Self {
-        let mut graph = self.graph();
-        graph.join_edges();
+        let mut graph = self.to_graph();
+        graph.split_edges();
+        graph.prune_overlapping_edges();
+        graph.prune_degenerate_edges();
 
-        let edges: Vec<ArrayView2<f64>> = graph
-            .edges
-            .iter()
-            .map(|edge| edge.arc.points.xyz.view())
-            .collect();
-
-        // // this will return an error if there are any disjoint arcstrings (multiple boundaries)
-        // ArcString::try_from(edges)
-        todo!()
+        MultiArcString::try_from(graph.find_disjoint_geometries()).unwrap()
     }
 
     fn overlap(&self) -> Option<Self> {
-        let mut graph = self.graph();
-        graph.overlap_edges();
+        let mut graph = self.to_graph();
+        graph.split_edges();
+        graph.prune_nonoverlapping_edges();
+        graph.prune_degenerate_edges();
 
-        let arcstrings = graph.extract_disjoint_geometries();
+        let arcstrings = graph.find_disjoint_geometries();
         if !arcstrings.is_empty() {
             Some(MultiArcString { arcstrings })
         } else {
@@ -1571,10 +1559,17 @@ impl GeometryCollection<ArcString> for MultiArcString {
     }
 
     fn symmetric_split(&self) -> Self {
-        let mut graph = self.graph();
-        graph.split_edges();
-        MultiArcString {
-            arcstrings: graph.extract_disjoint_geometries(),
-        }
+        let mut split_graph = self.to_graph();
+        split_graph.split_edges();
+
+        let mut overlap_graph = self.to_graph();
+        overlap_graph.split_edges();
+        overlap_graph.prune_nonoverlapping_edges();
+        overlap_graph.prune_degenerate_edges();
+
+        let mut arcstrings = split_graph.find_disjoint_geometries();
+        arcstrings.extend(overlap_graph.find_disjoint_geometries());
+
+        MultiArcString { arcstrings }
     }
 }

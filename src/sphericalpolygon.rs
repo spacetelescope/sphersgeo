@@ -1,6 +1,6 @@
 use crate::{
     arcstring::{vector_arc_crossing, ArcString, MultiArcString},
-    edgegraph::{EdgeGraph, GeometryGraph, Graphed},
+    edgegraph::{EdgeGraph, GeometryGraph, ToGraph},
     geometry::{GeometricOperations, Geometry, GeometryCollection, MultiGeometry},
     sphericalpoint::{
         angle_between_vectors_radians, vector_arc_radians, MultiSphericalPoint, SphericalPoint,
@@ -798,7 +798,6 @@ impl GeometricOperations<SphericalPolygon> for SphericalPolygon {
                             if joined.closed {
                                 polygons.push(SphericalPolygon::new(joined, None).unwrap());
                             } else {
-                                println!("joining {segment_index} and {other_segment_index}");
                                 joined_segments.push(joined);
                                 segment_removal_indices.push(segment_index);
                                 segment_removal_indices.push(other_segment_index);
@@ -896,8 +895,8 @@ impl TryFrom<Vec<SphericalPolygon>> for MultiSphericalPolygon {
     }
 }
 
-impl Graphed<SphericalPolygon> for MultiSphericalPolygon {
-    fn graph(&self) -> EdgeGraph<SphericalPolygon> {
+impl ToGraph<SphericalPolygon> for MultiSphericalPolygon {
+    fn to_graph(&self) -> EdgeGraph<SphericalPolygon> {
         let mut graph = EdgeGraph::<SphericalPolygon>::default();
         for polygon in self.polygons.iter() {
             graph.push(polygon);
@@ -1348,28 +1347,34 @@ impl GeometricOperations<MultiSphericalPolygon, SphericalPolygon> for MultiSpher
 
 impl GeometryCollection<SphericalPolygon> for MultiSphericalPolygon {
     fn join(&self) -> Self {
-        let mut graph = self.graph();
-        graph.join_edges();
+        let mut graph = self.to_graph();
+        graph.split_edges();
+        graph.prune_overlapping_edges();
+        graph.prune_degenerate_edges();
 
-        MultiSphericalPolygon::try_from(graph.extract_disjoint_geometries()).unwrap()
+        MultiSphericalPolygon::try_from(graph.find_disjoint_geometries()).unwrap()
     }
 
     fn overlap(&self) -> Option<Self> {
-        let mut graph = self.graph();
-        graph.overlap_edges();
+        let mut graph = self.to_graph();
+        graph.split_edges();
+        graph.prune_nonoverlapping_edges();
+        graph.prune_degenerate_edges();
 
-        MultiSphericalPolygon::try_from(graph.extract_disjoint_geometries()).ok()
+        MultiSphericalPolygon::try_from(graph.find_disjoint_geometries()).ok()
     }
 
     fn symmetric_split(&self) -> Self {
-        let mut split_graph = self.graph();
+        let mut split_graph = self.to_graph();
         split_graph.split_edges();
 
-        let mut overlap_graph = self.graph();
-        overlap_graph.overlap_edges();
+        let mut overlap_graph = self.to_graph();
+        overlap_graph.split_edges();
+        overlap_graph.prune_nonoverlapping_edges();
+        overlap_graph.prune_degenerate_edges();
 
-        let mut polygons = split_graph.extract_disjoint_geometries();
-        polygons.extend(overlap_graph.extract_disjoint_geometries());
+        let mut polygons = split_graph.find_disjoint_geometries();
+        polygons.extend(overlap_graph.find_disjoint_geometries());
 
         MultiSphericalPolygon::try_from(polygons).unwrap()
     }

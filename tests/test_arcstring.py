@@ -177,8 +177,14 @@ def test_adjoins_join():
     assert segment3.adjoins(segment1)
     assert not segment4.adjoins(segment1)
 
-    joined = segment1.join(segment2).join(segment3).join(segment4)
-    print(joined)
+    joined12 = segment1.join(segment2)
+    print(joined12.vertices.to_lonlat())
+
+    joined34 = segment3.join(segment4)
+    print(joined34.vertices.to_lonlat())
+
+    joined1234 = joined12.join(joined34)
+    print(joined1234.vertices.to_lonlat())
 
 
 def test_intersection():

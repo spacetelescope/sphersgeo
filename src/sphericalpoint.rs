@@ -181,32 +181,37 @@ pub fn angles_between_vectors_radians(
 
 /// whether the three points exist on the same line
 pub fn vectors_collinear(a: &ArrayView1<f64>, b: &ArrayView1<f64>, c: &ArrayView1<f64>) -> bool {
-    let tolerance = 1e-5;
-    // let area = spherical_triangle_area(a, b, c);
-    // area.is_nan() || area < tolerance
+    let tolerance = 2e-8;
 
-    let abc = angle_between_vectors_radians(a, b, c);
-    let cab = angle_between_vectors_radians(c, a, b);
-    let bca = angle_between_vectors_radians(b, c, a);
+    if (a - b).abs().sum() < tolerance || (b - c).abs().sum() < tolerance {
+        true
+    } else {
+        // let area = spherical_triangle_area(a, b, c);
+        // area.is_nan() || area < tolerance
 
-    abc < tolerance
-        || cab < tolerance
-        || bca < tolerance
-        || (abc - std::f64::consts::PI).abs() < tolerance
-        || (cab - std::f64::consts::PI).abs() < tolerance
-        || (bca - std::f64::consts::PI).abs() < tolerance
+        let abc = angle_between_vectors_radians(a, b, c);
+        let cab = angle_between_vectors_radians(c, a, b);
+        let bca = angle_between_vectors_radians(b, c, a);
 
-    // let left = arc_length(&a, &p);
-    // let right = arc_length(&p, &b);
-    // let total = arc_length(&a, &b);
+        abc < tolerance
+            || cab < tolerance
+            || bca < tolerance
+            || (abc - std::f64::consts::PI).abs() < tolerance
+            || (cab - std::f64::consts::PI).abs() < tolerance
+            || (bca - std::f64::consts::PI).abs() < tolerance
 
-    // let tolerance = 3e-11;
-    // if left + right - total < tolerance {
-    //     // ensure angle is flat
-    //     if angle(&a, &point.xyz.view(), &b, false) - std::f64::consts::PI < tolerance {
-    //         return true;
-    //     }
-    // }
+        // let left = arc_length(&a, &p);
+        // let right = arc_length(&p, &b);
+        // let total = arc_length(&a, &b);
+
+        // let tolerance = 3e-11;
+        // if left + right - total < tolerance {
+        //     // ensure angle is flat
+        //     if angle(&a, &point.xyz.view(), &b, false) - std::f64::consts::PI < tolerance {
+        //         return true;
+        //     }
+        // }
+    }
 }
 pub fn cross_vector(a: &ArrayView1<f64>, b: &ArrayView1<f64>) -> Array1<f64> {
     let ax = a[0];
