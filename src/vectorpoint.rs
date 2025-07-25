@@ -544,6 +544,8 @@ impl Distance for &MultiVectorPoint {
 
 #[cfg(test)]
 mod tests {
+    use std::array::from_fn;
+
     use super::*;
     use crate::geometry::Distance;
     use crate::vectorpoint::{MultiVectorPoint, VectorPoint};
@@ -582,17 +584,17 @@ mod tests {
 
     #[test]
     fn test_from_lonlat() {
-        let lats = Array1::<f64>::from_iter(linspace(-360.0, 360.0, 360));
+        let lons = Array1::<f64>::from_iter(linspace(-360.0, 360.0, 360));
 
-        let equator_lon = array![0.0];
-        let equator_lons = equator_lon.broadcast(lats.len()).unwrap();
-        let equators = Zip::from(equator_lons)
-            .and(&lats)
+        let equator_lat = array![0.0];
+        let equator_lats = equator_lat.broadcast(lons.len()).unwrap();
+        let equators = Zip::from(&lons)
+            .and(equator_lats)
             .par_map_collect(|lon, lat| {
                 VectorPoint::from_lonlat(&array![lon.to_owned(), lat.to_owned()].view(), false)
             });
         let multi_equator = MultiVectorPoint::from_lonlats(
-            &stack(Axis(1), &[equator_lons, lats.view()]).unwrap().view(),
+            &stack(Axis(1), &[equator_lats, lons.view()]).unwrap().view(),
             false,
         );
 
@@ -602,18 +604,18 @@ mod tests {
 
         assert_eq!(
             multi_equator.xyz.slice(s![.., 2]),
-            array![0.0].broadcast(multi_equator.xyz.nrows()).unwrap()
+            Array1::<f64>::zeros(multi_equator.xyz.nrows())
         );
 
-        let north_pole_lon = array![90.0];
-        let north_pole_lons = north_pole_lon.broadcast(lats.len()).unwrap();
-        let north_poles = Zip::from(north_pole_lons)
-            .and(&lats)
+        let north_pole_lat = array![90.0];
+        let north_pole_lats = north_pole_lat.broadcast(lons.len()).unwrap();
+        let north_poles = Zip::from(&lons)
+            .and(north_pole_lats)
             .par_map_collect(|lon, lat| {
                 VectorPoint::from_lonlat(&array![lon.to_owned(), lat.to_owned()].view(), false)
             });
         let multi_north_pole = MultiVectorPoint::from_lonlats(
-            &stack(Axis(1), &[north_pole_lons, lats.view()])
+            &stack(Axis(1), &[north_pole_lats, lons.view()])
                 .unwrap()
                 .view(),
             false,
@@ -624,27 +626,27 @@ mod tests {
             .all(|multi, single| multi == single.xyz));
 
         assert_eq!(
-            multi_north_pole.xyz.slice(s![.., 0]),
-            array![0.0].broadcast(multi_north_pole.xyz.nrows()).unwrap()
-        );
-        assert_eq!(
-            multi_north_pole.xyz.slice(s![.., 1]),
-            array![0.0].broadcast(multi_north_pole.xyz.nrows()).unwrap()
-        );
-        assert_eq!(
-            multi_north_pole.xyz.slice(s![.., 2]),
-            array![1.0].broadcast(multi_north_pole.xyz.nrows()).unwrap()
+            multi_north_pole.xyz,
+            stack(
+                Axis(1),
+                &[
+                    Array1::<f64>::zeros(multi_north_pole.xyz.nrows()).view(),
+                    Array1::<f64>::zeros(multi_north_pole.xyz.nrows()).view(),
+                    Array1::<f64>::ones(multi_north_pole.xyz.nrows()).view()
+                ]
+            )
+            .unwrap()
         );
 
-        let south_pole_lon = array![-90.0];
-        let south_pole_lons = south_pole_lon.broadcast(lats.len()).unwrap();
-        let south_poles = Zip::from(south_pole_lons)
-            .and(&lats)
+        let south_pole_lat = array![-90.0];
+        let south_pole_lats = south_pole_lat.broadcast(lons.len()).unwrap();
+        let south_poles = Zip::from(&lons)
+            .and(south_pole_lats)
             .par_map_collect(|lon, lat| {
                 VectorPoint::from_lonlat(&array![lat.to_owned(), lon.to_owned()].view(), false)
             });
         let multi_south_pole = MultiVectorPoint::from_lonlats(
-            &stack(Axis(1), &[south_pole_lons, lats.view()])
+            &stack(Axis(1), &[south_pole_lats, lons.view()])
                 .unwrap()
                 .view(),
             false,
@@ -655,18 +657,16 @@ mod tests {
             .all(|multi, single| multi == single.xyz));
 
         assert_eq!(
-            multi_south_pole.xyz.slice(s![.., 0]),
-            array![0.0].broadcast(multi_south_pole.xyz.nrows()).unwrap()
-        );
-        assert_eq!(
-            multi_south_pole.xyz.slice(s![.., 1]),
-            array![0.0].broadcast(multi_south_pole.xyz.nrows()).unwrap()
-        );
-        assert_eq!(
-            multi_south_pole.xyz.slice(s![.., 2]),
-            array![-1.0]
-                .broadcast(multi_south_pole.xyz.nrows())
-                .unwrap()
+            multi_south_pole.xyz.view(),
+            stack(
+                Axis(1),
+                &[
+                    Array1::<f64>::zeros(multi_north_pole.xyz.nrows()).view(),
+                    Array1::<f64>::zeros(multi_north_pole.xyz.nrows()).view(),
+                    (-1.0 * Array1::<f64>::ones(multi_north_pole.xyz.nrows())).view()
+                ]
+            )
+            .unwrap()
         );
     }
 

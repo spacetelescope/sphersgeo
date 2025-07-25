@@ -1,7 +1,6 @@
 import numpy as np
-import math
 from numpy.testing import assert_almost_equal
-from sphersgeo import VectorPoint, MultiVectorPoint
+from sphersgeo import MultiVectorPoint, VectorPoint
 
 
 def test_normalize():
@@ -28,22 +27,28 @@ def test_already_normalized():
 
 
 def test_from_lonlat():
-    lats = np.arange(-360.0, 360.0, 1.0)
+    lons = np.arange(-360.0, 360.0, 1.0)
 
-    equator_lon = 0.0
-    equators = [VectorPoint.from_lonlat(np.array([equator_lon, lat])) for lat in lats]
+    equator_lat = 0.0
+    equators = [VectorPoint.from_lonlat(np.array([lon, equator_lat])) for lon in lons]
+    for equator in equators:
+        assert_almost_equal(equator.to_lonlat()[1], 0.0)
+
     multi_equator = MultiVectorPoint.from_lonlats(
-        np.stack([np.repeat(equator_lon, len(lats)), lats], axis=1)
+        np.stack([lons, np.repeat(equator_lat, len(lons))], axis=1)
     )
     assert equators == multi_equator.vector_points
     assert_almost_equal(multi_equator.xyz[:, 2], 0.0)
 
-    north_pole_lon = 90.0
+    north_pole_lat = 90.0
     north_poles = [
-        VectorPoint.from_lonlat(np.array([north_pole_lon, lat])) for lat in lats
+        VectorPoint.from_lonlat(np.array([lon, north_pole_lat])) for lon in lons
     ]
+    for north_pole in north_poles:
+        assert_almost_equal(north_pole.xyz, np.array([0.0, 0.0, 1.0]))
+
     multi_north_pole = MultiVectorPoint.from_lonlats(
-        np.stack([np.repeat(north_pole_lon, len(lats)), lats], axis=1)
+        np.stack([lons, np.repeat(north_pole_lat, len(lons))], axis=1)
     )
     assert north_poles == multi_north_pole.vector_points
     assert_almost_equal(
@@ -51,12 +56,15 @@ def test_from_lonlat():
         np.repeat([[0.0, 0.0, 1.0]], len(multi_north_pole), axis=0),
     )
 
-    south_pole_lon = -90.0
+    south_pole_lat = -90.0
     south_poles = [
-        VectorPoint.from_lonlat(np.array([south_pole_lon, lat])) for lat in lats
+        VectorPoint.from_lonlat(np.array([lon, south_pole_lat])) for lon in lons
     ]
+    for south_pole in south_poles:
+        assert_almost_equal(south_pole.xyz, np.array([0.0, 0.0, -1.0]))
+
     multi_south_pole = MultiVectorPoint.from_lonlats(
-        np.stack([np.repeat(south_pole_lon, len(lats)), lats], axis=1)
+        np.stack([lons, np.repeat(south_pole_lat, len(lons))], axis=1)
     )
     assert south_poles == multi_south_pole.vector_points
     assert_almost_equal(
