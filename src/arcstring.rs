@@ -34,7 +34,7 @@ pub fn interpolate(
                 Axis(0),
                 &[
                     (inverted_offsets * a + offsets * b).view(),
-                    b.broadcast((1, 3)).unwrap(),
+                    b.to_shape((1, 3)).unwrap().view(),
                 ],
             )
             .unwrap())
@@ -46,7 +46,7 @@ pub fn interpolate(
                         / omega.sin())
                         + b * &((t * omega).sin() / omega.sin()).view())
                         .view(),
-                    b.broadcast((1, 3)).unwrap(),
+                    b.to_shape((1, 3)).unwrap().view(),
                 ],
             )
             .unwrap())
