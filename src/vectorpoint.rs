@@ -1,12 +1,14 @@
-use crate::arcstring::{angle, arc_length, collinear};
-use crate::geometry::{
-    GeometricOperations, Geometry, GeometryCollection, MultiGeometry, SingleGeometry,
+use crate::{
+    arcstring::{angle, arc_length, collinear},
+    collection::GeometryCollection,
+    geometry::{GeometricOperations, Geometry, MultiGeometry, MutableMultiGeometry},
 };
 use kiddo::ImmutableKdTree;
 use numpy::ndarray::{
     array, concatenate, s, stack, Array1, Array2, ArrayView1, ArrayView2, Axis, Zip,
 };
 use pyo3::prelude::*;
+use std::iter::Sum;
 use std::ops::{Add, AddAssign};
 
 #[inline(always)]
@@ -147,18 +149,17 @@ impl Into<[f64; 3]> for VectorPoint {
     }
 }
 
-impl Into<MultiVectorPoint> for VectorPoint {
+impl Into<MultiVectorPoint> for &VectorPoint {
     #[inline]
     fn into(self) -> MultiVectorPoint {
-        MultiVectorPoint::new(unsafe { self.xyz.to_shape((1, 3)).unwrap_unchecked() }.to_owned())
+        MultiVectorPoint::try_from(
+            unsafe { self.xyz.to_shape((1, 3)).unwrap_unchecked() }.to_owned(),
+        )
+        .unwrap()
     }
 }
 
 impl VectorPoint {
-    pub fn new(xyz: Array1<f64>) -> Self {
-        Self { xyz }
-    }
-
     /// from the given coordinates, build an xyz vector representing a point on the sphere
     pub fn try_from_lonlat(coordinates: &ArrayView1<f64>, degrees: bool) -> Result<Self, String> {
         if coordinates.len() == 2 {
@@ -173,11 +174,10 @@ impl VectorPoint {
             let (lon_sin, lon_cos) = lon.sin_cos();
             let (lat_sin, lat_cos) = lat.sin_cos();
 
-            Ok(Self::new(array![
-                lon_cos * lat_cos,
-                lon_sin * lat_cos,
-                lat_sin,
-            ]))
+            Ok(unsafe {
+                Self::try_from(array![lon_cos * lat_cos, lon_sin * lat_cos, lat_sin])
+                    .unwrap_unchecked()
+            })
         } else {
             Err(String::from("invalid shape"))
         }
@@ -206,12 +206,12 @@ impl VectorPoint {
 
     /// normalize the given xyz vector
     pub fn normalize(xyz: &ArrayView1<f64>) -> Self {
-        Self::new(normalize_vector(xyz))
+        Self::try_from(normalize_vector(xyz)).unwrap()
     }
 
     /// normalize this vector to length 1 (the unit sphere) while preserving direction
     pub fn normalized(&self) -> Self {
-        Self::new(normalize_vector(&self.xyz.view()))
+        Self::try_from(normalize_vector(&self.xyz.view())).unwrap()
     }
 
     /// angle on the sphere between this point and two other points
@@ -248,11 +248,12 @@ impl VectorPoint {
         let by = b[1];
         let bz = b[2];
 
-        Self::new(
+        Self::try_from(
             -b * -a * b * (1.0 - theta.cos())
                 + a * theta.cos()
                 + array![-bz * ay + by * az, bz * ax - bx * az, -by * ax - bx * ay,] * theta.sin(),
         )
+        .unwrap()
     }
 }
 
@@ -273,7 +274,7 @@ impl Add<&VectorPoint> for &VectorPoint {
     type Output = MultiVectorPoint;
 
     fn add(self, rhs: &VectorPoint) -> Self::Output {
-        Self::Output::new(stack(Axis(0), &[self.xyz.view(), rhs.xyz.view()]).unwrap())
+        Self::Output::try_from(stack(Axis(0), &[self.xyz.view(), rhs.xyz.view()]).unwrap()).unwrap()
     }
 }
 
@@ -304,6 +305,10 @@ impl Geometry for &VectorPoint {
     fn convex_hull(&self) -> Option<crate::sphericalpolygon::SphericalPolygon> {
         None
     }
+
+    fn points(&self) -> MultiVectorPoint {
+        self.to_owned().into()
+    }
 }
 
 impl Geometry for VectorPoint {
@@ -322,9 +327,11 @@ impl Geometry for VectorPoint {
     fn convex_hull(&self) -> Option<crate::sphericalpolygon::SphericalPolygon> {
         (&self).convex_hull()
     }
-}
 
-impl SingleGeometry for VectorPoint {}
+    fn points(&self) -> MultiVectorPoint {
+        self.into()
+    }
+}
 
 impl GeometricOperations<&VectorPoint> for &VectorPoint {
     fn distance(self, other: &VectorPoint) -> f64 {
@@ -349,11 +356,15 @@ impl GeometricOperations<&VectorPoint> for &VectorPoint {
     }
 
     #[allow(refining_impl_trait)]
-    fn intersection(self, other: &VectorPoint) -> Option<VectorPoint> {
+    fn intersection(self, other: &VectorPoint) -> GeometryCollection {
         if self.intersects(other) {
-            Some(VectorPoint::new(self.xyz.to_owned()))
+            GeometryCollection {
+                geometries: vec![Box::new(unsafe {
+                    VectorPoint::try_from(self.xyz.to_owned()).unwrap_unchecked()
+                })],
+            }
         } else {
-            None
+            GeometryCollection::empty()
         }
     }
 }
@@ -383,7 +394,7 @@ impl Into<Vec<VectorPoint>> for &MultiVectorPoint {
         self.xyz
             .rows()
             .into_iter()
-            .map(|row| VectorPoint::new(row.to_owned()))
+            .map(|row| unsafe { VectorPoint::try_from(row.to_owned()).unwrap_unchecked() })
             .collect()
     }
 }
@@ -396,7 +407,16 @@ impl TryFrom<Array2<f64>> for MultiVectorPoint {
         if xyz.shape()[1] != 3 {
             Err(format!("array should be Nx3, not Nx{:?}", xyz.shape()[1]))
         } else {
-            Ok(Self::new(xyz))
+            let points = xyz
+                .rows()
+                .into_iter()
+                .map(|point| [point[0], point[1], point[2]])
+                .collect::<Vec<[f64; 3]>>();
+
+            Ok(Self {
+                xyz,
+                kdtree: points.as_slice().into(),
+            })
         }
     }
 }
@@ -432,19 +452,6 @@ impl Into<Vec<[f64; 3]>> for &MultiVectorPoint {
 }
 
 impl MultiVectorPoint {
-    pub fn new(xyz: Array2<f64>) -> Self {
-        let points = xyz
-            .rows()
-            .into_iter()
-            .map(|point| [point[0], point[1], point[2]])
-            .collect::<Vec<[f64; 3]>>();
-
-        Self {
-            xyz,
-            kdtree: points.as_slice().into(),
-        }
-    }
-
     /// from the given coordinates, build xyz vectors representing points on the sphere
     pub fn try_from_lonlats(coordinates: &ArrayView2<f64>, degrees: bool) -> Result<Self, String> {
         if coordinates.shape()[1] == 2 {
@@ -461,17 +468,20 @@ impl MultiVectorPoint {
             let lon_cos = &lon.cos();
             let lat_cos = &lat.cos();
 
-            Ok(Self::new(
-                stack(
-                    Axis(1),
-                    &[
-                        (lon_cos * lat_cos).view(),
-                        (lon_sin * lat_cos).view(),
-                        lat_sin.view(),
-                    ],
+            Ok(unsafe {
+                Self::try_from(
+                    stack(
+                        Axis(1),
+                        &[
+                            (lon_cos * lat_cos).view(),
+                            (lon_sin * lat_cos).view(),
+                            lat_sin.view(),
+                        ],
+                    )
+                    .unwrap(),
                 )
-                .unwrap(),
-            ))
+                .unwrap_unchecked()
+            })
         } else {
             Err(String::from("invalid shape"))
         }
@@ -479,12 +489,12 @@ impl MultiVectorPoint {
 
     /// normalize the given xyz vectors
     pub fn normalize(xyz: &ArrayView2<f64>) -> Self {
-        Self::new(normalize_vectors(xyz))
+        Self::try_from(normalize_vectors(xyz)).unwrap()
     }
 
     /// normalize the underlying vectors to length 1 (the unit sphere) while preserving direction
     pub fn normalized(&self) -> Self {
-        Self::new(normalize_vectors(&self.xyz.view()))
+        unsafe { Self::try_from(normalize_vectors(&self.xyz.view())).unwrap_unchecked() }
     }
 
     /// convert to angle coordinates along the sphere
@@ -536,20 +546,23 @@ impl MultiVectorPoint {
         let by = b.slice(s![.., 1]);
         let bz = b.slice(s![.., 2]);
 
-        Self::new(
-            -b * -a * b * (1.0 - theta.cos())
-                + a * theta.cos()
-                + stack(
-                    Axis(0),
-                    &[
-                        (-&bz * &ay + &by * &az).view(),
-                        (&bz * &ax - &bx * &az).view(),
-                        (-&by * &ax - &bx * &ay).view(),
-                    ],
-                )
-                .unwrap()
-                    * theta.sin(),
-        )
+        unsafe {
+            Self::try_from(
+                -b * -a * b * (1.0 - theta.cos())
+                    + a * theta.cos()
+                    + stack(
+                        Axis(0),
+                        &[
+                            (-&bz * &ay + &by * &az).view(),
+                            (&bz * &ax - &bx * &az).view(),
+                            (-&by * &ax - &bx * &ay).view(),
+                        ],
+                    )
+                    .unwrap()
+                        * theta.sin(),
+            )
+            .unwrap_unchecked()
+        }
     }
 
     pub fn angles(&self, a: &MultiVectorPoint, b: &MultiVectorPoint, degrees: bool) -> Array1<f64> {
@@ -567,6 +580,21 @@ impl MultiVectorPoint {
                 .map(|point| collinear(&a.xyz.view(), &point.xyz.view(), &b.xyz.view()))
                 .collect(),
         )
+    }
+}
+
+impl Sum for MultiVectorPoint {
+    fn sum<I: Iterator<Item = Self>>(iter: I) -> Self {
+        let mut xyzs = vec![];
+        for multipoint in iter {
+            xyzs.push(multipoint.xyz);
+        }
+        let xyzs: Vec<ArrayView2<f64>> = xyzs.iter().map(|xyz| xyz.view()).collect();
+        // TODO: remove duplicates
+        unsafe {
+            MultiVectorPoint::try_from(concatenate(Axis(0), xyzs.as_slice()).unwrap_unchecked())
+                .unwrap_unchecked()
+        }
     }
 }
 
@@ -648,6 +676,10 @@ impl Geometry for &MultiVectorPoint {
     fn convex_hull(&self) -> Option<crate::sphericalpolygon::SphericalPolygon> {
         None
     }
+
+    fn points(&self) -> MultiVectorPoint {
+        (*self).to_owned()
+    }
 }
 
 impl Geometry for MultiVectorPoint {
@@ -666,29 +698,25 @@ impl Geometry for MultiVectorPoint {
     fn convex_hull(&self) -> Option<crate::sphericalpolygon::SphericalPolygon> {
         (&self).convex_hull()
     }
+
+    fn points(&self) -> MultiVectorPoint {
+        (&self).points()
+    }
 }
 
-impl MultiGeometry<VectorPoint> for &MultiVectorPoint {
-    fn parts(&self) -> Vec<VectorPoint> {
-        self.to_owned().into()
-    }
-
+impl MultiGeometry for &MultiVectorPoint {
     fn len(&self) -> usize {
         self.xyz.nrows()
     }
 }
 
-impl MultiGeometry<VectorPoint> for MultiVectorPoint {
-    fn parts(&self) -> Vec<VectorPoint> {
-        (&self).parts()
-    }
-
+impl MultiGeometry for MultiVectorPoint {
     fn len(&self) -> usize {
         (&self).len()
     }
 }
 
-impl GeometryCollection<VectorPoint> for MultiVectorPoint {
+impl MutableMultiGeometry<VectorPoint> for MultiVectorPoint {
     fn extend(&mut self, other: MultiVectorPoint) {
         self.xyz = concatenate(Axis(0), &[self.xyz.view(), other.xyz.view()]).unwrap();
     }
@@ -724,10 +752,7 @@ impl GeometricOperations<&MultiVectorPoint> for &MultiVectorPoint {
     }
 
     fn contains(self, other: &MultiVectorPoint) -> bool {
-        other.len() < self.len()
-            && self
-                .intersection(other)
-                .map_or(false, |intersection| intersection.len() < self.len())
+        other.len() < self.len() && self.intersection(other).len() < self.len()
     }
 
     fn within(self, other: &MultiVectorPoint) -> bool {
@@ -735,11 +760,11 @@ impl GeometricOperations<&MultiVectorPoint> for &MultiVectorPoint {
     }
 
     fn intersects(self, other: &MultiVectorPoint) -> bool {
-        self.intersection(other).is_some()
+        self.intersection(other).len() > 0
     }
 
     #[allow(refining_impl_trait)]
-    fn intersection(self, other: &MultiVectorPoint) -> Option<MultiVectorPoint> {
+    fn intersection(self, other: &MultiVectorPoint) -> GeometryCollection {
         let tolerance: f64 = 3e-11;
         let other_point = other.xyz.view();
 
@@ -751,11 +776,14 @@ impl GeometricOperations<&MultiVectorPoint> for &MultiVectorPoint {
         }
 
         if points.len() > 0 {
-            Some(unsafe {
-                MultiVectorPoint::new(stack(Axis(0), points.as_slice()).unwrap_unchecked())
-            })
+            GeometryCollection {
+                geometries: vec![Box::new(unsafe {
+                    MultiVectorPoint::try_from(stack(Axis(0), points.as_slice()).unwrap_unchecked())
+                        .unwrap_unchecked()
+                })],
+            }
         } else {
-            None
+            GeometryCollection::empty()
         }
     }
 }
@@ -778,7 +806,7 @@ impl GeometricOperations<&VectorPoint> for &MultiVectorPoint {
         Zip::from(self.xyz.rows()).any(|point| (&point - &other_point).abs().sum() < tolerance)
     }
 
-    fn within(self, other: &VectorPoint) -> bool {
+    fn within(self, _: &VectorPoint) -> bool {
         false
     }
 
@@ -787,19 +815,21 @@ impl GeometricOperations<&VectorPoint> for &MultiVectorPoint {
     }
 
     #[allow(refining_impl_trait)]
-    fn intersection(self, other: &VectorPoint) -> Option<VectorPoint> {
+    fn intersection(self, other: &VectorPoint) -> GeometryCollection {
         let tolerance = 1e-10;
         let other_point = other.xyz.view();
 
         for point in self.xyz.rows() {
             if (&point - &other_point).abs().sum() < tolerance {
-                return Some(VectorPoint {
-                    xyz: point.to_owned(),
-                });
+                return GeometryCollection {
+                    geometries: vec![Box::new(VectorPoint {
+                        xyz: point.to_owned(),
+                    })],
+                };
             }
         }
 
-        return None;
+        return GeometryCollection::empty();
     }
 }
 
@@ -811,8 +841,10 @@ mod tests {
     #[test]
     fn test_normalize() {
         let xyz = Array1::<f64>::linspace(-100.0, 100.0, 18);
-        let points =
-            MultiVectorPoint::new(stack(Axis(1), &[xyz.view(), xyz.view(), xyz.view()]).unwrap());
+        let points = MultiVectorPoint::try_from(
+            stack(Axis(1), &[xyz.view(), xyz.view(), xyz.view()]).unwrap(),
+        )
+        .unwrap();
 
         assert_ne!(
             points.vector_lengths(),
@@ -958,23 +990,23 @@ mod tests {
 
         let lonlats = array![[0., 90.], [0., -90.], [45., 0.], [315., 0.]];
 
-        let a = VectorPoint::new(xyz.slice(s![0, ..]).to_owned());
+        let a = VectorPoint::try_from(xyz.slice(s![0, ..]).to_owned()).unwrap();
         let ac = a.to_lonlat(true);
         assert_eq!(ac, lonlats.slice(s![0, ..]).to_owned());
 
-        let b = VectorPoint::new(xyz.slice(s![1, ..]).to_owned());
+        let b = VectorPoint::try_from(xyz.slice(s![1, ..]).to_owned()).unwrap();
         let bc = b.to_lonlat(true);
         assert_eq!(bc, lonlats.slice(s![1, ..]).to_owned());
 
-        let c = VectorPoint::new(xyz.slice(s![2, ..]).to_owned());
+        let c = VectorPoint::try_from(xyz.slice(s![2, ..]).to_owned()).unwrap();
         let cc = c.to_lonlat(true);
         assert_eq!(cc, lonlats.slice(s![2, ..]).to_owned());
 
-        let d = VectorPoint::new(xyz.slice(s![3, ..]).to_owned());
+        let d = VectorPoint::try_from(xyz.slice(s![3, ..]).to_owned()).unwrap();
         let dc = d.to_lonlat(true);
         assert_eq!(dc, lonlats.slice(s![3, ..]).to_owned());
 
-        let abcd = MultiVectorPoint::new(xyz);
+        let abcd = MultiVectorPoint::try_from(xyz).unwrap();
         let abcdc = abcd.to_lonlats(true);
         assert_eq!(abcdc, lonlats);
         assert_eq!(
@@ -1017,11 +1049,15 @@ mod tests {
     #[test]
     fn test_str() {
         assert_eq!(
-            VectorPoint::new(array![0.0, 1.0, 2.0]).to_string(),
+            VectorPoint::try_from(array![0.0, 1.0, 2.0])
+                .unwrap()
+                .to_string(),
             "VectorPoint([0, 1, 2])"
         );
         assert_eq!(
-            MultiVectorPoint::new(array![[0.0, 1.0, 2.0]]).to_string(),
+            MultiVectorPoint::try_from(array![[0.0, 1.0, 2.0]])
+                .unwrap()
+                .to_string(),
             "MultiVectorPoint([[0, 1, 2]])"
         );
     }
@@ -1035,17 +1071,18 @@ mod tests {
             [1.0, -1.0, 0.0],
         ];
 
-        let a = VectorPoint::new(xyz.slice(s![0, ..]).to_owned());
-        let b = VectorPoint::new(xyz.slice(s![1, ..]).to_owned());
-        let c = VectorPoint::new(xyz.slice(s![2, ..]).to_owned());
-        let d = VectorPoint::new(xyz.slice(s![3, ..]).to_owned());
+        let a = VectorPoint::try_from(xyz.slice(s![0, ..]).to_owned()).unwrap();
+        let b = VectorPoint::try_from(xyz.slice(s![1, ..]).to_owned()).unwrap();
+        let c = VectorPoint::try_from(xyz.slice(s![2, ..]).to_owned()).unwrap();
+        let d = VectorPoint::try_from(xyz.slice(s![3, ..]).to_owned()).unwrap();
 
-        let reference_ab = MultiVectorPoint::new(xyz.slice(s![0..2, ..]).to_owned());
-        let reference_bc = MultiVectorPoint::new(xyz.slice(s![1..3, ..]).to_owned());
-        let reference_cd = MultiVectorPoint::new(xyz.slice(s![2..4, ..]).to_owned());
-        let reference_da = MultiVectorPoint::new(
+        let reference_ab = MultiVectorPoint::try_from(xyz.slice(s![0..2, ..]).to_owned()).unwrap();
+        let reference_bc = MultiVectorPoint::try_from(xyz.slice(s![1..3, ..]).to_owned()).unwrap();
+        let reference_cd = MultiVectorPoint::try_from(xyz.slice(s![2..4, ..]).to_owned()).unwrap();
+        let reference_da = MultiVectorPoint::try_from(
             stack(Axis(0), &[xyz.slice(s![3, ..]), xyz.slice(s![0, ..])]).unwrap(),
-        );
+        )
+        .unwrap();
 
         assert_eq!(&a + &b, reference_ab);
 
@@ -1055,8 +1092,8 @@ mod tests {
 
         assert_eq!(&d + &a, reference_da);
 
-        let reference_abc = MultiVectorPoint::new(xyz.slice(s![..3, ..]).to_owned());
-        let reference_abcd = MultiVectorPoint::new(xyz);
+        let reference_abc = MultiVectorPoint::try_from(xyz.slice(s![..3, ..]).to_owned()).unwrap();
+        let reference_abcd = MultiVectorPoint::try_from(xyz).unwrap();
 
         assert_eq!(&reference_ab + &c, reference_abc);
 
