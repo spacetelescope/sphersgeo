@@ -145,7 +145,7 @@ fn xyz_rotate_around(a: &[f64; 3], b: &[f64; 3], theta: &f64) -> [f64; 3] {
     let theta_cos = theta.cos();
 
     let a = array![a[0], a[1], a[2]];
-    let b = array![a[0], a[1], a[2]];
+    let b = array![b[0], b[1], b[2]];
 
     let rotated = -&b * -&a * &b * (1.0 - theta_cos)
         + (&a * theta_cos)
@@ -647,7 +647,7 @@ impl GeometricOperations<SphericalPoint> for SphericalPoint {
         }
     }
 
-    fn split(&self, other: &SphericalPoint) -> MultiSphericalPoint {
+    fn split(&self, _: &SphericalPoint) -> MultiSphericalPoint {
         MultiSphericalPoint::from(self.to_owned())
     }
 }
@@ -685,7 +685,7 @@ impl GeometricOperations<MultiSphericalPoint> for SphericalPoint {
         }
     }
 
-    fn split(&self, other: &MultiSphericalPoint) -> MultiSphericalPoint {
+    fn split(&self, _: &MultiSphericalPoint) -> MultiSphericalPoint {
         MultiSphericalPoint::from(self.to_owned())
     }
 }
@@ -723,7 +723,7 @@ impl GeometricOperations<crate::arcstring::ArcString> for SphericalPoint {
         }
     }
 
-    fn split(&self, other: &crate::arcstring::ArcString) -> MultiSphericalPoint {
+    fn split(&self, _: &crate::arcstring::ArcString) -> MultiSphericalPoint {
         MultiSphericalPoint::from(self.to_owned())
     }
 }
@@ -761,7 +761,7 @@ impl GeometricOperations<crate::arcstring::MultiArcString> for SphericalPoint {
         }
     }
 
-    fn split(&self, other: &crate::arcstring::MultiArcString) -> MultiSphericalPoint {
+    fn split(&self, _: &crate::arcstring::MultiArcString) -> MultiSphericalPoint {
         MultiSphericalPoint::from(self.to_owned())
     }
 }
@@ -802,7 +802,7 @@ impl GeometricOperations<crate::sphericalpolygon::SphericalPolygon> for Spherica
         }
     }
 
-    fn split(&self, other: &crate::sphericalpolygon::SphericalPolygon) -> MultiSphericalPoint {
+    fn split(&self, _: &crate::sphericalpolygon::SphericalPolygon) -> MultiSphericalPoint {
         MultiSphericalPoint::from(self.to_owned())
     }
 }
@@ -843,7 +843,7 @@ impl GeometricOperations<crate::sphericalpolygon::MultiSphericalPolygon> for Sph
         }
     }
 
-    fn split(&self, other: &crate::sphericalpolygon::MultiSphericalPolygon) -> MultiSphericalPoint {
+    fn split(&self, _: &crate::sphericalpolygon::MultiSphericalPolygon) -> MultiSphericalPoint {
         MultiSphericalPoint::from(self.to_owned())
     }
 }
@@ -1352,7 +1352,7 @@ impl GeometricOperations<SphericalPoint, SphericalPoint> for MultiSphericalPoint
         }
     }
 
-    fn split(&self, other: &SphericalPoint) -> MultiSphericalPoint {
+    fn split(&self, _: &SphericalPoint) -> MultiSphericalPoint {
         self.to_owned()
     }
 }
@@ -1437,7 +1437,7 @@ impl GeometricOperations<MultiSphericalPoint, SphericalPoint> for MultiSpherical
         .ok()
     }
 
-    fn split(&self, other: &MultiSphericalPoint) -> MultiSphericalPoint {
+    fn split(&self, _: &MultiSphericalPoint) -> MultiSphericalPoint {
         self.to_owned()
     }
 }
@@ -1485,7 +1485,7 @@ impl GeometricOperations<crate::arcstring::ArcString, SphericalPoint> for MultiS
         .ok()
     }
 
-    fn split(&self, other: &crate::arcstring::ArcString) -> MultiSphericalPoint {
+    fn split(&self, _: &crate::arcstring::ArcString) -> MultiSphericalPoint {
         self.to_owned()
     }
 }
@@ -1522,7 +1522,7 @@ impl GeometricOperations<crate::arcstring::MultiArcString, SphericalPoint> for M
         other.intersection(self)
     }
 
-    fn split(&self, other: &crate::arcstring::MultiArcString) -> MultiSphericalPoint {
+    fn split(&self, _: &crate::arcstring::MultiArcString) -> MultiSphericalPoint {
         self.to_owned()
     }
 }
@@ -1561,7 +1561,7 @@ impl GeometricOperations<crate::sphericalpolygon::SphericalPolygon, SphericalPoi
         other.intersection(self)
     }
 
-    fn split(&self, other: &crate::sphericalpolygon::SphericalPolygon) -> MultiSphericalPoint {
+    fn split(&self, _: &crate::sphericalpolygon::SphericalPolygon) -> MultiSphericalPoint {
         self.to_owned()
     }
 }
@@ -1609,7 +1609,7 @@ impl GeometricOperations<crate::sphericalpolygon::MultiSphericalPolygon, Spheric
         other.intersection(self)
     }
 
-    fn split(&self, other: &crate::sphericalpolygon::MultiSphericalPolygon) -> MultiSphericalPoint {
+    fn split(&self, _: &crate::sphericalpolygon::MultiSphericalPolygon) -> MultiSphericalPoint {
         self.to_owned()
     }
 }

@@ -417,7 +417,7 @@ impl GeometricOperations<SphericalPoint> for SphericalPolygon {
         other.intersection(self)
     }
 
-    fn split(&self, other: &SphericalPoint) -> MultiSphericalPolygon {
+    fn split(&self, _: &SphericalPoint) -> MultiSphericalPolygon {
         MultiSphericalPolygon {
             polygons: vec![self.to_owned()],
         }
@@ -491,7 +491,7 @@ impl GeometricOperations<MultiSphericalPoint> for SphericalPolygon {
         .ok()
     }
 
-    fn split(&self, other: &MultiSphericalPoint) -> MultiSphericalPolygon {
+    fn split(&self, _: &MultiSphericalPoint) -> MultiSphericalPolygon {
         MultiSphericalPolygon {
             polygons: vec![self.to_owned()],
         }
@@ -554,8 +554,6 @@ impl GeometricOperations<ArcString> for SphericalPolygon {
     }
 
     fn split(&self, other: &ArcString) -> MultiSphericalPolygon {
-        let tolerance = 3e-11;
-
         // split this polygon into several pieces
         let mut polygons = MultiSphericalPolygon {
             polygons: vec![self.to_owned()],
@@ -1016,7 +1014,7 @@ impl GeometricOperations<SphericalPoint, SphericalPolygon> for MultiSphericalPol
         other.intersection(self)
     }
 
-    fn split(&self, other: &SphericalPoint) -> MultiSphericalPolygon {
+    fn split(&self, _: &SphericalPoint) -> MultiSphericalPolygon {
         self.to_owned()
     }
 }
@@ -1064,7 +1062,7 @@ impl GeometricOperations<MultiSphericalPoint, SphericalPolygon> for MultiSpheric
             .sum()
     }
 
-    fn split(&self, other: &MultiSphericalPoint) -> MultiSphericalPolygon {
+    fn split(&self, _: &MultiSphericalPoint) -> MultiSphericalPolygon {
         self.to_owned()
     }
 }

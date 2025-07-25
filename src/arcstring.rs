@@ -357,8 +357,6 @@ impl ArcString {
     /// whether this arcstring intersects itself
     pub fn crosses_self(&self) -> bool {
         if self.points.len() >= 4 {
-            let tolerance = 1e-11;
-
             // we can't use the Bentley-Ottmann sweep-line algorithm here :/
             // because a sphere is an enclosed infinite space so there's no good way to sort by longitude
             // so I guess the best we can do instead is use brute-force and skip visited arcs

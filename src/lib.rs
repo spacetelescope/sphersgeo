@@ -1,4 +1,4 @@
-#![allow(unused_variables, refining_impl_trait)]
+#![allow(refining_impl_trait)]
 mod arcstring;
 mod edgegraph;
 mod geometry;
@@ -67,7 +67,7 @@ mod py_sphersgeo {
         #[classmethod]
         #[pyo3(name = "from_lonlat")]
         fn py_from_lonlat<'py>(
-            cls: &Bound<'py, PyType>,
+            _: &Bound<'py, PyType>,
             lonlat: PySphericalPointLonLatInputs,
         ) -> Self {
             let lonlat = match lonlat {
@@ -376,7 +376,7 @@ mod py_sphersgeo {
         #[classmethod]
         #[pyo3(name = "from_lonlats")]
         fn py_from_lonlats<'py>(
-            cls: &Bound<'py, PyType>,
+            _: &Bound<'py, PyType>,
             lonlats: PyMultiSphericalPointLonLatInputs,
         ) -> PyResult<Self> {
             let lonlats = match lonlats {
@@ -1163,7 +1163,7 @@ mod py_sphersgeo {
         #[classmethod]
         #[pyo3(name="from_cone", signature=(center, radius, steps=16))]
         fn py_from_cone<'py>(
-            cls: &Bound<'py, PyType>,
+            _: &Bound<'py, PyType>,
             center: PySphericalPointInputs,
             radius: f64,
             steps: usize,

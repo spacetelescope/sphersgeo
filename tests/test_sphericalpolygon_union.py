@@ -13,13 +13,8 @@ import pytest
 from numpy.testing import assert_array_almost_equal
 
 # LOCAL
-from spherical_geometry import polygon
-from spherical_geometry.tests.helpers import ROOT_DIR, resolve_imagename
+from sphersgeo import SphericalPolygon
 
-try:
-    from spherical_geometry import math_util
-except ImportError:
-    math_util = None
 
 GRAPH_MODE = False
 
@@ -53,7 +48,7 @@ class union_test:
                 filename = "%s_union_%04d.svg" % (func.__name__, i)
                 print(filename)
 
-                union = polygon.SphericalPolygon.multi_union(permutation)
+                union = SphericalPolygon.join(permutation)
                 unions.append(union)
                 union_area = union.area()
 
@@ -86,12 +81,12 @@ class union_test:
 
 @union_test(0, 90)
 def test2():
-    poly1 = polygon.SphericalPolygon.from_cone(0, 60, 7, steps=8)
-    poly2 = polygon.SphericalPolygon.from_cone(0, 72, 7, steps=8)
-    poly3 = polygon.SphericalPolygon.from_cone(20, 60, 7, steps=8)
-    poly4 = polygon.SphericalPolygon.from_cone(20, 72, 7, steps=8)
-    poly5 = polygon.SphericalPolygon.from_cone(35, 55, 7, steps=8)
-    poly6 = polygon.SphericalPolygon.from_cone(60, 60, 3, steps=8)
+    poly1 = SphericalPolygon.from_cone(0, 60, 7, steps=8)
+    poly2 = SphericalPolygon.from_cone(0, 72, 7, steps=8)
+    poly3 = SphericalPolygon.from_cone(20, 60, 7, steps=8)
+    poly4 = SphericalPolygon.from_cone(20, 72, 7, steps=8)
+    poly5 = SphericalPolygon.from_cone(35, 55, 7, steps=8)
+    poly6 = SphericalPolygon.from_cone(60, 60, 3, steps=8)
     return [poly1, poly2, poly3, poly4, poly5, poly6]
 
 
@@ -102,9 +97,9 @@ def test5():
 
     with fits.open(os.path.join(ROOT_DIR, "2chipA.fits.gz")) as A:
         wcs = pywcs.WCS(A[1].header, fobj=A)
-        chipA1 = polygon.SphericalPolygon.from_wcs(wcs)
+        chipA1 = SphericalPolygon.from_wcs(wcs)
         wcs = pywcs.WCS(A[4].header, fobj=A)
-        chipA2 = polygon.SphericalPolygon.from_wcs(wcs)
+        chipA2 = SphericalPolygon.from_wcs(wcs)
 
     _ = chipA1.union(chipA2)
 
@@ -115,9 +110,9 @@ def test6():
 
     with fits.open(os.path.join(ROOT_DIR, "2chipC.fits.gz")) as A:
         wcs = pywcs.WCS(A[1].header, fobj=A)
-        chipA1 = polygon.SphericalPolygon.from_wcs(wcs)
+        chipA1 = SphericalPolygon.from_wcs(wcs)
         wcs = pywcs.WCS(A[4].header, fobj=A)
-        chipA2 = polygon.SphericalPolygon.from_wcs(wcs)
+        chipA2 = SphericalPolygon.from_wcs(wcs)
 
     _ = chipA1.union(chipA2)
 
@@ -130,15 +125,15 @@ def test7():
 
     with fits.open(os.path.join(ROOT_DIR, "2chipA.fits.gz")) as A:
         wcs = pywcs.WCS(A[1].header, fobj=A)
-        chipA1 = polygon.SphericalPolygon.from_wcs(wcs)
+        chipA1 = SphericalPolygon.from_wcs(wcs)
         wcs = pywcs.WCS(A[4].header, fobj=A)
-        chipA2 = polygon.SphericalPolygon.from_wcs(wcs)
+        chipA2 = SphericalPolygon.from_wcs(wcs)
 
     with fits.open(os.path.join(ROOT_DIR, "2chipB.fits.gz")) as B:
         wcs = pywcs.WCS(B[1].header, fobj=B)
-        chipB1 = polygon.SphericalPolygon.from_wcs(wcs)
+        chipB1 = SphericalPolygon.from_wcs(wcs)
         wcs = pywcs.WCS(B[4].header, fobj=B)
-        chipB2 = polygon.SphericalPolygon.from_wcs(wcs)
+        chipB2 = SphericalPolygon.from_wcs(wcs)
 
     return [chipA1, chipA2, chipB1, chipB2]
 
@@ -150,21 +145,21 @@ def test8():
     filename = resolve_imagename(ROOT_DIR, "1904-66_TAN.fits")
     header = fits.getheader(filename, ext=0)
 
-    poly1 = polygon.SphericalPolygon.from_wcs(header, 1)
-    poly2 = polygon.SphericalPolygon.from_wcs(header, 1)
+    poly1 = SphericalPolygon.from_wcs(header, 1)
+    poly2 = SphericalPolygon.from_wcs(header, 1)
 
     return [poly1, poly2]
 
 
 def test_union_empty():
-    p = polygon.SphericalPolygon.from_cone(
+    p = SphericalPolygon.from_cone(
         random.randrange(-180, 180),
         random.randrange(20, 90),
         random.randrange(5, 16),
         steps=16,
     )
 
-    p2 = p.union(polygon.SphericalPolygon([]))
+    p2 = p.union(SphericalPolygon([]))
 
     assert len(p2.polygons) == 1
     assert_array_almost_equal(p2.polygons[0].points, p.polygons[0].points)
@@ -188,10 +183,10 @@ def notest_difficult_unions():
             points,
             inside,
         ) = [to_array(line) for line in lines[i : i + 2]]
-        poly = polygon.SphericalPolygon(points, inside)
+        poly = SphericalPolygon(points, inside)
         polys.append(poly)
 
-    polygon.SphericalPolygon.multi_union(polys[: len(polys) // 2])
+    SphericalPolygon.multi_union(polys[: len(polys) // 2])
 
 
 def test_inside_point():
@@ -250,11 +245,11 @@ def test_inside_point():
     )
     c4 = np.array([0.98465776, 0.17362173, 0.01745241])
 
-    testFoV = polygon.SphericalPolygon(p, inside=c)
-    poly1 = polygon.SphericalPolygon(p1, inside=c1)
-    poly2 = polygon.SphericalPolygon(p2, inside=c2)
-    poly3 = polygon.SphericalPolygon(p3, inside=c3)
-    poly4 = polygon.SphericalPolygon(p4, inside=c4)
+    testFoV = SphericalPolygon(p, inside=c)
+    poly1 = SphericalPolygon(p1, inside=c1)
+    poly2 = SphericalPolygon(p2, inside=c2)
+    poly3 = SphericalPolygon(p3, inside=c3)
+    poly4 = SphericalPolygon(p4, inside=c4)
 
     polys = [poly1, poly2, poly3, poly4]
 
@@ -329,15 +324,11 @@ def test_edge_crossings():
         ]
     )
 
-    A = polygon.SphericalPolygon(a)
-    B = polygon.SphericalPolygon(b)
+    A = SphericalPolygon(a)
+    B = SphericalPolygon(b)
     _ = A.union(B)
 
 
-@pytest.mark.skipif(
-    math_util is None,
-    reason="math_util C-ext is missing, double accuracy leads to crash",
-)
 def test_almost_identical_polygons_multi_union():
     filename = resolve_imagename(ROOT_DIR, "almost_same_polygons.npz")
     polygon_data = np.load(filename)
@@ -345,7 +336,7 @@ def test_almost_identical_polygons_multi_union():
     polygons = []
     for k in range(len(polygon_data.files) // 2):
         polygons.append(
-            polygon.SphericalPolygon(
+            SphericalPolygon(
                 polygon_data[f"p{k:02d}_points"],
                 inside=polygon_data[f"p{k:02d}_inside"],
             )
@@ -363,6 +354,6 @@ def test_almost_identical_polygons_multi_union():
     else:
         p_shapes = [(66, 3)]
 
-    p = polygon.SphericalPolygon.multi_union(polygons)
+    p = SphericalPolygon.multi_union(polygons)
     assert np.shape(list(p.points)[0]) in p_shapes
     assert abs(p.area() - 2.6672666e-8) < area_tol

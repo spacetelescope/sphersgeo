@@ -370,7 +370,9 @@ impl<'a> EdgeGraph<'a, SphericalPolygon> {
             }
         }
 
-        for source_update in pending_source_updates {}
+        for source_update in pending_source_updates {
+            todo!()
+        }
     }
 }
 
@@ -563,14 +565,14 @@ fn trace_polygons(
         if edge_angles.len() > 1 {
             let left_node = edge_angles
                 .iter()
-                .min_by(|(edge_a, edge_angle_a), (edge_b, edge_angle_b)| {
+                .min_by(|(_, edge_angle_a), (_, edge_angle_b)| {
                     edge_angle_a.partial_cmp(edge_angle_b).unwrap()
                 })
                 .unwrap()
                 .0;
             let right_node = edge_angles
                 .iter()
-                .min_by(|(edge_a, edge_angle_a), (edge_b, edge_angle_b)| {
+                .min_by(|(_, edge_angle_a), (_, edge_angle_b)| {
                     edge_angle_a.partial_cmp(edge_angle_b).unwrap()
                 })
                 .unwrap()
