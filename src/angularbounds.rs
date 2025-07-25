@@ -1,5 +1,6 @@
 use crate::geometry::{GeometricOperations, Geometry};
-use numpy::ndarray::{array, s, Array1};
+use ndarray::Array2;
+use numpy::ndarray::{array, s, Array1, Axis};
 use pyo3::prelude::*;
 use rayon::iter::{IntoParallelRefIterator, ParallelIterator};
 
@@ -113,7 +114,7 @@ impl Geometry for &AngularBounds {
     }
 
     fn length(&self) -> f64 {
-        crate::arcstring::vector_arc_length(
+        crate::sphericalpoint::vector_arc_length(
             &array![self.min_x, self.min_y].view(),
             &array![self.max_x, self.max_y].view(),
         )
@@ -248,7 +249,7 @@ impl GeometricOperations<&crate::sphericalpoint::MultiSphericalPoint> for &Angul
         self,
         other: &crate::sphericalpoint::MultiSphericalPoint,
     ) -> Option<crate::sphericalpoint::MultiSphericalPoint> {
-        let points: Vec<Array1<f64>> = other
+        let lonlats: Vec<Array1<f64>> = other
             .to_lonlats(self.degrees)
             .rows()
             .into_iter()
@@ -265,8 +266,19 @@ impl GeometricOperations<&crate::sphericalpoint::MultiSphericalPoint> for &Angul
             })
             .collect();
 
-        if !points.is_empty() {
-            Some(crate::sphericalpoint::MultiSphericalPoint::try_from(points).unwrap())
+        let mut array = Array2::<f64>::uninit((lonlats.len(), 2));
+        for (index, row) in array.axis_iter_mut(Axis(0)).enumerate() {
+            lonlats[index].assign_to(row);
+        }
+
+        if !lonlats.is_empty() {
+            Some(
+                crate::sphericalpoint::MultiSphericalPoint::try_from_lonlats(
+                    &unsafe { array.assume_init() }.view(),
+                    self.degrees,
+                )
+                .unwrap(),
+            )
         } else {
             None
         }

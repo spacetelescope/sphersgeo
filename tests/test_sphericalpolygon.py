@@ -4,14 +4,17 @@ from pathlib import Path
 
 import numpy as np
 import pytest
-import sphersgeo
+from sphersgeo import SphericalPolygon
 from numpy.testing import assert_almost_equal
 
 DATA_DIRECTORY = Path(__file__).parent / "data"
 
+def test_init():
+    a = SphericalPolygon((np.array[[]]))
+
 
 def test_is_clockwise():
-    clockwise_poly = sphersgeo.SphericalPolygon.from_cone(0.0, 90.0, 1.0)
+    clockwise_poly = SphericalPolygon.from_cone(0.0, 90.0, 1.0)
     assert clockwise_poly.is_clockwise()
 
     points = list(clockwise_poly.points)[0]
@@ -19,10 +22,10 @@ def test_is_clockwise():
     outside = -1.0 * inside
 
     rpoints = points[::-1]
-    reverse_poly = sphersgeo.SphericalPolygon(rpoints, inside=inside)
+    reverse_poly = SphericalPolygon(rpoints, inside=inside)
     assert reverse_poly.is_clockwise()
 
-    complement_poly = sphersgeo.SphericalPolygon(points, inside=outside)
+    complement_poly = SphericalPolygon(points, inside=outside)
     assert not complement_poly.is_clockwise()
 
 
@@ -35,7 +38,7 @@ def test_overlap():
         for corner in corners:
             x, y = corner
             points.append(np.asarray(vector.lonlat_to_vector(x + offset, y + y_eps)))
-        poly = sphersgeo.SphericalPolygon(points)
+        poly = SphericalPolygon(points)
         return poly
 
     first_poly = build_polygon(0.0)
@@ -52,7 +55,7 @@ def test_from_wcs():
 
     header = fits.getheader(DATA_DIRECTORY / "j8bt06nyq_flt.fits", ext=("SCI", 1))
 
-    poly = sphersgeo.SphericalPolygon.from_wcs(header)
+    poly = SphericalPolygon.from_wcs(header)
     for lonlat in poly.to_lonlat():
         lon = lonlat[0]
         lat = lonlat[1]
@@ -63,22 +66,22 @@ def test_from_wcs():
 def test_intersects_poly_simple():
     lon1 = np.array([-10, 10, 10, -10, -10], dtype=float)
     lat1 = np.array([30, 30, 0, 0, 30], dtype=float)
-    poly1 = sphersgeo.SphericalPolygon.from_lonlat(lon1, lat1)
+    poly1 = SphericalPolygon.from_lonlat(lon1, lat1)
 
     ra2 = np.array([-5, 15, 15, -5, -5], dtype=float)
     dec2 = np.array([20, 20, -10, -10, 20], dtype=float)
-    poly2 = sphersgeo.SphericalPolygon.from_lonlat(ra2, dec2)
+    poly2 = SphericalPolygon.from_lonlat(ra2, dec2)
 
     assert poly1.intersects_poly(poly2)
 
     # Make sure it isn't order-dependent
     lon1 = lon1[::-1]
     lat1 = lat1[::-1]
-    poly1 = sphersgeo.SphericalPolygon.from_lonlat(lon1, lat1)
+    poly1 = SphericalPolygon.from_lonlat(lon1, lat1)
 
     ra2 = ra2[::-1]
     dec2 = dec2[::-1]
-    poly2 = sphersgeo.SphericalPolygon.from_radec(ra2, dec2)
+    poly2 = SphericalPolygon.from_radec(ra2, dec2)
 
     assert poly1.intersects_poly(poly2)
 
@@ -86,22 +89,22 @@ def test_intersects_poly_simple():
 def test_intersects_poly_fully_contained():
     lon1 = np.array([-10, 10, 10, -10, -10], dtype=float)
     lat1 = np.array([30, 30, 0, 0, 30], dtype=float)
-    poly1 = sphersgeo.SphericalPolygon.from_lonlat(lon1, lat1)
+    poly1 = SphericalPolygon.from_lonlat(lon1, lat1)
 
     lon2 = np.array([-5, 5, 5, -5, -5], dtype=float)
     lat2 = np.array([20, 20, 10, 10, 20], dtype=float)
-    poly2 = sphersgeo.SphericalPolygon.from_lonlat(lon2, lat2)
+    poly2 = SphericalPolygon.from_lonlat(lon2, lat2)
 
     assert poly1.intersects_poly(poly2)
 
     # Make sure it isn't order-dependent
     lon1 = lon1[::-1]
     lat1 = lat1[::-1]
-    poly1 = sphersgeo.SphericalPolygon.from_lonlat(lon1, lat1)
+    poly1 = SphericalPolygon.from_lonlat(lon1, lat1)
 
     lon2 = lon2[::-1]
     lat2 = lat2[::-1]
-    poly2 = sphersgeo.SphericalPolygon.from_lonlat(lon2, lat2)
+    poly2 = SphericalPolygon.from_lonlat(lon2, lat2)
 
     assert poly1.intersects_poly(poly2)
 
@@ -109,22 +112,22 @@ def test_intersects_poly_fully_contained():
 def test_hard_intersects_poly():
     lon1 = np.array([-10, 10, 10, -10, -10], dtype=float)
     lat1 = np.array([30, 30, 0, 0, 30], dtype=float)
-    poly1 = sphersgeo.SphericalPolygon.from_lonlat(lon1, lat1)
+    poly1 = SphericalPolygon.from_lonlat(lon1, lat1)
 
     lon2 = np.array([-20, 20, 20, -20, -20], dtype=float)
     lat2 = np.array([20, 20, 10, 10, 20], dtype=float)
-    poly2 = sphersgeo.SphericalPolygon.from_lonlat(lon2, lat2)
+    poly2 = SphericalPolygon.from_lonlat(lon2, lat2)
 
     assert poly1.intersects_poly(poly2)
 
     # Make sure it isn't order-dependent
     lon1 = lon1[::-1]
     lat1 = lat1[::-1]
-    poly1 = sphersgeo.SphericalPolygon.from_lonlat(lon1, lat1)
+    poly1 = SphericalPolygon.from_lonlat(lon1, lat1)
 
     lon2 = lon2[::-1]
     lat2 = lat2[::-1]
-    poly2 = sphersgeo.SphericalPolygon.from_lonlat(lon2, lat2)
+    poly2 = SphericalPolygon.from_lonlat(lon2, lat2)
 
     assert poly1.intersects_poly(poly2)
 
@@ -132,28 +135,28 @@ def test_hard_intersects_poly():
 def test_not_intersects_poly():
     lon1 = np.array([-10, 10, 10, -10, -10], dtype=float)
     lat1 = np.array([30, 30, 5, 5, 30], dtype=float)
-    poly1 = sphersgeo.SphericalPolygon.from_lonlat(lon1, lat1)
+    poly1 = SphericalPolygon.from_lonlat(lon1, lat1)
 
     lon2 = np.array([-20, 20, 20, -20, -20], dtype=float)
     lat2 = np.array([-20, -20, -10, -10, -20], dtype=float)
-    poly2 = sphersgeo.SphericalPolygon.from_lonlat(lon2, lat2)
+    poly2 = SphericalPolygon.from_lonlat(lon2, lat2)
 
     assert not poly1.intersects_poly(poly2)
 
     # Make sure it isn't order-dependent
     lon1 = lon1[::-1]
     lat1 = lat1[::-1]
-    poly1 = sphersgeo.SphericalPolygon.from_lonlat(lon1, lat1)
+    poly1 = SphericalPolygon.from_lonlat(lon1, lat1)
 
     lon2 = lon2[::-1]
     lat2 = lat2[::-1]
-    poly2 = sphersgeo.SphericalPolygon.from_lonlat(lon2, lat2)
+    poly2 = SphericalPolygon.from_lonlat(lon2, lat2)
 
     assert not poly1.intersects_poly(poly2)
 
 
 def test_point_in_poly():
-    point = sphersgeo.VectorPoint(np.asarray([-0.27475449, 0.47588873, -0.83548781]))
+    point = VectorPoint(np.asarray([-0.27475449, 0.47588873, -0.83548781]))
     points = np.asarray(
         [
             [0.04821217, -0.29877206, 0.95310589],
@@ -164,7 +167,7 @@ def test_point_in_poly():
         ]
     )
     inside = np.asarray([-0.03416009, -0.36858623, 0.9289657])
-    poly = sphersgeo.SphericalPolygon(points, inside)
+    poly = SphericalPolygon(points, inside)
     assert not poly.contains_point(point)
 
     lonlat = point.to_lonlat()

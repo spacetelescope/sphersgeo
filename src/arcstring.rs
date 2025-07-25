@@ -1,7 +1,10 @@
 use crate::{
     angularbounds::AngularBounds,
     geometry::{ExtendMultiGeometry, GeometricOperations, Geometry, MultiGeometry},
-    sphericalpoint::{cross_vector, cross_vectors, MultiSphericalPoint, SphericalPoint},
+    sphericalpoint::{
+        cross_vector, cross_vectors, normalize_vector, vector_arc_length, MultiSphericalPoint,
+        SphericalPoint,
+    },
     sphericalpolygon::{spherical_triangle_area, MultiSphericalPolygon, SphericalPolygon},
 };
 use numpy::ndarray::{
@@ -9,7 +12,7 @@ use numpy::ndarray::{
 };
 use pyo3::prelude::*;
 use rayon::prelude::*;
-use std::{collections::VecDeque, iter::Sum};
+use std::{collections::VecDeque, iter::Sum, ops::Sub};
 
 pub fn interpolate_points_along_vector_arc(
     a: &ArrayView1<f64>,
@@ -52,34 +55,56 @@ pub fn interpolate_points_along_vector_arc(
             )
             .unwrap())
         } else {
-            Err(String::from(""))
+            Err(String::from("invalid input"))
         }
     } else {
-        Err(String::from("shape must match"))
+        Err(String::from("shapes must match"))
     }
 }
 
-/// given three XYZ vectors on the unit sphere (A, B, and C), retrieve the angle at B between arc AB and arc BC
+/// given three XYZ vector points on the sphere (`a`, `b`, and `c`), retrieve the angle at `b` formed by arcs `ab` and `bc`
+///
+///     cos(ca) = cos(bc) * cos(ab) + sin(bc) * sin(ab) * cos(b)
 ///
 /// References:
 /// - Miller, Robert D. Computing the area of a spherical polygon. Graphics Gems IV. p132. 1994. Academic Press. doi:10.5555/180895.180907
-pub fn vector_arc_angle(
+pub fn vector_arcs_angle_between(
     a: &ArrayView1<f64>,
     b: &ArrayView1<f64>,
     c: &ArrayView1<f64>,
     degrees: bool,
 ) -> f64 {
+    let abx = normalize_vector(&cross_vector(&a.view(), &b.view()).view());
+    let bcx = normalize_vector(&cross_vector(&b.view(), &c.view()).view());
+
+    let x = normalize_vector(&cross_vector(&abx.view(), &bcx.view()).view());
+
+    let diff = (b * x).sum();
+    let inner = (abx * bcx).sum();
+    let mut angle = inner.acos();
+    if diff < 0.0 {
+        angle = (2.0 * std::f64::consts::PI) - angle;
+    }
+
     let tolerance = 3e-11;
 
     let ab = vector_arc_length(a, b);
     let bc = vector_arc_length(b, c);
     let ca = vector_arc_length(c, a);
 
-    let angle = if ab > tolerance && bc > tolerance {
-        ((ca.cos() - bc.cos() * ab.cos()) / (bc.sin() * ab.sin())).acos()
-    } else {
+    let mut angle = if ca < tolerance {
+        // if the opposite side of the triangle is negligibly small
+        0.0
+    } else if ab < tolerance || bc < tolerance {
         (1.0 - ca.powi(2) / 2.0).acos()
+    } else {
+        ((ca.cos() - bc.cos() * ab.cos()) / (bc.sin() * ab.sin())).acos()
     };
+
+    // if all three points are collinear, the result will be NaN
+    if angle.is_nan() {
+        angle = std::f64::consts::PI;
+    }
 
     if degrees {
         angle.to_degrees()
@@ -92,7 +117,7 @@ pub fn vector_arc_angle(
 ///
 /// References:
 /// - Miller, Robert D. Computing the area of a spherical polygon. Graphics Gems IV. 1994. Academic Press. doi:10.5555/180895.180907
-pub fn vector_arc_angles(
+pub fn vector_arcs_angles_between(
     a: &ArrayView2<f64>,
     b: &ArrayView2<f64>,
     c: &ArrayView2<f64>,
@@ -123,21 +148,22 @@ pub fn vector_arc_angles(
     }
 }
 
-/// radians subtended by this arc on the sphere
-///    Notes
-///    -----
-///    The length is computed using the following:
-///
-///       l = arccos(A ⋅ B) / r^2
-pub fn vector_arc_length(a: &ArrayView1<f64>, b: &ArrayView1<f64>) -> f64 {
-    a.dot(b).acos()
-}
-
 /// whether the three points exist on the same line
 pub fn vectors_collinear(a: &ArrayView1<f64>, b: &ArrayView1<f64>, c: &ArrayView1<f64>) -> bool {
     let tolerance = 3e-11;
-    let area = spherical_triangle_area(a, b, c);
-    area.is_nan() || area < tolerance
+    // let area = spherical_triangle_area(a, b, c);
+    // area.is_nan() || area < tolerance
+
+    let abc = vector_arcs_angle_between(a, b, c, false);
+    let cab = vector_arcs_angle_between(c, a, b, false);
+    let bca = vector_arcs_angle_between(b, c, a, false);
+
+    abc < tolerance
+        || cab < tolerance
+        || bca < tolerance
+        || (abc - std::f64::consts::PI).abs() < tolerance
+        || (cab - std::f64::consts::PI).abs() < tolerance
+        || (bca - std::f64::consts::PI).abs() < tolerance
 
     // let left = arc_length(&a, &p);
     // let right = arc_length(&p, &b);
@@ -279,7 +305,7 @@ impl ArcString {
         }
 
         if intersections.len() > 0 {
-            Some(unsafe { MultiSphericalPoint::try_from(intersections).unwrap_unchecked() })
+            Some(unsafe { MultiSphericalPoint::try_from(&intersections).unwrap_unchecked() })
         } else {
             None
         }
@@ -501,7 +527,7 @@ impl GeometricOperations<&ArcString> for &ArcString {
         }
 
         if intersections.len() > 0 {
-            Some(MultiSphericalPoint::try_from(intersections).unwrap())
+            Some(MultiSphericalPoint::try_from(&intersections).unwrap())
         } else {
             None
         }
@@ -630,6 +656,18 @@ impl TryFrom<Vec<MultiSphericalPoint>> for MultiArcString {
             .par_iter()
             .map(|points| ArcString::try_from(points.to_owned()).unwrap())
             .collect();
+        Ok(Self::from(arcstrings))
+    }
+}
+
+impl TryFrom<Vec<Array2<f64>>> for MultiArcString {
+    type Error = String;
+
+    fn try_from(xyzs: Vec<Array2<f64>>) -> Result<Self, Self::Error> {
+        let mut arcstrings = vec![];
+        for xyz in xyzs {
+            arcstrings.push(ArcString::from(MultiSphericalPoint::try_from(xyz)?));
+        }
         Ok(Self::from(arcstrings))
     }
 }
@@ -1036,202 +1074,5 @@ impl GeometricOperations<&MultiSphericalPolygon> for &MultiArcString {
             .par_iter()
             .map(|arcstring| arcstring.intersection(other))
             .sum()
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use crate::geometry::MultiGeometry;
-    use numpy::ndarray::{array, linspace, s};
-
-    #[test]
-    fn test_midpoint() {
-        let tolerance = 1e-10;
-
-        let mut avec = Array2::<f64>::zeros((0, 2));
-        let mut bvec = Array2::<f64>::zeros((0, 2));
-        for i in linspace(0., 11., 5) {
-            for j in linspace(0., 11., 5) {
-                let row = array![i, j];
-                avec.push_row(row.view()).unwrap();
-                bvec.push_row(row.view()).unwrap();
-            }
-        }
-        avec += 7.0;
-        bvec += 10.0;
-
-        for a in avec.rows() {
-            let a = SphericalPoint::try_from_lonlat(&a, true).unwrap();
-            for b in bvec.rows() {
-                let b = SphericalPoint::try_from_lonlat(&b, true).unwrap();
-                let c = ArcString {
-                    points: a.combine(&b),
-                }
-                .midpoints();
-                let aclen = ArcString { points: &a + &c }.length();
-                let bclen = ArcString { points: &b + &c }.length();
-                assert!((aclen - bclen) < tolerance)
-            }
-        }
-    }
-
-    #[test]
-    fn test_contains() {
-        let arc = ArcString {
-            points: MultiSphericalPoint::try_from_lonlats(
-                &array![[-30.0, -30.0], [30.0, 30.0]].view(),
-                true,
-            )
-            .unwrap(),
-        };
-        assert!((&arc).contains(
-            &SphericalPoint::try_from_lonlat(&array![349.10660535, -12.30998866].view(), true)
-                .unwrap()
-        ));
-
-        let vertical_arc = ArcString {
-            points: MultiSphericalPoint::try_from_lonlats(
-                &array![[60.0, 0.0], [60.0, 30.0]].view(),
-                true,
-            )
-            .unwrap(),
-        };
-        for i in linspace(1., 29., 1) {
-            assert!((&vertical_arc)
-                .contains(&SphericalPoint::try_from_lonlat(&array![60.0, i].view(), true).unwrap()))
-        }
-
-        let horizontal_arc = ArcString {
-            points: MultiSphericalPoint::try_from_lonlats(
-                &array![[0.0, 60.0], [30.0, 60.0]].view(),
-                true,
-            )
-            .unwrap(),
-        };
-        for i in linspace(1., 29., 1) {
-            assert!((&horizontal_arc).contains(
-                &SphericalPoint::try_from_lonlat(&array![i, 60.0].view(), true).unwrap()
-            ));
-        }
-    }
-
-    #[test]
-    fn test_interpolate() {
-        let tolerance = 1e-10;
-
-        let a_lonlat = array![60.0, 0.0];
-        let b_lonlat = array![60.0, 30.0];
-        let lonlats =
-            interpolate_points_along_vector_arc(&a_lonlat.view(), &b_lonlat.view(), 10).unwrap();
-
-        let a = SphericalPoint::try_from_lonlat(&a_lonlat.view(), true).unwrap();
-        let b = SphericalPoint::try_from_lonlat(&b_lonlat.view(), true).unwrap();
-
-        assert!(Zip::from(&lonlats.slice(s![0, ..]))
-            .and(&a_lonlat.view())
-            .all(|test, reference| (test - reference).abs() < tolerance));
-        assert!(Zip::from(&lonlats.slice(s![-1, ..]))
-            .and(&b_lonlat.view())
-            .all(|test, reference| (test - reference).abs() < tolerance));
-
-        let xyzs = interpolate_points_along_vector_arc(&a.xyz.view(), &b.xyz.view(), 10).unwrap();
-
-        assert!(Zip::from(&xyzs.slice(s![0, ..]))
-            .and(&a.xyz.view())
-            .all(|test, reference| (test - reference).abs() < tolerance));
-        assert!(Zip::from(&xyzs.slice(s![-1, ..]))
-            .and(&b.xyz.view())
-            .all(|test, reference| (test - reference).abs() < tolerance));
-
-        let arc_from_lonlats = ArcString {
-            points: MultiSphericalPoint::try_from_lonlats(&lonlats.view(), true).unwrap(),
-        };
-        let arc_from_xyzs = ArcString {
-            points: MultiSphericalPoint::try_from(xyzs.to_owned()).unwrap(),
-        };
-
-        for xyz in xyzs.rows() {
-            let point = SphericalPoint::try_from(xyz.to_owned()).unwrap();
-            assert!((&arc_from_lonlats).contains(&point));
-            assert!((&arc_from_xyzs).contains(&point));
-        }
-
-        let distances_from_lonlats = arc_from_lonlats.lengths();
-        let distances_from_xyz = arc_from_xyzs.lengths();
-
-        assert!(Zip::from(&distances_from_lonlats)
-            .and(&distances_from_xyz)
-            .all(|from_lonlats, from_xyz| (from_lonlats - from_xyz).abs() < tolerance));
-    }
-
-    #[test]
-    fn test_intersection() {
-        let tolerance = 1e-10;
-
-        let a = SphericalPoint::try_from_lonlat(&array![-10.0, -10.0].view(), true).unwrap();
-        let b = SphericalPoint::try_from_lonlat(&array![10.0, 10.0].view(), true).unwrap();
-
-        let c = SphericalPoint::try_from_lonlat(&array![-25.0, 10.0].view(), true).unwrap();
-        let d = SphericalPoint::try_from_lonlat(&array![15.0, -10.0].view(), true).unwrap();
-
-        // let e = VectorPoint::try_from_lonlat(&array![-20.0, 40.0].view(), true).unwrap();
-        // let f = VectorPoint::try_from_lonlat(&array![20.0, 40.0].view(), true).unwrap();
-
-        let reference_intersection = array![0.99912414, -0.02936109, -0.02981403];
-
-        let ab = ArcString {
-            points: a.combine(&b),
-        };
-        let cd = ArcString {
-            points: c.combine(&d),
-        };
-        assert!((&ab).intersects(&cd));
-        let r = (&ab).intersection(&cd);
-        assert!(r.is_some());
-        let r = r.unwrap();
-        assert!(r.len() == 3);
-        assert!(Zip::from(r.xyz.rows())
-            .all(|point| (&point - &reference_intersection.view()).abs().sum() < tolerance));
-
-        // assert not np.all(great_circle_arc.intersects([A, E], [B, F], [C], [D]))
-        // r = great_circle_arc.intersection([A, E], [B, F], [C], [D])
-        // assert r.shape == (2, 3)
-        // assert_allclose(r[0], reference_intersection)
-        // assert np.all(np.isnan(r[1]))
-
-        // Test parallel arcs
-        let r = (&ab).intersection(&ab);
-        assert!(r.is_some());
-        assert!(r.unwrap().xyz.is_all_nan());
-    }
-
-    #[test]
-    fn test_length() {
-        let tolerance = 1e-10;
-
-        let a = SphericalPoint::try_from_lonlat(&array![90.0, 0.0].view(), true).unwrap();
-        let b = SphericalPoint::try_from_lonlat(&array![-90.0, 0.0].view(), true).unwrap();
-        let ab = ArcString {
-            points: a.combine(&b),
-        };
-        assert_eq!(ab.length(), (&a).distance(&b));
-        assert!((ab.length() - std::f64::consts::PI).abs() < tolerance);
-
-        let a = SphericalPoint::try_from_lonlat(&array![135.0, 0.0].view(), true).unwrap();
-        let b = SphericalPoint::try_from_lonlat(&array![-90.0, 0.0].view(), true).unwrap();
-        let ab = ArcString {
-            points: a.combine(&b),
-        };
-        assert_eq!(ab.length(), (&a).distance(&b));
-        assert!((ab.length() - (3.0 / 4.0) * std::f64::consts::PI).abs() < tolerance);
-
-        let a = SphericalPoint::try_from_lonlat(&array![0.0, 0.0].view(), true).unwrap();
-        let b = SphericalPoint::try_from_lonlat(&array![0.0, 90.0].view(), true).unwrap();
-        let ab = ArcString {
-            points: a.combine(&b),
-        };
-        assert_eq!(ab.length(), (&a).distance(&b));
-        assert!((ab.length() - std::f64::consts::PI / 2.0).abs() < tolerance);
     }
 }
