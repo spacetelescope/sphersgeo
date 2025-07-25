@@ -5,12 +5,9 @@ import sphersgeo
 import math
 
 
-def haversine_distance(
-    a: tuple[float, float], b: tuple[float, float], degrees: bool = True
-) -> float:
-    if degrees:
-        a = tuple(map(math.radians, a))
-        b = tuple(map(math.radians, b))
+def haversine_distance(a: tuple[float, float], b: tuple[float, float]) -> float:
+    a = tuple(map(math.radians, a))
+    b = tuple(map(math.radians, b))
 
     distance = 2 * math.asin(
         math.sqrt(
@@ -21,7 +18,7 @@ def haversine_distance(
         )
     )
 
-    return math.degrees(distance) if degrees else distance
+    return math.degrees(distance)
 
 
 def test_init():
@@ -83,23 +80,21 @@ def test_from_lonlat():
     a_lonlat = np.array((60.0, 0.0))
     b_lonlat = np.array((60.0, 30.0))
 
-    a = SphericalPoint.from_lonlat(a_lonlat, degrees=True)
-    b = SphericalPoint.from_lonlat(b_lonlat, degrees=True)
+    a = SphericalPoint.from_lonlat(a_lonlat)
+    b = SphericalPoint.from_lonlat(b_lonlat)
 
-    assert_allclose(a.to_lonlat(degrees=True), a_lonlat)
-    assert_allclose(b.to_lonlat(degrees=True), b_lonlat)
+    assert_allclose(a.to_lonlat(), a_lonlat)
+    assert_allclose(b.to_lonlat(), b_lonlat)
 
     lons = np.arange(-360.0, 360.0, 1.0)
 
     equator_lat = 0.0
-    equators = [
-        SphericalPoint.from_lonlat((lon, equator_lat), degrees=True) for lon in lons
-    ]
+    equators = [SphericalPoint.from_lonlat((lon, equator_lat)) for lon in lons]
     for equator in equators:
-        assert_allclose(equator.to_lonlat(degrees=True)[1], 0.0)
+        assert_allclose(equator.to_lonlat()[1], 0.0)
 
     multi_equator = MultiSphericalPoint.from_lonlat(
-        np.stack([lons, np.repeat(equator_lat, len(lons))], axis=1), degrees=True
+        np.stack([lons, np.repeat(equator_lat, len(lons))], axis=1)
     )
 
     for point in equators:
@@ -107,14 +102,12 @@ def test_from_lonlat():
     assert_allclose(multi_equator.xyz[:, 2], 0.0)
 
     north_pole_lat = 90.0
-    north_poles = [
-        SphericalPoint.from_lonlat((lon, north_pole_lat), degrees=True) for lon in lons
-    ]
+    north_poles = [SphericalPoint.from_lonlat((lon, north_pole_lat)) for lon in lons]
     for north_pole in north_poles:
         assert_allclose(north_pole.xyz, [0.0, 0.0, 1.0], atol=tolerance)
 
     multi_north_pole = MultiSphericalPoint.from_lonlat(
-        np.stack([lons, np.repeat(north_pole_lat, len(lons))], axis=1), degrees=True
+        np.stack([lons, np.repeat(north_pole_lat, len(lons))], axis=1)
     )
 
     for point in north_poles:
@@ -126,14 +119,12 @@ def test_from_lonlat():
     )
 
     south_pole_lat = -90.0
-    south_poles = [
-        SphericalPoint.from_lonlat((lon, south_pole_lat), degrees=True) for lon in lons
-    ]
+    south_poles = [SphericalPoint.from_lonlat((lon, south_pole_lat)) for lon in lons]
     for south_pole in south_poles:
         assert_allclose(south_pole.xyz, [0.0, 0.0, -1.0], atol=tolerance)
 
     multi_south_pole = MultiSphericalPoint.from_lonlat(
-        np.stack([lons, np.repeat(south_pole_lat, len(lons))], axis=1), degrees=True
+        np.stack([lons, np.repeat(south_pole_lat, len(lons))], axis=1)
     )
 
     for point in south_poles:
@@ -157,22 +148,22 @@ def test_to_lonlat():
     lonlats = [(0, 90), (0, -90), (45, 0), (315, 0), (np.nan, 0)]
 
     a = SphericalPoint(xyz[0])
-    assert_allclose(a.to_lonlat(degrees=True), lonlats[0])
+    assert_allclose(a.to_lonlat(), lonlats[0])
 
     b = SphericalPoint(xyz[1])
-    assert_allclose(b.to_lonlat(degrees=True), lonlats[1])
+    assert_allclose(b.to_lonlat(), lonlats[1])
 
     c = SphericalPoint(xyz[2])
-    assert_allclose(c.to_lonlat(degrees=True), lonlats[2])
+    assert_allclose(c.to_lonlat(), lonlats[2])
 
     d = SphericalPoint(xyz[3])
-    assert_allclose(d.to_lonlat(degrees=True), lonlats[3])
+    assert_allclose(d.to_lonlat(), lonlats[3])
 
     e = SphericalPoint(xyz[4])
-    assert_allclose(e.to_lonlat(degrees=True), lonlats[4])
+    assert_allclose(e.to_lonlat(), lonlats[4])
 
     abcde = MultiSphericalPoint(xyz)
-    assert_allclose(abcde.to_lonlat(degrees=True), lonlats)
+    assert_allclose(abcde.to_lonlat(), lonlats)
 
 
 def test_vector_arc_length():
@@ -181,10 +172,10 @@ def test_vector_arc_length():
     c = np.array((1.0, 1.0, 0.0))
     d = np.array((1.0, -1.0, 0.0))
 
-    assert sphersgeo.array.vector_arc_length(a, b) == np.acos(a.dot(b))
-    assert sphersgeo.array.vector_arc_length(b, c) == np.acos(b.dot(c))
-    assert sphersgeo.array.vector_arc_length(c, d) == np.acos(c.dot(d))
-    assert sphersgeo.array.vector_arc_length(d, a) == np.acos(d.dot(a))
+    assert sphersgeo.array.vector_arc_radians(a, b) == np.acos(a.dot(b))
+    assert sphersgeo.array.vector_arc_radians(b, c) == np.acos(b.dot(c))
+    assert sphersgeo.array.vector_arc_radians(c, d) == np.acos(c.dot(d))
+    assert sphersgeo.array.vector_arc_radians(d, a) == np.acos(d.dot(a))
 
 
 def test_distance():
@@ -208,15 +199,11 @@ def test_distance():
     bc = MultiSphericalPoint(xyz[1:3, :])
     cd = MultiSphericalPoint(xyz[2:, :])
 
+    assert_allclose(a.distance(b), haversine_distance(a.to_lonlat(), b.to_lonlat()))
+    assert_allclose(b.distance(c), haversine_distance(b.to_lonlat(), c.to_lonlat()))
     assert_allclose(
-        a.distance(b), haversine_distance(a.to_lonlat(True), b.to_lonlat(True))
-    )
-    assert_allclose(
-        b.distance(c), haversine_distance(b.to_lonlat(True), c.to_lonlat(True))
-    )
-    assert_allclose(
-        c.distance(d, degrees=False),
-        haversine_distance(c.to_lonlat(False), d.to_lonlat(False), degrees=False),
+        c.distance(d),
+        haversine_distance(c.to_lonlat(), d.to_lonlat()),
     )
 
     assert a.distance(a) == 0.0
@@ -235,17 +222,17 @@ def test_distance():
     assert_allclose(bc.distance(bc), 0.0, atol=tolerance)
     assert_allclose(cd.distance(cd), 0.0, atol=tolerance)
 
-    A = SphericalPoint.from_lonlat((90.0, 0.0), degrees=True)
-    B = SphericalPoint.from_lonlat((-90.0, 0.0), degrees=True)
+    A = SphericalPoint.from_lonlat((90.0, 0.0))
+    B = SphericalPoint.from_lonlat((-90.0, 0.0))
     assert_allclose(A.distance(B), 180)
 
-    A = SphericalPoint.from_lonlat((135.0, 0.0), degrees=True)
-    B = SphericalPoint.from_lonlat((-90.0, 0.0), degrees=True)
-    assert_allclose(A.distance(B, degrees=False), (3.0 / 4.0) * np.pi)
+    A = SphericalPoint.from_lonlat((135.0, 0.0))
+    B = SphericalPoint.from_lonlat((-90.0, 0.0))
+    assert_allclose(A.distance(B), np.rad2deg((3.0 / 4.0) * np.pi))
 
-    A = SphericalPoint.from_lonlat((0.0, 0.0), degrees=True)
-    B = SphericalPoint.from_lonlat((0.0, 90.0), degrees=True)
-    assert_allclose(A.distance(B, degrees=False), np.pi / 2.0)
+    A = SphericalPoint.from_lonlat((0.0, 0.0))
+    B = SphericalPoint.from_lonlat((0.0, 90.0))
+    assert_allclose(A.distance(B), np.rad2deg(np.pi / 2.0))
 
 
 def test_distance_domain():
@@ -349,30 +336,34 @@ def test_add():
     assert ab + cd == abcd
 
 
-def test_angle():
+def test_angle_between():
     # right angle
     A = SphericalPoint((1.0, 0.0, 0.0))
     B = SphericalPoint((0.0, 1.0, 0.0))
     C = SphericalPoint((0.0, 0.0, 1.0))
-    assert B.angle_between(A, C, degrees=False) == np.pi / 2
+    assert B.angle_between(A, C) == np.rad2deg(np.pi / 2)
+    assert B.angle_between(C, A) == np.rad2deg(np.pi / 2)
 
     # antipodes
     A = SphericalPoint((1.0, 1.0, 1.0))
     B = SphericalPoint((0.0, 1.0, 0.0))
     C = SphericalPoint((-1.0, -1.0, -1.0))
-    assert B.angle_between(A, C, degrees=False) == np.pi
+    assert B.angle_between(A, C) == np.rad2deg(np.pi)
+    assert B.angle_between(C, A) == np.rad2deg(np.pi)
 
     # same point
     A = SphericalPoint((1.0, 1.0, 1.0))
     B = SphericalPoint((0.0, 1.0, 0.0))
     C = SphericalPoint((1.0, 1.0, 1.0))
-    assert B.angle_between(A, C, degrees=False) == 0.0
+    assert B.angle_between(A, C) == 0.0
+    assert B.angle_between(C, A) == 0.0
 
     # defined from lonlat
     A = SphericalPoint.from_lonlat((60.0, 45.0))
     B = SphericalPoint.from_lonlat((0.0, 90.0))
     C = SphericalPoint.from_lonlat((30.0, -3.0))
-    assert_allclose(B.angle_between(A, C, degrees=True), 30.0)
+    assert_allclose(B.angle_between(A, C), 30.0)
+    assert_allclose(B.angle_between(C, A), 30.0)
 
     # TODO: More angle tests
 
@@ -381,22 +372,22 @@ def test_angle_domain():
     A = SphericalPoint((0.0, 0.0, 0.0))
     B = SphericalPoint((0.0, 0.0, 0.0))
     C = SphericalPoint((0.0, 0.0, 0.0))
-    assert np.isnan(B.angle_between(A, C, degrees=False))
+    assert np.isnan(B.angle_between(A, C))
 
     A = SphericalPoint((1.0, 1.0, 1.0))
     B = SphericalPoint((0.0, 0.0, 0.0))
     C = SphericalPoint((-1.0, -1.0, -1.0))
-    assert np.isnan(B.angle_between(A, C, degrees=True))
+    assert np.isnan(B.angle_between(A, C))
 
     A = SphericalPoint((0.0, 0.0, 0.0))
     B = SphericalPoint((0.0, 1.0, 0.0))
     C = SphericalPoint((1.0, 0.0, 0.0))
-    assert np.isnan(B.angle_between(A, C, degrees=True))
+    assert np.isnan(B.angle_between(A, C))
 
     A = SphericalPoint((0.0, 0.0, 0.0))
     B = SphericalPoint((0.0, 1.0, 0.0))
     C = SphericalPoint((0.0, 0.0, 0.0))
-    assert np.isnan(B.angle_between(A, C, degrees=True))
+    assert np.isnan(B.angle_between(A, C))
 
 
 def test_angle_nearly_coplanar():
@@ -412,12 +403,12 @@ def test_angle_nearly_coplanar():
             (-1.0, 0.1, -1.0),
         ]
     )
-    angles = B.angles_between(A, C, degrees=False)
+    angles = B.angles_between(A, C)
 
-    assert_allclose(angles[0], np.pi / 2)
+    assert_allclose(angles[0], np.rad2deg(np.pi / 2))
     assert np.isfinite(angles[1:3]).all()
-    assert_allclose(angles[3], np.pi / 2)
-    assert_allclose(angles[4], np.pi)
+    assert_allclose(angles[3], np.rad2deg(np.pi / 2))
+    assert_allclose(angles[4], np.rad2deg(np.pi))
 
 
 def test_collinear():

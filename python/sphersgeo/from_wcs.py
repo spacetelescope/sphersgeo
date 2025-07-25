@@ -13,9 +13,9 @@ def polygon_from_wcs(
     wcs: WCS | PathLike,
 ) -> SphericalPolygon:
     r"""
-    Create a new ``SphericalPolygon`` from the footprint of a FITS WCS specification.
+    Create a new ``SphericalPolygon`` from the footprint of a WCS specification.
 
-    This method requires having ``astropy`` installed.
+    This method requires having ``gwcs`` installed.
 
     :param wcs: GWCS WCS object
     :returns: polygon representing the footprint of the provided WCS

@@ -695,7 +695,9 @@ mod py_sphersgeo {
                 }
                 PyArcStringInputs::AnyGeometry(geometry) => {
                     return match geometry {
-                        AnyGeometry::MultiSphericalPoint(multipoint) => Ok(multipoint.into()),
+                        AnyGeometry::MultiSphericalPoint(multipoint) => {
+                            Ok(multipoint.try_into().unwrap())
+                        }
                         AnyGeometry::ArcString(arcstring) => Ok(if closed != arcstring.closed {
                             let mut arcstring = arcstring.to_owned();
                             arcstring.closed = closed;
@@ -711,7 +713,7 @@ mod py_sphersgeo {
                 }
             };
 
-            let mut arcstring = Self::from(points);
+            let mut arcstring = Self::try_from(points).unwrap();
             arcstring.closed = closed;
             Ok(arcstring)
         }
@@ -755,6 +757,18 @@ mod py_sphersgeo {
         #[getter]
         fn get_crossings_with_self(&self) -> Option<MultiSphericalPoint> {
             self.crossings_with_self()
+        }
+
+        /// if this arcstring's endpoints touch another's
+        #[pyo3(name = "adjoins")]
+        fn py_adjoins(&self, other: &Self) -> bool {
+            self.adjoins(other)
+        }
+
+        /// join this arcstring's endpoint(s) to another
+        #[pyo3(name = "join")]
+        fn py_join(&self, other: &Self) -> Option<ArcString> {
+            self.join(other)
         }
 
         #[getter]
@@ -946,25 +960,25 @@ mod py_sphersgeo {
                     for arcstring_input in arcstring_inputs {
                         arcstrings.push(ArcString::py_new(arcstring_input, false)?);
                     }
-                    Ok(Self::from(arcstrings))
+                    Self::try_from(arcstrings)
                 }
                 PyMultiArcStringInputs::AnyGeometry(geometry) => match geometry {
                     AnyGeometry::MultiSphericalPoint(multipoint) => {
-                        Ok(Self::from(vec![ArcString::from(multipoint)]))
+                        Self::try_from(vec![ArcString::try_from(multipoint)
+                            .map_err(|err| PyValueError::new_err(err.to_string()))?])
                     }
-                    AnyGeometry::ArcString(arcstring) => Ok(Self::from(vec![arcstring])),
+                    AnyGeometry::ArcString(arcstring) => Self::try_from(vec![arcstring]),
                     AnyGeometry::MultiArcString(multiarcstring) => Ok(multiarcstring),
                     AnyGeometry::SphericalPolygon(polygon) => {
-                        Ok(Self::from(vec![polygon.boundary]))
+                        Self::try_from(vec![polygon.boundary])
                     }
                     AnyGeometry::MultiSphericalPolygon(multipolygon) => {
                         Ok(multipolygon.boundary().unwrap())
                     }
-                    _ => Err(PyValueError::new_err(format!(
-                        "cannot derive multiarcstring from {geometry:?}",
-                    ))),
+                    _ => Err(format!("cannot derive multiarcstring from {geometry:?}",)),
                 },
             }
+            .map_err(|err| PyValueError::new_err(err.to_string()))
         }
 
         /// radians subtended by each arcstring on the sphere
@@ -1619,13 +1633,13 @@ mod py_sphersgeo {
         }
 
         #[pyfunction]
-        #[pyo3(name = "vector_arc_length", signature=(a, b, normalized=false))]
-        fn py_vector_arc_length(
+        #[pyo3(name = "vector_arc_radians", signature=(a, b, normalized=false))]
+        fn py_vector_arc_radians(
             a: PyReadonlyArray1<f64>,
             b: PyReadonlyArray1<f64>,
             normalized: bool,
         ) -> f64 {
-            crate::sphericalpoint::vector_arc_length(&a.as_array(), &b.as_array(), normalized)
+            crate::sphericalpoint::vector_arc_radians(&a.as_array(), &b.as_array(), normalized)
         }
 
         #[pyfunction]
@@ -1647,13 +1661,13 @@ mod py_sphersgeo {
         }
 
         #[pyfunction]
-        #[pyo3(name = "vector_arc_angle_between")]
-        fn py_vector_arc_angle_between(
+        #[pyo3(name = "angle_between_vectors_radians")]
+        fn py_angle_between_vectors_radians(
             a: PyReadonlyArray1<f64>,
             b: PyReadonlyArray1<f64>,
             c: PyReadonlyArray1<f64>,
         ) -> f64 {
-            crate::sphericalpoint::angle_between_vectors(
+            crate::sphericalpoint::angle_between_vectors_radians(
                 &a.as_array(),
                 &b.as_array(),
                 &c.as_array(),
@@ -1661,14 +1675,14 @@ mod py_sphersgeo {
         }
 
         #[pyfunction]
-        #[pyo3(name = "vector_arc_angles")]
-        fn py_vector_arc_angles<'py>(
+        #[pyo3(name = "angles_between_vectors_radians")]
+        fn py_angles_between_vectors_radians<'py>(
             py: Python<'py>,
             a: PyReadonlyArray2<f64>,
             b: PyReadonlyArray2<f64>,
             c: PyReadonlyArray2<f64>,
         ) -> Bound<'py, PyArray1<f64>> {
-            crate::sphericalpoint::angles_between_vectors(
+            crate::sphericalpoint::angles_between_vectors_radians(
                 &a.as_array(),
                 &b.as_array(),
                 &c.as_array(),
@@ -1677,25 +1691,17 @@ mod py_sphersgeo {
         }
 
         #[pyfunction]
-        #[pyo3(name = "spherical_triangle_area", signature=(a, b, c, degrees=true))]
-        fn spherical_triangle_area(
+        #[pyo3(name = "spherical_triangle_area")]
+        fn py_spherical_triangle_area(
             a: PyReadonlyArray1<f64>,
             b: PyReadonlyArray1<f64>,
             c: PyReadonlyArray1<f64>,
-            degrees: bool,
         ) -> f64 {
             crate::sphericalpolygon::spherical_triangle_area(
                 &a.as_array(),
                 &b.as_array(),
                 &c.as_array(),
-                degrees,
             )
-        }
-
-        #[pyfunction]
-        #[pyo3(name = "spherical_polygon_area")]
-        fn spherical_polygon_area(points: PyReadonlyArray2<f64>) -> f64 {
-            crate::sphericalpolygon::spherical_polygon_area(&points.as_array())
         }
     }
 }

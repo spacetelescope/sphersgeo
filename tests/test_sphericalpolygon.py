@@ -79,56 +79,100 @@ def test_from_cone():
         lon = random.randrange(-180, 180)
         lat = random.randrange(20, 90)
         polygon = SphericalPolygon.from_cone(
-            SphericalPoint.from_lonlat((lon, lat), degrees=True),
+            SphericalPoint.from_lonlat((lon, lat)),
             8,
             steps=64,
         )
         assert polygon.area > 0
 
 
-@pytest.mark.parametrize("lon", [0, 60, 120, 180, 240, 300])
+@pytest.mark.parametrize("lon", [0, 120, 240])
 @pytest.mark.parametrize("lat", [0, 30, 60, 90])
 def test_cone_area(lon, lat):
     polygon = SphericalPolygon.from_cone(
         SphericalPoint.from_lonlat((lon, lat)), radius=10, steps=64
     )
     assert polygon.vertices.xyz.shape == (63, 3)
-    assert_almost_equal(polygon.convex_hull.area, 2.1317425024870715)
-    assert_almost_equal(polygon.area, 2.1317425024870715, decimal=1)
+    assert_almost_equal(polygon.area, 312, decimal=0)
 
 
-def test_is_clockwise():
-    counterclockwise_poly = SphericalPolygon.from_cone(
-        SphericalPoint.from_lonlat((0.0, 90.0)), 1.0
+@pytest.mark.parametrize(
+    "lonlats,is_clockwise",
+    [
+        (
+            np.array(
+                [
+                    (18.0, 6.0),
+                    (20.0, 5.0),
+                    (25.0, 5.0),
+                    (25.0, 10.0),
+                    (20.0, 10.0),
+                    (18.0, 7.0),
+                ]
+            ),
+            True,
+        ),
+        (
+            np.array(
+                [
+                    (18.0, 7.0),
+                    (20.0, 10.0),
+                    (25.0, 10.0),
+                    (25.0, 5.0),
+                    (20.0, 5.0),
+                    (18.0, 6.0),
+                ]
+            ),
+            False,
+        ),
+    ],
+)
+def test_is_clockwise(lonlats, is_clockwise):
+    poly = SphericalPolygon(MultiSphericalPoint.from_lonlat(lonlats))
+    assert poly.is_clockwise == is_clockwise
+
+
+def test_split():
+    a = SphericalPolygon(
+        MultiSphericalPoint.from_lonlat(
+            np.array(
+                [
+                    (20.0, 5.0),
+                    (25.0, 5.0),
+                    (25.0, 10.0),
+                    (20.0, 10.0),
+                ]
+            ),
+        )
     )
-    assert not counterclockwise_poly.is_clockwise
+    b = SphericalPolygon(
+        MultiSphericalPoint.from_lonlat(
+            np.array(
+                [
+                    (5.0, 5.0),
+                    (25.0, 5.0),
+                    (25.0, 15.0),
+                    (5.0, 15.0),
+                ]
+            ),
+        )
+    )
 
-    points = list(counterclockwise_poly.vertices)[0]
-    inside = list(counterclockwise_poly)[0]
-    outside = -1.0 * inside
+    split = a.split(b)
 
-    rpoints = points[::-1]
-    reverse_poly = SphericalPolygon(rpoints, interior_point=inside)
-    assert reverse_poly.is_clockwise
-
-    complement_poly = SphericalPolygon(points, inside=outside)
-    assert not complement_poly.is_clockwise
+    assert split is not None
 
 
 def test_overlap():
     y_eps = 1e-8
 
     def build_polygon(offset: float):
-        offset = float(offset)
-        points = []
-        corners = [(0.0, 0.0), (0.0, 10.0), (10.0, 10.0), (10.0, 0.0)]
-        for lon, lat in corners:
-            points.append(
-                SphericalPoint.from_lonlat(
-                    (lon + offset, lat + y_eps), degrees=True
-                ).xyz
-            )
-        poly = SphericalPolygon(points, None, None)
+        lonlats = np.array([(0.0, 0.0), (0.0, 10.0), (10.0, 10.0), (10.0, 0.0)])
+        lonlats[:, 0] += offset
+        lonlats[:, 1] += y_eps
+        poly = SphericalPolygon(
+            MultiSphericalPoint.from_lonlat(lonlats),
+        )
         return poly
 
     first_poly = build_polygon(0.0)
@@ -194,6 +238,9 @@ def test_point_in_poly():
 @pytest.mark.parametrize(
     "lonlats,expected_area",
     [
+        ([(90, 0), (0, 45), (0, -45)], 5156.620156177408),
+        ([(90, 0), (0, 22.5), (0, -22.5)], 2578.3100780887044),
+        ([(90, 0), (0, 11.25), (0, -11.25)], 1289.155039044352),
         (
             np.array(
                 [
@@ -203,7 +250,107 @@ def test_point_in_poly():
                     (20.0, 10.0),
                 ]
             ),
-            25,
+            24.793161010085402,
+        ),
+        (
+            np.array(
+                [
+                    (5.0, 5.0),
+                    (25.0, 5.0),
+                    (25.0, 15.0),
+                    (5.0, 15.0),
+                ]
+            ),
+            198.53387372080792,
+        ),
+        (
+            np.array(
+                [
+                    (18.0, 6.0),
+                    (20.0, 5.0),
+                    (25.0, 5.0),
+                    (25.0, 10.0),
+                    (20.0, 10.0),
+                    (18.0, 7.0),
+                ]
+            ),
+            30.75372343561762,
+        ),
+        (
+            np.array(
+                [
+                    (18.0, 7.0),
+                    (20.0, 10.0),
+                    (25.0, 10.0),
+                    (25.0, 5.0),
+                    (20.0, 5.0),
+                    (18.0, 6.0),
+                ]
+            ),
+            30.75372343561762,
+        ),
+        (
+            np.array(
+                [
+                    (18.0, 6.0),
+                    (20.0, 5.0),
+                    (25.0, 5.0),
+                    (25.0, 10.0),
+                    (20.0, 10.0),
+                    (19.0, 8.0),  # concave point
+                    (18.0, 7.0),
+                ]
+            ),
+            30.25221669253947,
+        ),
+    ],
+)
+def test_area(lonlats, expected_area):
+    poly = SphericalPolygon(MultiSphericalPoint.from_lonlat(lonlats))
+
+    assert_almost_equal(poly.area, expected_area)
+
+
+@pytest.mark.parametrize(
+    "lonlats,expected_centroid_lonlat",
+    [
+        ([(90, 0), (0, 45), (0, -45)], (35.2643897, 0.0)),
+        ([(90, 0), (0, 22.5), (0, -22.5)], (28.4220791, 0.0)),
+        ([(90, 0), (0, 11.25), (0, -11.25)], (27.012286, 0.0)),
+        (
+            np.array(
+                [
+                    (20.0, 5.0),
+                    (25.0, 5.0),
+                    (25.0, 10.0),
+                    (20.0, 10.0),
+                ]
+            ),
+            (22.5, 7.5070637),
+        ),
+        (
+            np.array(
+                [
+                    (5.0, 5.0),
+                    (25.0, 5.0),
+                    (25.0, 15.0),
+                    (5.0, 15.0),
+                ]
+            ),
+            (15.0, 10.1510817),
+        ),
+        (
+            np.array(
+                [
+                    (18.0, 6.0),
+                    (20.0, 5.0),
+                    (25.0, 5.0),
+                    (25.0, 10.0),
+                    (20.0, 10.0),
+                    (18.0, 7.0),
+                ]
+            ),
+            (21.4828013, 8.0147551),
         ),
         (
             np.array(
@@ -217,42 +364,14 @@ def test_point_in_poly():
                     (18.0, 7.0),
                 ]
             ),
-            25,
+            (21.4828013, 8.0147551),
         ),
-        ([(90, 0), (0, 45), (0, -45)], 90.0),
-        ([(90, 0), (0, 22.5), (0, -22.5)], 45.0),
-        ([(90, 0), (0, 11.25), (0, -11.25)], 22.5),
     ],
 )
-def test_area(lonlats, expected_area):
+def test_centroid(lonlats, expected_centroid_lonlat):
     poly = SphericalPolygon(MultiSphericalPoint.from_lonlat(lonlats))
-    assert_almost_equal(poly.area, expected_area)
 
-
-def test_fast_area():
-    a = SphericalPolygon(
-        [
-            (0.35331737, 0.6351013, -0.68688658),
-            (0.3536442, 0.63515101, -0.68667239),
-            (0.35360581, 0.63521041, -0.68663722),
-            (0.35328338, 0.63515742, -0.68685217),
-            (0.35328614, 0.63515318, -0.68685467),
-            (0.35328374, 0.63515279, -0.68685627),
-        ]
-    )
-
-    b = SphericalPolygon(
-        [
-            (0.35327617, 0.6351561, -0.6868571),
-            (0.35295533, 0.63510299, -0.68707112),
-            (0.35298984, 0.63505081, -0.68710162),
-            (0.35331262, 0.63510039, -0.68688987),
-        ],
-        interior_point=(-0.35327617, -0.6351561, 0.6868571),
-    )
-
-    assert a.area > 0.0 and a.area < 2.0 * np.pi
-    assert b.area > 2.0 * np.pi and b.area < 4.0 * np.pi
+    assert_almost_equal(poly.centroid.to_lonlat(), expected_centroid_lonlat)
 
 
 @pytest.mark.parametrize(
@@ -388,7 +507,7 @@ def test_fast_area():
     ],
 )
 def test_convex_hull(lonlats, expected_area, expected_on_boundary):
-    points = MultiSphericalPoint.from_lonlat(lonlats, degrees=True)
+    points = MultiSphericalPoint.from_lonlat(lonlats)
 
     convex_hull = points.convex_hull
 

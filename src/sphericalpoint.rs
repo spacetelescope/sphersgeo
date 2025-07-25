@@ -88,7 +88,11 @@ pub fn vector_lengths(vectors: &ArrayView2<f64>) -> Array1<f64> {
 /// References:
 /// - Miller, Robert D. Computing the area of a spherical polygon. Graphics Gems IV. p132. 1994. Academic Press. doi:10.5555/180895.180907
 ///   `pdf <https://www.google.com/books/edition/Graphics_Gems_IV/CCqzMm_-WucC?hl=en&gbpv=1&dq=Graphics%20Gems%20IV.%20p132&pg=PA133&printsec=frontcover>`_
-pub fn angle_between_vectors(a: &ArrayView1<f64>, b: &ArrayView1<f64>, c: &ArrayView1<f64>) -> f64 {
+pub fn angle_between_vectors_radians(
+    a: &ArrayView1<f64>,
+    b: &ArrayView1<f64>,
+    c: &ArrayView1<f64>,
+) -> f64 {
     let tolerance = 3e-11;
 
     // let abx = cross_vector(&a, &b);
@@ -122,11 +126,11 @@ pub fn angle_between_vectors(a: &ArrayView1<f64>, b: &ArrayView1<f64>, c: &Array
     let b = normalize_vector(b);
     let c = normalize_vector(c);
 
-    let ab = vector_arc_length(&a.view(), &b.view(), true);
-    let bc = vector_arc_length(&b.view(), &c.view(), true);
-    let ca = vector_arc_length(&c.view(), &a.view(), true);
+    let ab = vector_arc_radians(&a.view(), &b.view(), true);
+    let bc = vector_arc_radians(&b.view(), &c.view(), true);
+    let ca = vector_arc_radians(&c.view(), &a.view(), true);
 
-    let mut angle = if ca < tolerance {
+    let mut radians = if ca < tolerance {
         // if the opposite side of the triangle is negligibly small
         0.0
     } else if ab < tolerance || bc < tolerance {
@@ -137,11 +141,11 @@ pub fn angle_between_vectors(a: &ArrayView1<f64>, b: &ArrayView1<f64>, c: &Array
     };
 
     // test if all three points are collinear
-    if angle.is_nan() && (ab + bc - ca) < tolerance {
-        angle = std::f64::consts::PI;
+    if radians.is_nan() && (ab + bc - ca) < tolerance {
+        radians = std::f64::consts::PI;
     }
 
-    angle.to_degrees()
+    radians
 }
 
 /// given three arrays of XYZ vectors on the unit sphere (A, B, and C), element-wise retrieve the angles at B between arcs AB and arcs BC
@@ -149,7 +153,7 @@ pub fn angle_between_vectors(a: &ArrayView1<f64>, b: &ArrayView1<f64>, c: &Array
 /// References:
 /// - Miller, Robert D. Computing the area of a spherical polygon. Graphics Gems IV. 1994. Academic Press. doi:10.5555/180895.180907
 ///   `pdf <https://www.google.com/books/edition/Graphics_Gems_IV/CCqzMm_-WucC?hl=en&gbpv=1&dq=Graphics%20Gems%20IV.%20p132&pg=PA133&printsec=frontcover>`_
-pub fn angles_between_vectors(
+pub fn angles_between_vectors_radians(
     a: &ArrayView2<f64>,
     b: &ArrayView2<f64>,
     c: &ArrayView2<f64>,
@@ -162,7 +166,7 @@ pub fn angles_between_vectors(
     let mut inner = (abx * bcx).sum_axis(Axis(1));
     inner.par_mapv_inplace(|v| v.acos());
 
-    let angles = stack(Axis(0), &[inner.view(), diff.view()])
+    let radians = stack(Axis(0), &[inner.view(), diff.view()])
         .unwrap()
         .map_axis(Axis(0), |v| {
             if v[1] < 0.0 {
@@ -172,7 +176,7 @@ pub fn angles_between_vectors(
             }
         });
 
-    angles.to_degrees()
+    radians
 }
 
 /// whether the three points exist on the same line
@@ -181,9 +185,9 @@ pub fn vectors_collinear(a: &ArrayView1<f64>, b: &ArrayView1<f64>, c: &ArrayView
     // let area = spherical_triangle_area(a, b, c);
     // area.is_nan() || area < tolerance
 
-    let abc = angle_between_vectors(a, b, c);
-    let cab = angle_between_vectors(c, a, b);
-    let bca = angle_between_vectors(b, c, a);
+    let abc = angle_between_vectors_radians(a, b, c);
+    let cab = angle_between_vectors_radians(c, a, b);
+    let bca = angle_between_vectors_radians(b, c, a);
 
     abc < tolerance
         || cab < tolerance
@@ -245,7 +249,7 @@ pub fn cross_vectors(a: &ArrayView2<f64>, b: &ArrayView2<f64>) -> Array2<f64> {
 /// References
 /// ----------
 /// - https://www.mathforengineers.com/math-calculators/angle-between-two-vectors-in-spherical-coordinates.html
-pub fn vector_arc_length(a: &ArrayView1<f64>, b: &ArrayView1<f64>, normalized: bool) -> f64 {
+pub fn vector_arc_radians(a: &ArrayView1<f64>, b: &ArrayView1<f64>, normalized: bool) -> f64 {
     if (a - b).abs().sum() < 1e-10 {
         0.0
     } else {
@@ -496,7 +500,7 @@ impl SphericalPoint {
 
     /// angle on the sphere between this point and two other points
     pub fn angle_between(&self, a: &SphericalPoint, b: &SphericalPoint) -> f64 {
-        angle_between_vectors(&a.xyz.view(), &self.xyz.view(), &b.xyz.view())
+        angle_between_vectors_radians(&a.xyz.view(), &self.xyz.view(), &b.xyz.view()).to_degrees()
     }
 
     /// whether this point shares a line with two other points
@@ -638,7 +642,7 @@ impl GeometricOperations<&SphericalPoint> for &SphericalPoint {
         if self.xyz == other.xyz {
             0.0
         } else {
-            vector_arc_length(&self.xyz.view(), &other.xyz.view(), false).to_degrees()
+            vector_arc_radians(&self.xyz.view(), &other.xyz.view(), false).to_degrees()
         }
     }
 
@@ -919,7 +923,7 @@ impl TryFrom<Array2<f64>> for MultiSphericalPoint {
     type Error = String;
 
     fn try_from(xyz: Array2<f64>) -> Result<Self, Self::Error> {
-        if xyz.shape()[1] != 3 {
+        if xyz.shape()[0] > 0 && xyz.shape()[1] != 3 {
             Err(format!(
                 "array of 3D vectors should have shape Nx3, not {}x{}",
                 xyz.shape()[0],
@@ -944,12 +948,18 @@ impl<'p> From<&'p MultiSphericalPoint> for ArrayView2<'p, f64> {
     }
 }
 
-impl From<Vec<[f64; 3]>> for MultiSphericalPoint {
-    fn from(xyzs: Vec<[f64; 3]>) -> Self {
-        let kdtree = ImmutableKdTree::<f64, 3>::from(xyzs.as_slice());
-        Self {
-            xyz: xyzs.into(),
-            kdtree,
+impl TryFrom<Vec<[f64; 3]>> for MultiSphericalPoint {
+    type Error = String;
+
+    fn try_from(xyzs: Vec<[f64; 3]>) -> Result<Self, Self::Error> {
+        if !xyzs.is_empty() {
+            let kdtree = ImmutableKdTree::<f64, 3>::from(xyzs.as_slice());
+            Ok(Self {
+                xyz: xyzs.into(),
+                kdtree,
+            })
+        } else {
+            Err(String::from("no points provided"))
         }
     }
 }
@@ -1198,7 +1208,8 @@ impl MultiSphericalPoint {
         Zip::from(self.xyz.rows())
             .and(a.xyz.rows())
             .and(b.xyz.rows())
-            .par_map_collect(|point, a, b| angle_between_vectors(&point, &a, &b))
+            .par_map_collect(|point, a, b| angle_between_vectors_radians(&point, &a, &b))
+            .to_degrees()
     }
 
     pub fn collinear(&self, a: &SphericalPoint, b: &SphericalPoint) -> Array1<bool> {
@@ -1426,7 +1437,10 @@ impl Geometry for &MultiSphericalPoint {
         };
 
         crate::sphericalpolygon::SphericalPolygon::new(
-            crate::arcstring::ArcString::from(MultiSphericalPoint::from(convex_hull)),
+            crate::arcstring::ArcString::try_from(
+                MultiSphericalPoint::try_from(convex_hull).unwrap(),
+            )
+            .unwrap(),
             Some(interior_point),
         )
         .ok()
@@ -1542,7 +1556,7 @@ impl GeometricOperations<&MultiSphericalPoint> for &MultiSphericalPoint {
                         other_xyz[1],
                         other_xyz[2],
                     ]);
-                    vector_arc_length(
+                    vector_arc_radians(
                         &self.xyz.slice(s![nearest.item as usize, ..]),
                         &other_xyz,
                         false,

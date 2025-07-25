@@ -67,9 +67,9 @@ def test_midpoint():
     ]
 
     for a in avec:
-        A = SphericalPoint.from_lonlat(a, degrees=True)
+        A = SphericalPoint.from_lonlat(a)
         for b in bvec:
-            B = SphericalPoint.from_lonlat(b, degrees=True)
+            B = SphericalPoint.from_lonlat(b)
             mid = ArcString([A, B]).midpoints.parts[0]
             assert_allclose(A.distance(mid), mid.distance(B), atol=tolerance)
             assert_allclose(mid.angle_between(A, B), 180, rtol=tolerance)
@@ -77,26 +77,22 @@ def test_midpoint():
 
 def test_contains():
     diagonal_arc = ArcString(
-        MultiSphericalPoint.from_lonlat(
-            [(-30.0, -30.0), (30.0, 30.0)], degrees=True
-        ).xyz
+        MultiSphericalPoint.from_lonlat([(-30.0, -30.0), (30.0, 30.0)]).xyz
     )
-    assert diagonal_arc.contains(SphericalPoint.from_lonlat((0, 0), degrees=True))
+    assert diagonal_arc.contains(SphericalPoint.from_lonlat((0, 0)))
 
     vertical_arc = ArcString(
-        MultiSphericalPoint.from_lonlat([(60.0, 0.0), (60.0, 30.0)], degrees=True).xyz,
+        MultiSphericalPoint.from_lonlat([(60.0, 0.0), (60.0, 30.0)]).xyz,
     )
     for latitude in np.arange(1.0, 29.0, 1.0):
-        assert vertical_arc.contains(
-            SphericalPoint.from_lonlat((60.0, latitude), degrees=True)
-        )
+        assert vertical_arc.contains(SphericalPoint.from_lonlat((60.0, latitude)))
 
     horizontal_arc = ArcString(
-        MultiSphericalPoint.from_lonlat([(0.0, 60.0), (30.0, 60.0)], degrees=True).xyz,
+        MultiSphericalPoint.from_lonlat([(0.0, 60.0), (30.0, 60.0)]).xyz,
     )
     for longitude in np.arange(1.0, 29.0, 1.0):
         assert not horizontal_arc.contains(
-            SphericalPoint.from_lonlat((longitude, 60.0), degrees=True)
+            SphericalPoint.from_lonlat((longitude, 60.0))
         )
 
 
@@ -112,8 +108,8 @@ def test_contains():
 def test_interpolate(a, b):
     tolerance = 1e-10
 
-    a = SphericalPoint.from_lonlat(a, degrees=True)
-    b = SphericalPoint.from_lonlat(b, degrees=True)
+    a = SphericalPoint.from_lonlat(a)
+    b = SphericalPoint.from_lonlat(b)
     ab = ArcString([a, b])
 
     interpolated_points = MultiSphericalPoint(
@@ -133,13 +129,65 @@ def test_interpolate(a, b):
     assert np.allclose(distances, ab.length / len(interpolated_arc), atol=tolerance)
 
 
+def test_adjoins_join():
+    segment1 = ArcString(
+        MultiSphericalPoint.from_lonlat(
+            np.array(
+                [
+                    (20.0, 5.0),
+                    (25.0, 5.0),
+                ]
+            )
+        )
+    )
+    segment2 = ArcString(
+        MultiSphericalPoint.from_lonlat(
+            np.array(
+                [
+                    (25.0, 5.0),
+                    (25.0, 6.0),
+                ]
+            )
+        )
+    )
+    segment3 = ArcString(
+        MultiSphericalPoint.from_lonlat(
+            np.array(
+                [
+                    (25.0, 5.0),
+                    (25.0, 6.0),
+                    (25.0, 7.0),
+                ]
+            )
+        )
+    )
+    segment4 = ArcString(
+        MultiSphericalPoint.from_lonlat(
+            np.array(
+                [
+                    (25.0, 6.0),
+                    (25.0, 7.0),
+                ]
+            )
+        )
+    )
+
+    assert segment1.adjoins(segment2)
+    assert segment2.adjoins(segment3)
+    assert segment3.adjoins(segment1)
+    assert not segment4.adjoins(segment1)
+
+    joined = segment1.join(segment2).join(segment3).join(segment4)
+    print(joined)
+
+
 def test_intersection():
-    A = SphericalPoint.from_lonlat((-10.0, -10.0), degrees=True)
-    B = SphericalPoint.from_lonlat((10.0, 10.0), degrees=True)
-    C = SphericalPoint.from_lonlat((-25.0, 10.0), degrees=True)
-    D = SphericalPoint.from_lonlat((15.0, -10.0), degrees=True)
-    E = SphericalPoint.from_lonlat((-20.0, 40.0), degrees=True)
-    F = SphericalPoint.from_lonlat((20.0, 40.0), degrees=True)
+    A = SphericalPoint.from_lonlat((-10.0, -10.0))
+    B = SphericalPoint.from_lonlat((10.0, 10.0))
+    C = SphericalPoint.from_lonlat((-25.0, 10.0))
+    D = SphericalPoint.from_lonlat((15.0, -10.0))
+    E = SphericalPoint.from_lonlat((-20.0, 40.0))
+    F = SphericalPoint.from_lonlat((20.0, 40.0))
 
     # simple intersection
     AB = ArcString([A, B])
@@ -147,9 +195,7 @@ def test_intersection():
     EF = ArcString([E, F])
     assert AB.intersects(CD)
     assert not AB.intersects(EF)
-    assert_allclose(
-        AB.intersection(CD).to_lonlat(degrees=True), [(358.316743, -1.708471)]
-    )
+    assert_allclose(AB.intersection(CD).to_lonlat(), [(358.316743, -1.708471)])
 
     # intersection with later part
     ABE = ArcString([A, B, E])
@@ -159,9 +205,7 @@ def test_intersection():
     # multi-part geometry intersection
     AB_EF = MultiArcString([AB, EF])
     assert AB_EF.intersects(CD)
-    assert_allclose(
-        AB_EF.intersection(CD).to_lonlat(degrees=True), [(358.316743, -1.708471)]
-    )
+    assert_allclose(AB_EF.intersection(CD).to_lonlat(), [(358.316743, -1.708471)])
 
     # ensure non-intersection of non-parallel pre-terminated arcs
     CE = ArcString([C, E])
@@ -222,18 +266,18 @@ def test_not_crosses_self(lonlats):
 
 
 def test_crosses_self():
-    A = SphericalPoint.from_lonlat((-10.0, -10.0), degrees=True)
-    B = SphericalPoint.from_lonlat((10.0, 10.0), degrees=True)
-    C = SphericalPoint.from_lonlat((-25.0, 10.0), degrees=True)
-    D = SphericalPoint.from_lonlat((15.0, -10.0), degrees=True)
-    E = SphericalPoint.from_lonlat((-20.0, 40.0), degrees=True)
-    F = SphericalPoint.from_lonlat((20.0, 40.0), degrees=True)
+    A = SphericalPoint.from_lonlat((-10.0, -10.0))
+    B = SphericalPoint.from_lonlat((10.0, 10.0))
+    C = SphericalPoint.from_lonlat((-25.0, 10.0))
+    D = SphericalPoint.from_lonlat((15.0, -10.0))
+    E = SphericalPoint.from_lonlat((-20.0, 40.0))
+    F = SphericalPoint.from_lonlat((20.0, 40.0))
 
     # simple self-crossing
     ABCD = ArcString([A, B, C, D])
     assert ABCD.crosses_self
     assert_allclose(
-        ABCD.crossings_with_self.to_lonlat(degrees=True),
+        ABCD.crossings_with_self.to_lonlat(),
         [(358.316743, -1.708471)],
     )
 
@@ -241,9 +285,7 @@ def test_crosses_self():
     ABCDFE = ArcString([A, B, C, D, F, E])
     assert ABCDFE.crosses_self
     len(ABCDFE.crossings_with_self) == 1
-    assert_allclose(
-        ABCDFE.crossings_with_self.to_lonlat(degrees=True), [(358.316743, -1.708471)]
-    )
+    assert_allclose(ABCDFE.crossings_with_self.to_lonlat(), [(358.316743, -1.708471)])
 
     # double self-crossing
     ABCDFEc = ArcString([A, B, C, D, F, E], closed=True)
