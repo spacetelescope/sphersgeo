@@ -54,10 +54,54 @@ pub mod sphersgeo {
             self.to_lonlat(degrees).into_pyarray(py)
         }
 
+        #[getter]
+        #[pyo3(name = "area")]
+        fn py_area(&self) -> f64 {
+            self.area()
+        }
+
+        #[getter]
+        #[pyo3(name = "length")]
+        fn py_length(&self) -> f64 {
+            self.length()
+        }
+
+        /// bounding box [minX,minY,maxX,maxY]
+        #[pyo3(name = "bounds", signature=(degrees=false))]
+        fn py_bounds(&self, degrees: bool) -> [f64; 4] {
+            self.bounds(degrees)
+        }
+
+        #[getter]
+        #[pyo3(name = "convex_hull")]
+        fn py_convex_hull(&self) -> Option<SphericalPolygon> {
+            self.convex_hull()
+        }
+
         /// angular distance on the sphere between this point and another
         #[pyo3(name = "distance")]
         fn py_distance(&self, other: &Self) -> f64 {
             self.distance(other)
+        }
+
+        #[pyo3(name = "contains")]
+        fn py_contains(&self, other: &Self) -> bool {
+            self.contains(other)
+        }
+
+        #[pyo3(name = "within")]
+        fn py_within(&self, other: &Self) -> bool {
+            self.within(other)
+        }
+
+        #[pyo3(name = "intersects")]
+        fn py_intersects(&self, other: &Self) -> bool {
+            self.intersects(other)
+        }
+
+        #[pyo3(name = "intersection")]
+        fn py_intersection(&self, other: &Self) -> Option<VectorPoint> {
+            self.intersection(other)
         }
 
         /// normalize this vector to length 1 (the unit sphere) while preserving direction
@@ -146,28 +190,73 @@ pub mod sphersgeo {
             self.xyz.to_owned().into_pyarray(py)
         }
 
+        /// individual arcs along this string
+        #[getter]
+        #[pyo3(name = "parts")]
+        fn py_parts(&self) -> Vec<VectorPoint> {
+            self.into()
+        }
+
+        /// number of arcs in this string
+        fn __len__(&self) -> usize {
+            self.len()
+        }
+
+        #[getter]
+        #[pyo3(name = "area")]
+        fn py_area(&self) -> f64 {
+            self.area()
+        }
+
+        /// total radians subtended by this arcstring on the sphere
+        #[getter]
+        #[pyo3(name = "length")]
+        fn py_length(&self) -> f64 {
+            self.length()
+        }
+
         /// bounding box [minX,minY,maxX,maxY]
-        #[pyo3(name = "bounds", signature=(degrees=true))]
+        #[pyo3(name = "bounds", signature=(degrees=false))]
         fn py_bounds(&self, degrees: bool) -> [f64; 4] {
             self.bounds(degrees)
         }
 
-        /// whether the given point is one of these points
+        #[getter]
+        #[pyo3(name = "convex_hull")]
+        fn py_convex_hull(&self) -> Option<SphericalPolygon> {
+            self.convex_hull()
+        }
+
+        /// angular distance on the sphere between these points and others
+        #[pyo3(name = "distance")]
+        fn py_distance(&self, other: &Self) -> f64 {
+            self.distance(other)
+        }
+
         #[pyo3(name = "contains")]
-        fn py_contains(&self, point: &VectorPoint) -> bool {
-            self.contains(point)
+        fn py_contains(&self, other: &Self) -> bool {
+            self.contains(other)
+        }
+
+        #[pyo3(name = "within")]
+        fn py_within(&self, other: &Self) -> bool {
+            self.within(other)
+        }
+
+        #[pyo3(name = "intersects")]
+        fn py_intersects(&self, other: &Self) -> bool {
+            self.intersects(other)
+        }
+
+        #[pyo3(name = "intersection")]
+        fn py_intersection(&self, other: &Self) -> Option<MultiVectorPoint> {
+            self.intersection(other)
         }
 
         /// convert to angle coordinates along the sphere
         #[pyo3(name = "to_lonlats", signature=(degrees=true))]
         fn py_to_lonlats<'py>(&self, py: Python<'py>, degrees: bool) -> Bound<'py, PyArray2<f64>> {
             self.to_lonlats(degrees).into_pyarray(py)
-        }
-
-        /// angular distance on the sphere between these points and another set; returns None if overlaps
-        #[pyo3(name = "distance")]
-        fn py_distance(&self, other: &Self) -> f64 {
-            self.distance(other)
         }
 
         /// normalize the underlying vectors to length 1 (the unit sphere) while preserving direction
@@ -222,10 +311,6 @@ pub mod sphersgeo {
         #[pyo3(name = "vector_lengths")]
         fn py_vector_lengths<'py>(&self, py: Python<'py>) -> Bound<'py, PyArray1<f64>> {
             self.vector_lengths().to_pyarray(py)
-        }
-
-        fn __len__(&self) -> usize {
-            self.len()
         }
 
         fn __getitem__(&self, index: usize) -> VectorPoint {
@@ -328,25 +413,23 @@ pub mod sphersgeo {
             self.points.to_owned()
         }
 
+        /// individual arcs along this string
+        #[getter]
+        #[pyo3(name = "parts")]
+        fn py_parts(&self) -> Vec<ArcString> {
+            self.into()
+        }
+
+        /// number of arcs in this string
+        fn __len__(&self) -> usize {
+            self.len()
+        }
+
         /// radians subtended by each arc on the sphere
         #[getter]
         #[pyo3(name = "lengths")]
         fn py_lengths<'py>(&self, py: Python<'py>) -> Bound<'py, PyArray1<f64>> {
             self.lengths().to_pyarray(py)
-        }
-
-        /// total radians subtended by this arcstring on the sphere
-        #[getter]
-        #[pyo3(name = "length")]
-        fn py_length(&self) -> f64 {
-            self.length()
-        }
-
-        /// individual arcs along this string
-        #[getter]
-        #[pyo3(name = "arcs")]
-        fn py_arcs(&self) -> Vec<ArcString> {
-            self.into()
         }
 
         /// midpoints of each arc
@@ -356,16 +439,44 @@ pub mod sphersgeo {
             self.midpoints()
         }
 
+        #[getter]
+        #[pyo3(name = "area")]
+        fn py_area(&self) -> f64 {
+            self.area()
+        }
+
+        #[getter]
+        #[pyo3(name = "length")]
+        fn py_length(&self) -> f64 {
+            self.length()
+        }
+
         /// bounding box [minX,minY,maxX,maxY]
-        #[pyo3(name = "bounds", signature=(degrees=true))]
+        #[pyo3(name = "bounds", signature=(degrees=false))]
         fn py_bounds(&self, degrees: bool) -> [f64; 4] {
             self.bounds(degrees)
         }
 
-        /// whether this arcstring contains the given point
+        #[getter]
+        #[pyo3(name = "convex_hull")]
+        fn py_convex_hull(&self) -> Option<SphericalPolygon> {
+            self.convex_hull()
+        }
+
+        /// angular distance on the sphere between these points and others
+        #[pyo3(name = "distance")]
+        fn py_distance(&self, other: &Self) -> f64 {
+            self.distance(other)
+        }
+
         #[pyo3(name = "contains")]
-        fn py_contains(&self, point: &VectorPoint) -> bool {
-            self.contains(point)
+        fn py_contains(&self, other: &Self) -> bool {
+            self.contains(other)
+        }
+
+        #[pyo3(name = "within")]
+        fn py_within(&self, other: &Self) -> bool {
+            self.within(other)
         }
 
         /// whether this arcstring and another given arcstring intersect
@@ -375,7 +486,7 @@ pub mod sphersgeo {
         }
 
         /// point(s) at which this arcstring and another given arcstring intersect
-        #[pyo3(name = "intersection", signature=(other))]
+        #[pyo3(name = "intersection")]
         fn py_intersection(&self, other: &Self) -> Option<MultiVectorPoint> {
             self.intersection(other)
         }
