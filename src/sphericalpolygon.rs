@@ -62,13 +62,8 @@ pub fn spherical_polygon_interior_angles(points: &ArrayView2<f64>) -> Array1<f64
 /// surface area of a spherical polygon via deconstructing into triangles
 /// https://www.math.csi.cuny.edu/abhijit/623/spherical-triangle.pdf
 pub fn spherical_polygon_area(points: &ArrayView2<f64>) -> f64 {
-<<<<<<< Updated upstream
-    spherical_polygon_interior_angles(points).sum()
-        - ((points.nrows() - 1) as f64 * std::f64::consts::PI).to_degrees()
-=======
-    let interior_angles = spherical_polygon_interior_angles(points, false);
-    interior_angles.sum() - ((interior_angles.len() - 2) as f64 * std::f64::consts::PI)
->>>>>>> Stashed changes
+    let interior_angles = spherical_polygon_interior_angles(points);
+    interior_angles.sum() - ((interior_angles.len() - 2) as f64 * std::f64::consts::PI).to_degrees()
 }
 
 // use the classical even-crossings ray algorithm for point-in-polygon
@@ -361,14 +356,9 @@ impl Geometry for &SphericalPolygon {
     /// we can calculate the surface area of a spherical polygon by summing its interior angles on the sphere
     /// https://www.math.csi.cuny.edu/abhijit/623/spherical-triangle.pdf
     fn area(&self) -> f64 {
-<<<<<<< Updated upstream
-        self.interior_angles().sum()
-            - ((self.boundary.points.len() - 1) as f64 * std::f64::consts::PI).to_degrees()
-=======
-        let interior_angles = self.interior_angles(false);
-        (interior_angles.sum() - ((interior_angles.len() - 2) as f64 * std::f64::consts::PI))
-            .to_degrees()
->>>>>>> Stashed changes
+        let interior_angles = self.interior_angles();
+        interior_angles.sum()
+            - ((interior_angles.len() - 2) as f64 * std::f64::consts::PI).to_degrees()
     }
 
     fn length(&self) -> f64 {
@@ -811,10 +801,6 @@ impl GeometricOperations<&SphericalPolygon> for &SphericalPolygon {
                         if segment_index != other_segment_index {
                             if let Some(joined) = segment.join(other_segment) {
                                 if joined.closed {
-                                    if let Some(crossings) = joined.crossings_with_self() {
-                                        println!("{}", joined.points.to_lonlat(true));
-                                        println!("{}", crossings.to_lonlat(true));
-                                    }
                                     polygons.push(SphericalPolygon::new(joined, None).unwrap());
                                 } else {
                                     joined_segments.push(joined);
