@@ -155,7 +155,7 @@ pub fn collinear(a: &ArrayView1<f64>, b: &ArrayView1<f64>, c: &ArrayView1<f64>) 
 
 /// series of great circle arcs along the sphere
 #[pyclass]
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct ArcString {
     pub points: MultiVectorPoint,
 }
@@ -214,19 +214,7 @@ impl ArcString {
 
 impl ToString for ArcString {
     fn to_string(&self) -> String {
-        format!("ArcString({0})", self.points.to_string())
-    }
-}
-
-impl PartialEq for ArcString {
-    fn eq(&self, other: &ArcString) -> bool {
-        &self == &other
-    }
-}
-
-impl PartialEq<&ArcString> for ArcString {
-    fn eq(&self, other: &&ArcString) -> bool {
-        &self.points == &other.points
+        format!("ArcString({:?})", self.points)
     }
 }
 
@@ -527,19 +515,39 @@ impl MultiArcString {
 
 impl ToString for MultiArcString {
     fn to_string(&self) -> String {
-        format!("MultiArcString({})", self.arcstrings.len())
+        format!("MultiArcString({:?})", self.arcstrings)
     }
 }
 
-impl PartialEq for MultiArcString {
+impl PartialEq<MultiArcString> for MultiArcString {
     fn eq(&self, other: &MultiArcString) -> bool {
-        &self == &other
+        if self.len() != other.len() {
+            return false;
+        }
+
+        for arcstring in other.iter() {
+            if !self.contains(arcstring) {
+                return false;
+            }
+        }
+
+        true
     }
 }
 
-impl PartialEq<&MultiArcString> for MultiArcString {
-    fn eq(&self, other: &&MultiArcString) -> bool {
-        &self.arcstrings == &other.arcstrings
+impl PartialEq<Vec<ArcString>> for MultiArcString {
+    fn eq(&self, other: &Vec<ArcString>) -> bool {
+        if self.len() != other.len() {
+            return false;
+        }
+
+        for arcstring in other {
+            if !self.contains(arcstring) {
+                return false;
+            }
+        }
+
+        true
     }
 }
 
@@ -831,11 +839,11 @@ impl GeometricOperations<&MultiSphericalPolygon> for &MultiArcString {
 }
 
 impl<'a> Iterator for MultiGeometryIterator<'a, MultiArcString> {
-    type Item = ArcString;
+    type Item = &'a ArcString;
 
     fn next(&mut self) -> Option<Self::Item> {
         if self.index < self.multi.len() {
-            Some(self.multi.arcstrings[self.index].to_owned())
+            Some(&self.multi.arcstrings[self.index])
         } else {
             None
         }

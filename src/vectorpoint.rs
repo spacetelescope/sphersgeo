@@ -103,7 +103,6 @@ pub struct VectorPoint {
 impl TryFrom<Array1<f64>> for VectorPoint {
     type Error = String;
 
-    #[inline]
     fn try_from(xyz: Array1<f64>) -> Result<Self, Self::Error> {
         if xyz.len() != 3 {
             Err(format!("array should have length 3, not {:?}", xyz.len()))
@@ -114,14 +113,12 @@ impl TryFrom<Array1<f64>> for VectorPoint {
 }
 
 impl Into<Array1<f64>> for VectorPoint {
-    #[inline]
     fn into(self) -> Array1<f64> {
         self.xyz
     }
 }
 
 impl<'p> Into<ArrayView1<'p, f64>> for &'p VectorPoint {
-    #[inline]
     fn into(self) -> ArrayView1<'p, f64> {
         self.xyz.view()
     }
@@ -130,35 +127,30 @@ impl<'p> Into<ArrayView1<'p, f64>> for &'p VectorPoint {
 impl TryFrom<Vec<f64>> for VectorPoint {
     type Error = String;
 
-    #[inline]
     fn try_from(xyz: Vec<f64>) -> Result<Self, Self::Error> {
         Self::try_from(Array1::<f64>::from_vec(xyz))
     }
 }
 
 impl Into<Vec<f64>> for VectorPoint {
-    #[inline]
     fn into(self) -> Vec<f64> {
         self.xyz.to_vec()
     }
 }
 
 impl From<[f64; 3]> for VectorPoint {
-    #[inline]
     fn from(xyz: [f64; 3]) -> Self {
         Self::try_from(xyz.to_vec()).unwrap()
     }
 }
 
 impl Into<[f64; 3]> for VectorPoint {
-    #[inline]
     fn into(self) -> [f64; 3] {
         self.xyz.to_vec().try_into().unwrap()
     }
 }
 
 impl Into<MultiVectorPoint> for &VectorPoint {
-    #[inline]
     fn into(self) -> MultiVectorPoint {
         MultiVectorPoint::try_from(self.xyz.to_shape((1, 3)).unwrap().to_owned()).unwrap()
     }
@@ -249,7 +241,7 @@ impl VectorPoint {
     /// length of the underlying xyz vector
     ///
     ///     r = sqrt(x^2 + y^2 + z^2)
-    pub fn vector_radius(&self) -> f64 {
+    pub fn vector_length(&self) -> f64 {
         self.xyz.pow2().sum().sqrt()
     }
 
@@ -283,7 +275,7 @@ impl VectorPoint {
 
 impl ToString for VectorPoint {
     fn to_string(&self) -> String {
-        format!("VectorPoint({0})", self.xyz)
+        format!("VectorPoint({})", self.xyz)
     }
 }
 
@@ -565,6 +557,31 @@ impl GeometricOperations<&MultiSphericalPolygon> for &VectorPoint {
     }
 }
 
+impl GeometricOperations<&GeometryCollection> for &VectorPoint {
+    fn distance(self, other: &GeometryCollection) -> f64 {
+        todo!()
+    }
+
+    fn contains(self, other: &GeometryCollection) -> bool {
+        todo!()
+    }
+
+    fn within(self, other: &GeometryCollection) -> bool {
+        todo!()
+    }
+
+    fn intersects(self, other: &GeometryCollection) -> bool {
+        todo!()
+    }
+
+    fn intersection(
+        self,
+        other: &GeometryCollection,
+    ) -> crate::geometrycollection::GeometryCollection {
+        todo!()
+    }
+}
+
 /// xyz vectors representing points on the sphere
 #[pyclass]
 #[derive(Clone, Debug)]
@@ -642,31 +659,13 @@ impl Into<Vec<VectorPoint>> for &MultiVectorPoint {
 impl TryFrom<Array2<f64>> for MultiVectorPoint {
     type Error = String;
 
-    #[inline]
     fn try_from(xyz: Array2<f64>) -> Result<Self, Self::Error> {
         if xyz.shape()[1] != 3 {
             Err(format!("array should be Nx3, not Nx{:?}", xyz.shape()[1]))
         } else {
-            let xyz = normalize_vectors(&xyz.view());
-
-            let mut vec_xyz: Vec<[f64; 3]> = vec![];
-            let tolerance = 1e-10;
-            for current_row in 0..xyz.nrows() {
-                let point = xyz.slice(s![current_row, ..]);
-                for other_row in 0..xyz.nrows() {
-                    if other_row != current_row {
-                        let other_point = xyz.slice(s![other_row, ..]);
-                        if (&point - &other_point).abs().sum() < tolerance {
-                            return Err(format!(
-                                "duplicate points at indices {} and {}",
-                                current_row, other_row
-                            ));
-                        }
-                    }
-                }
-
-                vec_xyz.push([point[0], point[1], point[2]]);
-            }
+            let vec_xyz = Zip::from(xyz.rows())
+                .par_map_collect(|row| [row[0], row[1], row[2]])
+                .to_vec();
 
             Ok(Self {
                 xyz,
@@ -677,14 +676,12 @@ impl TryFrom<Array2<f64>> for MultiVectorPoint {
 }
 
 impl Into<Array2<f64>> for MultiVectorPoint {
-    #[inline]
     fn into(self) -> Array2<f64> {
         self.xyz
     }
 }
 
 impl<'p> Into<ArrayView2<'p, f64>> for &'p MultiVectorPoint {
-    #[inline]
     fn into(self) -> ArrayView2<'p, f64> {
         self.xyz.view()
     }
@@ -859,7 +856,7 @@ impl MultiVectorPoint {
         });
 
         let lats = Zip::from(self.xyz.slice(s![.., 2]))
-            .and(&self.vector_radii())
+            .and(&self.vector_lengths())
             .par_map_collect(|z, r| (z / r).asin());
         // let lats = Zip::from(self.xyz.rows())
         //     .par_map_collect(|xyz| xyz[2].atan2((xyz[0].powi(2) + xyz[1].powi(2)).sqrt()));
@@ -875,7 +872,7 @@ impl MultiVectorPoint {
     /// lengths of the underlying xyz vectors
     ///
     ///     r = sqrt(x^2 + y^2 + z^2)
-    pub fn vector_radii(&self) -> Array1<f64> {
+    pub fn vector_lengths(&self) -> Array1<f64> {
         self.xyz.pow2().sum_axis(Axis(1)).sqrt()
     }
 
@@ -947,14 +944,39 @@ impl Sum for MultiVectorPoint {
 
 impl ToString for MultiVectorPoint {
     fn to_string(&self) -> String {
-        format!("MultiVectorPoint({0})", self.xyz)
+        format!("MultiVectorPoint({})", self.xyz)
     }
 }
 
 impl PartialEq for MultiVectorPoint {
     fn eq(&self, other: &MultiVectorPoint) -> bool {
-        let tolerance = 3e-11;
-        (&self.xyz - &other.xyz).abs().sum() < tolerance
+        if self.len() != other.len() {
+            return false;
+        }
+
+        for point in other.iter() {
+            if !self.contains(&point) {
+                return false;
+            }
+        }
+
+        true
+    }
+}
+
+impl PartialEq<Vec<VectorPoint>> for MultiVectorPoint {
+    fn eq(&self, other: &Vec<VectorPoint>) -> bool {
+        if self.len() != other.len() {
+            return false;
+        }
+
+        for point in other {
+            if !self.contains(point) {
+                return false;
+            }
+        }
+
+        true
     }
 }
 
@@ -1414,13 +1436,13 @@ mod tests {
         .unwrap();
 
         assert_ne!(
-            points.vector_radii(),
+            points.vector_lengths(),
             array![1.0].broadcast(points.xyz.nrows()).unwrap()
         );
 
         let normalized = points.normalized();
 
-        assert!(Zip::from(&normalized.vector_radii()).all(|length| length == &1.0));
+        assert!(Zip::from(&normalized.vector_lengths()).all(|length| length == &1.0));
 
         assert!(Zip::from(&normalized.xyz.powi(2).sum_axis(Axis(1)).sqrt())
             .all(|length| length == &1.0),);

@@ -125,7 +125,14 @@ impl Geometry for &AngularBounds {
     }
 
     fn convex_hull(&self) -> Option<crate::sphericalpolygon::SphericalPolygon> {
-        crate::sphericalpolygon::SphericalPolygon::try_from(self.points()).ok()
+        crate::sphericalpolygon::SphericalPolygon::new(
+            crate::arcstring::ArcString {
+                points: self.points(),
+            },
+            self.centroid(),
+            None,
+        )
+        .ok()
     }
 
     fn points(&self) -> crate::vectorpoint::MultiVectorPoint {

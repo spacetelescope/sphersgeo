@@ -53,52 +53,33 @@ pub fn spherical_polygon_area(points: &ArrayView2<f64>) -> f64 {
 #[pyclass]
 #[derive(Clone, Debug, PartialEq)]
 pub struct SphericalPolygon {
-    pub arcstring: ArcString,
+    pub exterior: ArcString,
     pub interior: VectorPoint,
     pub holes: Option<MultiArcString>,
 }
 
-impl TryFrom<Array2<f64>> for SphericalPolygon {
-    type Error = String;
-
-    fn try_from(xyz: Array2<f64>) -> Result<Self, Self::Error> {
-        Self::try_from(ArcString::try_from(MultiVectorPoint::try_from(xyz)?)?)
-    }
-}
-
-impl TryFrom<MultiVectorPoint> for SphericalPolygon {
-    type Error = String;
-
-    fn try_from(multipoint: MultiVectorPoint) -> Result<Self, Self::Error> {
-        Self::try_from(ArcString::try_from(multipoint)?)
-    }
-}
-
-impl TryFrom<ArcString> for SphericalPolygon {
-    type Error = String;
-
-    /// create a simple polygon without holes, and assume the interior point is within the smaller region of the sphere
-    fn try_from(arcstring: ArcString) -> Result<Self, Self::Error> {
-        // TODO: check for self-intersections
-        let interior = todo!();
-
-        Ok(Self {
-            arcstring,
-            interior,
-            holes: None,
-        })
-    }
-}
-
 impl ToString for SphericalPolygon {
     fn to_string(&self) -> String {
-        format!("AngularPolygon({:?})", self.arcstring)
+        format!("AngularPolygon({:?})", self.exterior)
     }
 }
 
 impl SphericalPolygon {
+    /// interior point is required because a sphere is a finite space
+    pub fn new(
+        exterior: ArcString,
+        interior: VectorPoint,
+        holes: Option<MultiArcString>,
+    ) -> Result<Self, String> {
+        // TODO: check for self-intersections
+        Ok(Self {
+            exterior,
+            interior,
+            holes,
+        })
+    }
     fn interior_angles(&self, degrees: bool) -> Array1<f64> {
-        spherical_polygon_interior_angles(&self.arcstring.points.xyz.view(), degrees)
+        spherical_polygon_interior_angles(&self.exterior.points.xyz.view(), degrees)
     }
 }
 
@@ -107,7 +88,7 @@ impl Geometry for &SphericalPolygon {
     /// https://www.math.csi.cuny.edu/abhijit/623/spherical-triangle.pdf
     fn area(&self) -> f64 {
         self.interior_angles(false).sum()
-            - ((self.arcstring.points.len() - 1) as f64 * std::f64::consts::PI)
+            - ((self.exterior.points.len() - 1) as f64 * std::f64::consts::PI)
     }
 
     /// length of this polygon
@@ -116,11 +97,11 @@ impl Geometry for &SphericalPolygon {
     }
 
     fn convex_hull(&self) -> Option<SphericalPolygon> {
-        self.arcstring.convex_hull()
+        self.exterior.convex_hull()
     }
 
     fn points(&self) -> crate::vectorpoint::MultiVectorPoint {
-        self.arcstring.points()
+        self.exterior.points()
     }
 }
 
@@ -138,13 +119,13 @@ impl Geometry for SphericalPolygon {
     }
 
     fn points(&self) -> crate::vectorpoint::MultiVectorPoint {
-        (&self).arcstring.points()
+        (&self).exterior.points()
     }
 }
 
 impl GeometricOperations<&VectorPoint> for &SphericalPolygon {
     fn distance(self, other: &VectorPoint) -> f64 {
-        self.arcstring.distance(other)
+        self.exterior.distance(other)
     }
 
     fn contains(self, other: &VectorPoint) -> bool {
@@ -310,7 +291,7 @@ impl From<Vec<SphericalPolygon>> for MultiSphericalPolygon {
         for polygon in &polygons {
             points.extend(
                 polygon
-                    .arcstring
+                    .exterior
                     .points
                     .xyz
                     .rows()
@@ -329,6 +310,38 @@ impl From<Vec<SphericalPolygon>> for MultiSphericalPolygon {
 impl ToString for MultiSphericalPolygon {
     fn to_string(&self) -> String {
         format!("MultiAngularPolygon({:?})", self.polygons)
+    }
+}
+
+impl PartialEq<MultiSphericalPolygon> for MultiSphericalPolygon {
+    fn eq(&self, other: &MultiSphericalPolygon) -> bool {
+        if self.len() != other.len() {
+            return false;
+        }
+
+        for polygon in other.iter() {
+            if !self.contains(polygon) {
+                return false;
+            }
+        }
+
+        true
+    }
+}
+
+impl PartialEq<Vec<SphericalPolygon>> for MultiSphericalPolygon {
+    fn eq(&self, other: &Vec<SphericalPolygon>) -> bool {
+        if self.len() != other.len() {
+            return false;
+        }
+
+        for polygon in other {
+            if !self.contains(polygon) {
+                return false;
+            }
+        }
+
+        return true;
     }
 }
 
@@ -545,11 +558,11 @@ impl GeometricOperations<&MultiSphericalPolygon> for &MultiSphericalPolygon {
 }
 
 impl<'a> Iterator for MultiGeometryIterator<'a, MultiSphericalPolygon> {
-    type Item = SphericalPolygon;
+    type Item = &'a SphericalPolygon;
 
     fn next(&mut self) -> Option<Self::Item> {
         if self.index < self.multi.len() {
-            Some(self.multi.polygons[self.index].to_owned())
+            Some(&self.multi.polygons[self.index])
         } else {
             None
         }
