@@ -1286,7 +1286,7 @@ impl PartialEq for MultiSphericalPoint {
                 .all(|a, b| (&a - &b).abs().sum() < tolerance);
         }
 
-        true
+        false
     }
 }
 

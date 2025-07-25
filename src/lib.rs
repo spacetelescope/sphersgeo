@@ -683,7 +683,8 @@ mod py_sphersgeo {
     #[pymethods]
     impl ArcString {
         #[new]
-        fn py_new(arcstring: PyArcStringInputs) -> PyResult<Self> {
+        #[pyo3(signature=(arcstring, closed=false))]
+        fn py_new(arcstring: PyArcStringInputs, closed: bool) -> PyResult<Self> {
             let points = match arcstring {
                 PyArcStringInputs::MultiPointInput(multipoint_input) => {
                     MultiSphericalPoint::py_new(multipoint_input)?
@@ -691,7 +692,13 @@ mod py_sphersgeo {
                 PyArcStringInputs::AnyGeometry(geometry) => {
                     return match geometry {
                         AnyGeometry::MultiSphericalPoint(multipoint) => Ok(multipoint.into()),
-                        AnyGeometry::ArcString(arcstring) => Ok(arcstring),
+                        AnyGeometry::ArcString(arcstring) => Ok(if closed != arcstring.closed {
+                            let mut arcstring = arcstring.to_owned();
+                            arcstring.closed = closed;
+                            arcstring
+                        } else {
+                            arcstring
+                        }),
                         AnyGeometry::AngularBounds(bounds) => Ok(bounds
                             .boundary()
                             .ok_or(PyValueError::new_err(format!("invalid bounds {bounds:?}")))?),
@@ -703,7 +710,9 @@ mod py_sphersgeo {
                 }
             };
 
-            Self::try_from(points).map_err(|err| PyValueError::new_err(format!("{err}")))
+            let mut arcstring = Self::from(points);
+            arcstring.closed = closed;
+            Ok(arcstring)
         }
 
         /// number of arcs in this string
@@ -927,7 +936,7 @@ mod py_sphersgeo {
                 PyMultiArcStringInputs::ListOfArcStrings(arcstring_inputs) => {
                     let mut arcstrings = vec![];
                     for arcstring_input in arcstring_inputs {
-                        arcstrings.push(ArcString::py_new(arcstring_input)?);
+                        arcstrings.push(ArcString::py_new(arcstring_input, false)?);
                     }
                     Self::try_from(arcstrings)
                         .map_err(|err| PyValueError::new_err(format!("{err}")))
@@ -1356,7 +1365,7 @@ mod py_sphersgeo {
             interior_point: Option<PySphericalPointInputs<'py>>,
             holes: Option<PyMultiArcStringInputs<'py>>,
         ) -> PyResult<Self> {
-            let boundary = ArcString::py_new(boundary)?;
+            let boundary = ArcString::py_new(boundary, true)?;
             let interior_point = if let Some(interior_point) = interior_point {
                 Some(SphericalPoint::py_new(interior_point)?)
             } else {
@@ -1585,7 +1594,7 @@ mod py_sphersgeo {
                     let mut polygons: Vec<SphericalPolygon> = vec![];
                     for arcstring in arcstrings {
                         polygons.push(
-                            SphericalPolygon::new(ArcString::py_new(arcstring)?, None, None)
+                            SphericalPolygon::new(ArcString::py_new(arcstring, true)?, None, None)
                                 .map_err(|err| PyValueError::new_err(format!("{err}")))?,
                         );
                     }

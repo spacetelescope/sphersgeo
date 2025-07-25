@@ -140,28 +140,84 @@ def test_interpolate():
 def test_intersection():
     A = SphericalPoint.from_lonlat((-10.0, -10.0), degrees=True)
     B = SphericalPoint.from_lonlat((10.0, 10.0), degrees=True)
-
     C = SphericalPoint.from_lonlat((-25.0, 10.0), degrees=True)
     D = SphericalPoint.from_lonlat((15.0, -10.0), degrees=True)
+    E = SphericalPoint.from_lonlat((-20.0, 40.0), degrees=True)
+    F = SphericalPoint.from_lonlat((20.0, 40.0), degrees=True)
 
-    # E = SphericalPoint.from_lonlat((-20.0, 40.0), degrees=True)
-    # F = SphericalPoint.from_lonlat((20.0, 40.0), degrees=True)
-
-    reference_intersection = (0.99912414, -0.02936109, -0.02981403)
-
+    # simple intersection
     AB = ArcString([A, B])
     CD = ArcString([C, D])
+    EF = ArcString([E, F])
     assert AB.intersects(CD)
-    r = AB.intersection(CD)
-    assert r.xyz.shape == (3,)
-    assert_allclose(r.xyz, reference_intersection)
+    assert not AB.intersects(EF)
+    assert_allclose(
+        AB.intersection(CD).to_lonlats(degrees=True), [(358.316743, -1.708471)]
+    )
 
-    # assert not np.all(great_circle_arc.intersects([A, E], [B, F], [C], [D]))
-    # r = great_circle_arc.intersection([A, E], [B, F], [C], [D])
-    # assert r.shape == (2, 3)
-    # assert_allclose(r[0], reference_intersection)
-    # assert np.all(np.isnan(r[1]))
+    # intersection with later part
+    ABE = ArcString([A, B, E])
+    CF = ArcString([C, F])
+    assert ABE.intersects(CF)
 
-    # Test parallel arc.xyzs
-    r = AB.intersection(AB)
-    assert np.all(np.isnan(r.xyz))
+    # multi-part geometry intersection
+    AB_EF = MultiArcString([AB, EF])
+    assert AB_EF.intersects(CD)
+    assert_allclose(
+        AB_EF.intersection(CD).to_lonlats(degrees=True), [(358.316743, -1.708471)]
+    )
+
+    # ensure non-intersection of non-parallel pre-terminated arcs
+    CE = ArcString([C, E])
+    assert not CE.intersects(AB)
+    assert CE.intersection(AB) is None
+
+    # intersection with non-closed and closed arcstring
+    DFE = ArcString([D, F, E])
+    assert not AB.intersects(DFE)
+    DFEc = ArcString([D, F, E], closed=True)
+    assert AB.intersects(DFEc)
+
+    # intersection with self
+    assert AB.intersects(AB)
+
+
+def test_crosses_self():
+    A = SphericalPoint.from_lonlat((-10.0, -10.0), degrees=True)
+    B = SphericalPoint.from_lonlat((10.0, 10.0), degrees=True)
+    C = SphericalPoint.from_lonlat((-25.0, 10.0), degrees=True)
+    D = SphericalPoint.from_lonlat((15.0, -10.0), degrees=True)
+    E = SphericalPoint.from_lonlat((-20.0, 40.0), degrees=True)
+    F = SphericalPoint.from_lonlat((20.0, 40.0), degrees=True)
+
+    # simple self-crossing
+    ABCD = ArcString([A, B, C, D])
+    assert ABCD.crosses_self
+    assert_allclose(
+        ABCD.crossings_with_self.to_lonlats(degrees=True),
+        [(358.316743, -1.708471)],
+    )
+
+    # longer self-crossing
+    ABCDFE = ArcString([A, B, C, D, F, E])
+    assert ABCDFE.crosses_self
+    assert_allclose(
+        ABCDFE.crossings_with_self.to_lonlats(degrees=True), [(358.316743, -1.708471)]
+    )
+
+    # non-self-crossing
+    ACBD = ArcString([A, C, B, D])
+    assert not ACBD.crosses_self
+    assert ACBD.crossings_with_self is None
+
+    # closed and looped arcstrings
+    ABCDc = ArcString([A, B, C, D], closed=True)
+    assert ABCDc.crosses_self
+    ABCDA = ArcString([A, B, C, D, A], closed=False)
+    assert ABCDA.crosses_self
+
+    # non-closed arcstrings
+    ACBDc = ArcString([A, C, B, D], closed=True)
+    assert not ACBDc.crosses_self
+    ACBDA = ArcString([A, C, B, D, A], closed=False)
+    assert not ACBDA.crosses_self

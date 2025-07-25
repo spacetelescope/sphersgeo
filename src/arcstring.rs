@@ -1,13 +1,11 @@
 use crate::{
     geometry::{ExtendMultiGeometry, GeometricOperations, Geometry, MultiGeometry},
     sphericalpoint::{
-        cross_vector, cross_vectors, normalize_vector, point_within_kdtree, vector_arc_length,
+        cross_vector, normalize_vector, point_within_kdtree, vector_arc_length,
         MultiSphericalPoint, SphericalPoint,
     },
 };
-use numpy::ndarray::{
-    array, concatenate, s, stack, Array1, Array2, ArrayView1, ArrayView2, Axis, Zip,
-};
+use numpy::ndarray::{array, concatenate, s, stack, Array1, Array2, ArrayView1, Axis, Zip};
 use pyo3::prelude::*;
 use rayon::prelude::*;
 use std::{collections::VecDeque, iter::Sum};
@@ -88,10 +86,9 @@ pub fn vector_arc_crossings(
     ]
     .signum();
 
-    let epsilon = 1e-6;
-    if signs.iter().all(|sign| sign > &epsilon) {
+    if signs.iter().all(|sign| sign.is_sign_positive()) {
         Some(t)
-    } else if signs.iter().all(|sign| sign > &epsilon) {
+    } else if signs.iter().all(|sign| sign.is_sign_negative()) {
         Some(-t)
     } else {
         None
@@ -218,14 +215,14 @@ impl ArcString {
             // we can't use the Bentley-Ottmann sweep-line algorithm here :/
             // because a sphere is an enclosed infinite space so there's no good way to sort by longitude
             // so instead we use brute-force and skip visited arcs
-            for arc_index in 0..self.points.len() - 1 {
-                let a_0 = self.points.xyz.slice(s![arc_index, ..]);
-                let a_1 = self.points.xyz.slice(s![arc_index + 1, ..]);
+            let start_index = if self.closed { -1 as isize } else { 0 };
+            for a_0_index in start_index..(self.points.len() - 1) as isize {
+                let a_0 = self.points.xyz.slice(s![a_0_index, ..]);
+                let a_1 = self.points.xyz.slice(s![a_0_index + 1, ..]);
 
-                for other_arc_index in arc_index..self.points.len() - 1 {
-                    let b_0 = self.points.xyz.slice(s![other_arc_index, ..]);
-                    let b_1 = self.points.xyz.slice(s![other_arc_index + 1, ..]);
-
+                for b_0_index in a_0_index + 2..(self.points.len() - 1) as isize {
+                    let b_0 = self.points.xyz.slice(s![b_0_index, ..]);
+                    let b_1 = self.points.xyz.slice(s![b_0_index + 1, ..]);
                     if let Some(point) = vector_arc_crossings(&a_0, &a_1, &b_0, &b_1) {
                         return true;
                     }
@@ -244,13 +241,14 @@ impl ArcString {
             // we can't use the Bentley-Ottmann sweep-line algorithm here :/
             // because a sphere is an enclosed infinite space so there's no good way to sort by longitude
             // so instead we use brute-force and skip visited arcs
-            for arc_index in 0..self.points.len() - 1 {
-                let a_0 = self.points.xyz.slice(s![arc_index, ..]);
-                let a_1 = self.points.xyz.slice(s![arc_index + 1, ..]);
+            let start_index = if self.closed { -1 as isize } else { 0 };
+            for a_0_index in start_index..(self.points.len() - 1) as isize {
+                let a_0 = self.points.xyz.slice(s![a_0_index, ..]);
+                let a_1 = self.points.xyz.slice(s![a_0_index + 1, ..]);
 
-                for other_arc_index in arc_index..self.points.len() - 1 {
-                    let b_0 = self.points.xyz.slice(s![other_arc_index, ..]);
-                    let b_1 = self.points.xyz.slice(s![other_arc_index + 1, ..]);
+                for b_0_index in a_0_index + 2..(self.points.len() - 1) as isize {
+                    let b_0 = self.points.xyz.slice(s![b_0_index, ..]);
+                    let b_1 = self.points.xyz.slice(s![b_0_index + 1, ..]);
 
                     if let Some(point) = vector_arc_crossings(&a_0, &a_1, &b_0, &b_1) {
                         crossings.push(point);
@@ -450,11 +448,13 @@ impl GeometricOperations<&ArcString> for &ArcString {
         // we can't use the Bentley-Ottmann sweep-line algorithm here :/
         // because a sphere is an enclosed infinite space so there's no good way to sort by longitude
         // so instead we use brute-force
-        for arc_index in 0..self.points.xyz.nrows() - 1 {
+        let start_index = if self.closed { -1 as isize } else { 0 };
+        for arc_index in start_index..(self.points.xyz.nrows() - 1) as isize {
             let a_0 = self.points.xyz.slice(s![arc_index, ..]);
             let a_1 = self.points.xyz.slice(s![arc_index + 1, ..]);
 
-            for other_arc_index in 0..other.points.xyz.nrows() - 1 {
+            let other_start_index = if other.closed { -1 as isize } else { 0 };
+            for other_arc_index in other_start_index..(other.points.xyz.nrows() - 1) as isize {
                 let b_0 = other.points.xyz.slice(s![other_arc_index, ..]);
                 let b_1 = other.points.xyz.slice(s![other_arc_index + 1, ..]);
 
@@ -468,18 +468,20 @@ impl GeometricOperations<&ArcString> for &ArcString {
     }
 
     fn intersects(self, other: &ArcString) -> bool {
-        self.touches(other) || self.crosses(other)
+        self.touches(other) || self.crosses(other) || self.eq(other)
     }
 
     fn intersection(self, other: &ArcString) -> Option<MultiSphericalPoint> {
         let mut intersections = vec![];
 
         // find crossings first
-        for arc_index in 0..self.points.xyz.nrows() - 1 {
+        let start_index = if self.closed { -1 as isize } else { 0 };
+        for arc_index in start_index..(self.points.xyz.nrows() - 1) as isize {
             let a_0 = self.points.xyz.slice(s![arc_index, ..]);
             let a_1 = self.points.xyz.slice(s![arc_index + 1, ..]);
 
-            for other_arc_index in 0..other.points.xyz.nrows() - 1 {
+            let other_start_index = if other.closed { -1 as isize } else { 0 };
+            for other_arc_index in other_start_index..(other.points.xyz.nrows() - 1) as isize {
                 let b_0 = other.points.xyz.slice(s![other_arc_index, ..]);
                 let b_1 = other.points.xyz.slice(s![other_arc_index + 1, ..]);
 
