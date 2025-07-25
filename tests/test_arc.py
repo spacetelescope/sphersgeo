@@ -1,133 +1,145 @@
 import numpy as np
-import sphersgeo
-from numpy.testing import assert_almost_equal
+import pytest
+from numpy.testing import assert_almost_equal, assert_allclose
+from sphersgeo import ArcString, VectorPoint, MultiVectorPoint, interpolate
 
 
 def test_midpoint():
     avec = [
-        np.array(i + 7, j + 7, dtype=float)
+        np.array([[i, j]], dtype=float) + 7.0
         for i in range(0, 11, 5)
         for j in range(0, 11, 5)
     ]
 
     bvec = [
-        np.array(i + 10, j + 10, dtype=float)
+        np.array([[i, j]], dtype=float) + 10.0
         for i in range(0, 11, 5)
         for j in range(0, 11, 5)
     ]
 
     for a in avec:
-        A = np.asarray(sphersgeo.SphericalPoints.from_lonlats(a[0], a[1]))
+        A = np.asarray(MultiVectorPoint.from_lonlats(a))
         for b in bvec:
-            B = np.asarray(sphersgeo.SphericalPoints.from_lonlats(b[0], b[1]))
-            C = sphersgeo.GreatCircleArc(A, B).midpoint
-            aclen = sphersgeo.GreatCircleArc(A, C).subtends
-            bclen = sphersgeo.GreatCircleArc(B, C).subtends
+            B = np.asarray(MultiVectorPoint.from_lonlats(b))
+            C = ArcString(A + B).midpoints
+            aclen = ArcString(A + C).length
+            bclen = ArcString(B + C).length
             assert abs(aclen - bclen) < 1.0e-10
 
 
 def test_contains():
-    arc = sphersgeo.GreatCircleArc(
-        sphersgeo.SphericalPoint.from_lonlat(np.array([60.0, 0.0])),
-        sphersgeo.SphericalPoint.from_lonlat(np.array([60.0, 30.0])),
+    arc = ArcString(
+        MultiVectorPoint.from_lonlats(np.array([[60.0, 0.0], [60.0, 30.0]])),
     )
     for i in range(1, 29):
-        assert arc.contains(
-            sphersgeo.SphericalPoint.from_lonlat(np.array([60.0, i], dtype=float))
-        )
+        assert arc.contains(VectorPoint.from_lonlat(np.array([60.0, i], dtype=float)))
 
-    arc = sphersgeo.GreatCircleArc(
-        sphersgeo.SphericalPoint.from_lonlat(np.array([0.0, 60.0])),
-        sphersgeo.SphericalPoint.from_lonlat(np.array([30.0, 60.0])),
+    arc = ArcString(
+        MultiVectorPoint.from_lonlats(np.array([[0.0, 60.0], [30.0, 60.0]])),
     )
     for i in range(1, 29):
         assert not arc.contains(
-            sphersgeo.SphericalPoint.from_lonlat(np.array([float(i), 60.0]))
+            VectorPoint.from_lonlat(np.array([i, 60.0], dtype=float))
         )
 
 
 def test_interpolate():
-    arc = sphersgeo.GreatCircleArc(
-        sphersgeo.SphericalPoint(np.array([60.0, 0.0])),
-        sphersgeo.SphericalPoint(np.array([60.0, 30.0])),
+    arc = ArcString(
+        MultiVectorPoint(np.array([[60.0, 0.0], [60.0, 30.0]])),
     )
-    cvec = arc.interpolate_points(n=10)
+    cvec = interpolate(np.array([60.0, 0.0]), np.array([60.0, 30.0]), n=10)
 
-    first_length = sphersgeo.GreatCircleArc(cvec[0], cvec[1]).subtends
+    first_length = ArcString(cvec[0], cvec[1]).subtends
     for i in range(1, 9):
-        length = sphersgeo.GreatCircleArc(cvec[i], cvec[i + 1]).subtends
+        length = ArcString(cvec[i], cvec[i + 1]).subtends
         assert abs(length - first_length) < 1.0e-10
 
 
 def test_great_circle_arc_intersection():
-    A = [-10, -10]
-    B = [10, 10]
+    A = VectorPoint.from_lonlat(np.array([-10.0, -10.0]))
+    B = VectorPoint.from_lonlat(np.array([10.0, 10.0]))
 
-    C = [-25, 10]
-    D = [15, -10]
+    C = VectorPoint.from_lonlat(np.array([-25.0, 10.0]))
+    D = VectorPoint.from_lonlat(np.array([15.0, -10.0]))
 
-    E = [-20, 40]
-    F = [20, 40]
+    E = VectorPoint.from_lonlat(np.array([-20.0, 40.0]))
+    F = VectorPoint.from_lonlat(np.array([20.0, 40.0]))
 
-    correct = [0.99912414, -0.02936109, -0.02981403]
+    reference_intersection = [0.99912414, -0.02936109, -0.02981403]
 
-    A = vector.lonlat_to_vector(*A)
-    B = vector.lonlat_to_vector(*B)
-    C = vector.lonlat_to_vector(*C)
-    D = vector.lonlat_to_vector(*D)
-    E = vector.lonlat_to_vector(*E)
-    F = vector.lonlat_to_vector(*F)
-
-    assert great_circle_arc.intersects(A, B, C, D)
-    r = great_circle_arc.intersection(A, B, C, D)
+    AB = ArcString(A + B)
+    CD = ArcString(C + D)
+    assert AB.intersects(CD)
+    r = AB.intersection(CD)
     assert r.shape == (3,)
-    assert_almost_equal(r, correct)
+    assert_almost_equal(r, reference_intersection)
 
-    assert np.all(great_circle_arc.intersects([A], [B], [C], [D]))
-    r = great_circle_arc.intersection([A], [B], [C], [D])
-    assert r.shape == (1, 3)
-    assert_almost_equal(r, [correct])
-
-    assert np.all(great_circle_arc.intersects([A], [B], C, D))
-    r = great_circle_arc.intersection([A], [B], C, D)
-    assert r.shape == (1, 3)
-    assert_almost_equal(r, [correct])
-
-    assert not np.all(great_circle_arc.intersects([A, E], [B, F], [C], [D]))
-    r = great_circle_arc.intersection([A, E], [B, F], [C], [D])
-    assert r.shape == (2, 3)
-    assert_almost_equal(r[0], correct)
-    assert np.all(np.isnan(r[1]))
+    # assert not np.all(great_circle_arc.intersects([A, E], [B, F], [C], [D]))
+    # r = great_circle_arc.intersection([A, E], [B, F], [C], [D])
+    # assert r.shape == (2, 3)
+    # assert_almost_equal(r[0], reference_intersection)
+    # assert np.all(np.isnan(r[1]))
 
     # Test parallel arcs
-    r = great_circle_arc.intersection(A, B, A, B)
+    r = AB.intersection(AB)
     assert np.all(np.isnan(r))
 
 
 def test_great_circle_arc_length():
-    A = [90, 0]
-    B = [-90, 0]
-    A = vector.lonlat_to_vector(*A)
-    B = vector.lonlat_to_vector(*B)
-    assert_almost_equal(great_circle_arc.length(A, B), np.pi)
+    A = VectorPoint.from_lonlat(np.array([90.0, 0.0]))
+    B = VectorPoint.from_lonlat(np.array([-90.0, 0.0]))
+    assert_almost_equal(A.distance(B), np.pi)
 
-    A = [135, 0]
-    B = [-90, 0]
-    A = vector.lonlat_to_vector(*A)
-    B = vector.lonlat_to_vector(*B)
-    assert_almost_equal(great_circle_arc.length(A, B), (3.0 / 4.0) * np.pi)
+    A = VectorPoint.from_lonlat(np.array([135.0, 0.0]))
+    B = VectorPoint.from_lonlat(np.array([-90.0, 0.0]))
+    assert_almost_equal(A.distance(B), (3.0 / 4.0) * np.pi)
 
-    A = [0, 0]
-    B = [0, 90]
-    A = vector.lonlat_to_vector(*A)
-    B = vector.lonlat_to_vector(*B)
-    assert_almost_equal(great_circle_arc.length(A, B), np.pi / 2.0)
+    A = VectorPoint.from_lonlat(np.array([0.0, 0.0]))
+    B = VectorPoint.from_lonlat(np.array([0.0, 90.0]))
+    assert_almost_equal(A.distance(B), np.pi / 2.0)
 
 
-def test_great_circle_arc_angle():
-    A = [1, 0, 0]
-    B = [0, 1, 0]
-    C = [0, 0, 1]
-    assert great_circle_arc.angle(A, B, C) == (3.0 / 2.0) * np.pi
+def test_angle():
+    A = VectorPoint(np.array([1.0, 0.0, 0.0]))
+    B = VectorPoint(np.array([0.0, 1.0, 0.0]))
+    C = VectorPoint(np.array([0.0, 0.0, 1.0]))
+    assert A.angle(B, C) == (3.0 / 2.0) * np.pi
 
     # TODO: More angle tests
+
+
+def test_angle_domain():
+    A = VectorPoint(np.array([0.0, 0.0, 0.0]))
+    B = VectorPoint(np.array([0.0, 0.0, 0.0]))
+    C = VectorPoint(np.array([0.0, 0.0, 0.0]))
+    assert A.angle(B, C) == (3.0 / 2.0) * np.pi
+    assert not np.isfinite(A.angle(B, C))
+
+
+def test_length_domain():
+    A = VectorPoint(np.array([np.nan, 0.0, 0.0]))
+    B = VectorPoint(np.array([0.0, 0.0, np.inf]))
+    with pytest.raises(ValueError):
+        A.distance(B)
+
+
+def test_angle_nearly_coplanar_vec():
+    # test from issue #222 + extra values
+    A = MultiVectorPoint(np.repeat([[1.0, 1.0, 1.0]], 5, axis=0))
+    B = MultiVectorPoint(np.repeat([[1.0, 0.9999999, 1.0]], 5, axis=0))
+    C = MultiVectorPoint(
+        np.array(
+            [
+                [1.0, 0.5, 1.0],
+                [1.0, 0.15, 1.0],
+                [1.0, 0.001, 1.0],
+                [1.0, 0.15, 1.0],
+                [-1.0, 0.1, -1.0],
+            ]
+        )
+    )
+    # vectors = np.stack([A, B, C], axis=0)
+    angles = B.angle(A, C)
+
+    assert_allclose(angles[:-1], np.pi, rtol=0, atol=1e-16)
+    assert_allclose(angles[-1], 0, rtol=0, atol=1e-32)

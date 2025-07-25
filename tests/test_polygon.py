@@ -153,7 +153,7 @@ def test_not_intersects_poly():
 
 
 def test_point_in_poly():
-    point = sphersgeo.SphericalPoint(np.asarray([-0.27475449, 0.47588873, -0.83548781]))
+    point = sphersgeo.VectorPoint(np.asarray([-0.27475449, 0.47588873, -0.83548781]))
     points = np.asarray(
         [
             [0.04821217, -0.29877206, 0.95310589],
