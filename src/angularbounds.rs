@@ -1,3 +1,5 @@
+use std::fmt::Display;
+
 use crate::geometry::{GeometricOperations, Geometry};
 use numpy::ndarray::{array, s, Array1, Array2, ArrayView1, Axis};
 use pyo3::prelude::*;
@@ -48,10 +50,10 @@ impl From<&AngularBounds> for Array1<f64> {
 impl AngularBounds {
     pub fn empty(degrees: bool) -> Self {
         Self {
-            min_x: std::f64::NAN,
-            min_y: std::f64::NAN,
-            max_x: std::f64::NAN,
-            max_y: std::f64::NAN,
+            min_x: f64::NAN,
+            min_y: f64::NAN,
+            max_x: f64::NAN,
+            max_y: f64::NAN,
             degrees,
         }
     }
@@ -89,10 +91,10 @@ impl AngularBounds {
     }
 }
 
-impl ToString for AngularBounds {
-    fn to_string(&self) -> String {
+impl Display for AngularBounds {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let this: [f64; 4] = self.into();
-        format!("AngularBounds({:?}, degrees: {})", this, self.degrees)
+        write!(f, "AngularBounds({:?}, degrees: {})", this, self.degrees)
     }
 }
 

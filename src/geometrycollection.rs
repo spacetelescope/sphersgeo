@@ -1,6 +1,7 @@
 use crate::geometry::AnyGeometry;
 use crate::geometry::{ExtendMultiGeometry, Geometry, MultiGeometry};
 use pyo3::prelude::*;
+use std::fmt::Display;
 use std::{
     iter::Sum,
     ops::{Add, AddAssign},
@@ -219,8 +220,8 @@ impl AddAssign<&GeometryCollection> for GeometryCollection {
     }
 }
 
-impl ToString for GeometryCollection {
-    fn to_string(&self) -> String {
-        format!("GeometryCollection({:?})", self.geometries)
+impl Display for GeometryCollection {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "GeometryCollection({:?})", self.geometries)
     }
 }

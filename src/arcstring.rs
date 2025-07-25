@@ -8,7 +8,7 @@ use crate::{
 use numpy::ndarray::{array, concatenate, s, stack, Array1, Array2, ArrayView1, Axis, Zip};
 use pyo3::prelude::*;
 use rayon::prelude::*;
-use std::{collections::VecDeque, iter::Sum};
+use std::{collections::VecDeque, fmt::Display, iter::Sum};
 
 pub fn interpolate_points_along_vector_arc(
     a: &ArrayView1<f64>,
@@ -62,9 +62,7 @@ pub fn interpolate_points_along_vector_arc(
 ///
 /// References
 /// ----------
-/// - Method explained in an `e-mail
-///     <http://www.mathworks.com/matlabcentral/newsreader/view_thread/276271>`_
-///     by Roger Stafford.
+/// - Method explained in an `e-mail <http://www.mathworks.com/matlabcentral/newsreader/view_thread/276271>`_ by Roger Stafford.
 /// - https://spherical-geometry.readthedocs.io/en/latest/api/spherical_geometry.great_circle_arc.intersection.html#rb82e4e1c8654-1
 /// - Spinielli, Enrico. 2014. “Understanding Great Circle Arcs Intersection Algorithm.” October 19, 2014. https://enrico.spinielli.net/posts/2014-10-19-understanding-great-circle-arcs.
 pub fn vector_arc_crossings(
@@ -102,14 +100,10 @@ pub fn arcstring_contains_point(arcstring: &ArcString, xyz: &ArrayView1<f64>) ->
     if !arcstring.closed {
         let tolerance = 1e-10;
         let normalized = normalize_vector(xyz);
-        if (&normalize_vector(&xyzs.slice(s![0, ..])) - &normalized)
-            .abs()
-            .sum()
-            < tolerance
-            || (&normalize_vector(&xyzs.slice(s![xyzs.nrows() - 1, ..])) - &normalized)
-                .abs()
-                .sum()
-                < tolerance
+        let start = xyzs.slice(s![0, ..]);
+        let end = xyzs.slice(s![xyzs.nrows() - 1, ..]);
+        if (&normalize_vector(&start) - &normalized).abs().sum() < tolerance
+            || (&normalize_vector(&end) - &normalized).abs().sum() < tolerance
         {
             return false;
         }
@@ -120,7 +114,7 @@ pub fn arcstring_contains_point(arcstring: &ArcString, xyz: &ArrayView1<f64>) ->
         return true;
     }
 
-    // iterate over endpoints and check if the collinear with the given point
+    // iterate over endpoints and check if collinear with the given point
     for index in 0..arcstring.points.xyz.nrows() - 1 {
         let a = xyzs.slice(s![index, ..]);
         let b = xyzs.slice(s![index + 1, ..]);
@@ -208,7 +202,7 @@ impl ArcString {
             // we can't use the Bentley-Ottmann sweep-line algorithm here :/
             // because a sphere is an enclosed infinite space so there's no good way to sort by longitude
             // so instead we use brute-force and skip visited arcs
-            let start_index = if self.closed { -1 as isize } else { 0 };
+            let start_index = if self.closed { -1 } else { 0 };
             for a_0_index in start_index..(self.points.len() - 1) as isize {
                 let a_0 = self.points.xyz.slice(s![a_0_index, ..]);
                 let a_1 = self.points.xyz.slice(s![a_0_index + 1, ..]);
@@ -234,7 +228,7 @@ impl ArcString {
             // we can't use the Bentley-Ottmann sweep-line algorithm here :/
             // because a sphere is an enclosed infinite space so there's no good way to sort by longitude
             // so instead we use brute-force and skip visited arcs
-            let start_index = if self.closed { -1 as isize } else { 0 };
+            let start_index = if self.closed { -1 } else { 0 };
             for a_0_index in start_index..(self.points.len() - 1) as isize {
                 let a_0 = self.points.xyz.slice(s![a_0_index, ..]);
                 let a_1 = self.points.xyz.slice(s![a_0_index + 1, ..]);
@@ -266,9 +260,9 @@ impl ArcString {
     }
 }
 
-impl ToString for ArcString {
-    fn to_string(&self) -> String {
-        format!("ArcString({:?})", self.points)
+impl Display for ArcString {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "ArcString({:?})", self.points)
     }
 }
 
@@ -434,12 +428,12 @@ impl GeometricOperations<&ArcString> for &ArcString {
         // we can't use the Bentley-Ottmann sweep-line algorithm here :/
         // because a sphere is an enclosed infinite space so there's no good way to sort by longitude
         // so instead we use brute-force
-        let start_index = if self.closed { -1 as isize } else { 0 };
+        let start_index = if self.closed { -1 } else { 0 };
         for arc_index in start_index..(self.points.xyz.nrows() - 1) as isize {
             let a_0 = self.points.xyz.slice(s![arc_index, ..]);
             let a_1 = self.points.xyz.slice(s![arc_index + 1, ..]);
 
-            let other_start_index = if other.closed { -1 as isize } else { 0 };
+            let other_start_index = if other.closed { -1 } else { 0 };
             for other_arc_index in other_start_index..(other.points.xyz.nrows() - 1) as isize {
                 let b_0 = other.points.xyz.slice(s![other_arc_index, ..]);
                 let b_1 = other.points.xyz.slice(s![other_arc_index + 1, ..]);
@@ -461,12 +455,12 @@ impl GeometricOperations<&ArcString> for &ArcString {
         let mut intersections = vec![];
 
         // find crossings first
-        let start_index = if self.closed { -1 as isize } else { 0 };
+        let start_index = if self.closed { -1 } else { 0 };
         for arc_index in start_index..(self.points.xyz.nrows() - 1) as isize {
             let a_0 = self.points.xyz.slice(s![arc_index, ..]);
             let a_1 = self.points.xyz.slice(s![arc_index + 1, ..]);
 
-            let other_start_index = if other.closed { -1 as isize } else { 0 };
+            let other_start_index = if other.closed { -1 } else { 0 };
             for other_arc_index in other_start_index..(other.points.xyz.nrows() - 1) as isize {
                 let b_0 = other.points.xyz.slice(s![other_arc_index, ..]);
                 let b_1 = other.points.xyz.slice(s![other_arc_index + 1, ..]);
@@ -706,9 +700,9 @@ impl MultiArcString {
     }
 }
 
-impl ToString for MultiArcString {
-    fn to_string(&self) -> String {
-        format!("MultiArcString({:?})", self.arcstrings)
+impl Display for MultiArcString {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "MultiArcString({:?})", self.arcstrings)
     }
 }
 

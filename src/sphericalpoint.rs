@@ -6,6 +6,7 @@ use numpy::ndarray::{
 use pyo3::prelude::*;
 use rayon::prelude::*;
 use std::{
+    fmt::Display,
     iter::Sum,
     ops::{Add, AddAssign},
 };
@@ -86,7 +87,7 @@ pub fn vector_lengths(vectors: &ArrayView2<f64>) -> Array1<f64> {
 ///
 /// References:
 /// - Miller, Robert D. Computing the area of a spherical polygon. Graphics Gems IV. p132. 1994. Academic Press. doi:10.5555/180895.180907
-/// https://www.google.com/books/edition/Graphics_Gems_IV/CCqzMm_-WucC?hl=en&gbpv=1&dq=Graphics%20Gems%20IV.%20p132&pg=PA133&printsec=frontcover
+///   `pdf <https://www.google.com/books/edition/Graphics_Gems_IV/CCqzMm_-WucC?hl=en&gbpv=1&dq=Graphics%20Gems%20IV.%20p132&pg=PA133&printsec=frontcover>`_
 pub fn angle_between_vectors(
     a: &ArrayView1<f64>,
     b: &ArrayView1<f64>,
@@ -156,7 +157,7 @@ pub fn angle_between_vectors(
 ///
 /// References:
 /// - Miller, Robert D. Computing the area of a spherical polygon. Graphics Gems IV. 1994. Academic Press. doi:10.5555/180895.180907
-/// https://www.google.com/books/edition/Graphics_Gems_IV/CCqzMm_-WucC?hl=en&gbpv=1&dq=Graphics%20Gems%20IV.%20p132&pg=PA133&printsec=frontcover
+///   `pdf <https://www.google.com/books/edition/Graphics_Gems_IV/CCqzMm_-WucC?hl=en&gbpv=1&dq=Graphics%20Gems%20IV.%20p132&pg=PA133&printsec=frontcover>`_
 pub fn angles_between_vectors(
     a: &ArrayView2<f64>,
     b: &ArrayView2<f64>,
@@ -190,7 +191,7 @@ pub fn angles_between_vectors(
 
 /// whether the three points exist on the same line
 pub fn vectors_collinear(a: &ArrayView1<f64>, b: &ArrayView1<f64>, c: &ArrayView1<f64>) -> bool {
-    let tolerance = 3e-11;
+    let tolerance = 1e-5;
     // let area = spherical_triangle_area(a, b, c);
     // area.is_nan() || area < tolerance
 
@@ -239,7 +240,7 @@ pub fn cross_vectors(a: &ArrayView2<f64>, b: &ArrayView2<f64>) -> Array2<f64> {
     let result = stack(
         Axis(0),
         &[
-            (&ay * &bz - &az - &by).view(),
+            (&ay * &bz - az - by).view(),
             (&az * &bx - &ax * &bz).view(),
             (&ax * &by - &ay * &ax).view(),
         ],
@@ -309,7 +310,7 @@ fn vector_arcs_clockwise_turn(
 pub fn vector_to_lonlat(xyz: &ArrayView1<f64>, degrees: bool) -> Array1<f64> {
     if xyz.abs().sum() == 0.0 {
         // directionless vector
-        return array![std::f64::NAN, 0.0];
+        return array![f64::NAN, 0.0];
     }
 
     let mut lon = xyz[1].atan2(xyz[0]);
@@ -334,7 +335,7 @@ pub fn vectors_to_lonlats(xyzs: &ArrayView2<f64>, degrees: bool) -> Array2<f64> 
     let mut lons = Zip::from(xyzs.rows()).par_map_collect(|xyz| {
         if xyz.abs().sum() == 0.0 {
             // directionless vector
-            std::f64::NAN
+            f64::NAN
         } else {
             xyz[1].atan2(xyz[0])
         }
@@ -567,9 +568,9 @@ impl SphericalPoint {
     }
 }
 
-impl ToString for SphericalPoint {
-    fn to_string(&self) -> String {
-        format!("SphericalPoint({})", self.xyz)
+impl Display for SphericalPoint {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "SphericalPoint({})", self.xyz)
     }
 }
 
@@ -1092,11 +1093,11 @@ impl<'a> TryFrom<&ArrayView1<'a, f64>> for MultiSphericalPoint {
     type Error = String;
 
     fn try_from(xyz: &ArrayView1<'a, f64>) -> Result<Self, Self::Error> {
-        Ok(Self::try_from(
+        Self::try_from(
             xyz.to_shape((xyz.len() / 3, 3))
                 .map_err(|err| format!("{:?}", err))?
                 .to_owned(),
-        )?)
+        )
     }
 }
 
@@ -1239,9 +1240,9 @@ impl MultiSphericalPoint {
                 + stack(
                     Axis(0),
                     &[
-                        (-&bz * &ay + &by * &az).view(),
+                        (-&bz * ay + &by * &az).view(),
                         (&bz * &ax - &bx * &az).view(),
-                        (-&by * &ax - &bx * &ay).view(),
+                        (-&by * ax - &bx * &ay).view(),
                     ],
                 )
                 .unwrap()
@@ -1290,9 +1291,9 @@ impl Sum for MultiSphericalPoint {
     }
 }
 
-impl ToString for MultiSphericalPoint {
-    fn to_string(&self) -> String {
-        format!("MultiSphericalPoint({})", self.xyz)
+impl Display for MultiSphericalPoint {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "MultiSphericalPoint({})", self.xyz)
     }
 }
 
@@ -1616,7 +1617,7 @@ impl GeometricOperations<&MultiSphericalPoint> for &MultiSphericalPoint {
                 distance
             }
         } else {
-            std::f64::NAN
+            f64::NAN
         }
     }
 
