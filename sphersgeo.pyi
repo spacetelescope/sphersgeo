@@ -57,7 +57,7 @@ class SphericalPoint:
     def convex_hull(self) -> SphericalPolygon | None: ...
 
     @property
-    def points(self) -> MultiSphericalPoint: ...
+    def coords(self) -> MultiSphericalPoint: ...
 
     def distance(
         self,
@@ -184,7 +184,7 @@ class MultiSphericalPoint:
     def convex_hull(self) -> SphericalPolygon | None: ...
 
     @property
-    def points(self) -> MultiSphericalPoint: ...
+    def coords(self) -> MultiSphericalPoint: ...
 
     def distance(
         self,
@@ -258,26 +258,6 @@ class ArcString:
         | NDArray[float],
     ): ...
 
-    @classmethod
-    def normalize(
-        cls,
-        points: NDArray[float64]
-        | MultiSphericalPoint
-        | list[tuple[float, float, float]]
-        | list[list[float]]
-        | list[float],
-    ) -> ArcString: ...
-
-    @classmethod
-    def from_lonlats(
-        cls,
-        coordinates: NDArray[float64]
-        | tuple[float, float]
-        | list[list[float]]
-        | list[float],
-        degrees: bool = True,
-    ) -> ArcString: ...
-
     @property
     def closed(self) -> bool: ...
 
@@ -286,6 +266,12 @@ class ArcString:
 
     @property
     def midpoints(self) -> MultiSphericalPoint: ...
+
+    @property
+    def crosses_self(self) -> bool: ...
+
+    @property
+    def crossings_with_self(self) -> MultiSphericalPoint: ...
 
     @property
     def area(self) -> float: ...
@@ -299,7 +285,7 @@ class ArcString:
     def convex_hull(self) -> SphericalPolygon | None: ...
 
     @property
-    def points(self) -> MultiSphericalPoint: ...
+    def coords(self) -> MultiSphericalPoint: ...
 
     def distance(
         self,
@@ -379,7 +365,7 @@ class MultiArcString:
     def convex_hull(self) -> SphericalPolygon | None: ...
 
     @property
-    def points(self) -> MultiSphericalPoint: ...
+    def coords(self) -> MultiSphericalPoint: ...
 
     def distance(
         self,
@@ -459,7 +445,7 @@ class AngularBounds:
     def convex_hull(self) -> SphericalPolygon | None: ...
 
     @property
-    def points(self) -> MultiSphericalPoint: ...
+    def coords(self) -> MultiSphericalPoint: ...
 
     def distance(
         self,
@@ -520,13 +506,13 @@ class AngularBounds:
 class SphericalPolygon:
     def __init__(
         self,
-        arcstring: ArcString
+        exterior: ArcString
         | MultiSphericalPoint
         | list[tuple[float, float, float]]
         | list[list[float]]
         | list[float]
         | NDArray[float],
-        interior: None
+        interior_point: None
         | SphericalPoint
         | tuple[float, float, float]
         | list[float]
@@ -551,7 +537,7 @@ class SphericalPolygon:
     def convex_hull(self) -> SphericalPolygon | None: ...
 
     @property
-    def points(self) -> MultiSphericalPoint: ...
+    def coords(self) -> MultiSphericalPoint: ...
 
     def distance(
         self,
@@ -624,7 +610,7 @@ class MultiSphericalPolygon:
     def convex_hull(self) -> SphericalPolygon | None: ...
 
     @property
-    def points(self) -> MultiSphericalPoint: ...
+    def coords(self) -> MultiSphericalPoint: ...
 
     def distance(
         self,
