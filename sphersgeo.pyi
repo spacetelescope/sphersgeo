@@ -114,13 +114,7 @@ class SphericalPoint:
         | MultiSphericalPolygon,
     ) -> AnyGeometry | None: ...
 
-    def __add__(
-        self, other: SphericalPoint | NDArray[float64] | tuple[float, float, float]
-    ) -> SphericalPoint: ...
-
-    def __iadd__(
-        self, other: SphericalPoint | NDArray[float64] | tuple[float, float, float]
-    ): ...
+    def __add__(self, other: SphericalPoint) -> MultiSphericalPoint: ...
 
 
 class MultiSphericalPoint:

@@ -41,21 +41,21 @@ impl Geometry for &GeometryCollection {
 
     fn bounds(&self, degrees: bool) -> crate::angularbounds::AngularBounds {
         if self.len() > 0 {
-            self.points().bounds(degrees)
+            self.coords().bounds(degrees)
         } else {
             crate::angularbounds::AngularBounds::empty(degrees)
         }
     }
 
     fn convex_hull(&self) -> Option<crate::sphericalpolygon::SphericalPolygon> {
-        self.points().convex_hull()
+        self.coords().convex_hull()
     }
 
-    fn points(&self) -> crate::sphericalpoint::MultiSphericalPoint {
+    fn coords(&self) -> crate::sphericalpoint::MultiSphericalPoint {
         if self.len() > 0 {
             self.geometries
                 .iter()
-                .map(|geometry| geometry.points())
+                .map(|geometry| geometry.coords())
                 .sum()
         } else {
             crate::sphericalpoint::MultiSphericalPoint::try_from(array![[
@@ -65,6 +65,14 @@ impl Geometry for &GeometryCollection {
             ]])
             .unwrap()
         }
+    }
+
+    fn boundary(&self) -> Option<GeometryCollection> {
+        todo!()
+    }
+
+    fn representative_point(&self) -> crate::sphericalpoint::SphericalPoint {
+        todo!()
     }
 }
 
@@ -81,12 +89,20 @@ impl Geometry for GeometryCollection {
         (&self).bounds(degrees)
     }
 
-    fn points(&self) -> crate::sphericalpoint::MultiSphericalPoint {
-        (&self).points()
+    fn coords(&self) -> crate::sphericalpoint::MultiSphericalPoint {
+        (&self).coords()
     }
 
     fn convex_hull(&self) -> Option<crate::sphericalpolygon::SphericalPolygon> {
         (&self).convex_hull()
+    }
+
+    fn boundary(&self) -> Option<GeometryCollection> {
+        (&self).boundary()
+    }
+
+    fn representative_point(&self) -> crate::sphericalpoint::SphericalPoint {
+        (&self).representative_point()
     }
 }
 
