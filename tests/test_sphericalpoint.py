@@ -54,7 +54,7 @@ def test_init():
     assert multi_from_list_of_tuples == multi_from_array
     assert multi_from_flat_list == multi_from_array
 
-    # assert MultiSphericalPoint(multi_from_array) == multi_from_array
+    assert MultiSphericalPoint(multi_from_array) == multi_from_array
 
 
 def test_normalized():

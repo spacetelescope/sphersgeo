@@ -26,10 +26,11 @@ mod py_sphersgeo {
     #[derive(FromPyObject)]
     #[allow(clippy::large_enum_variant)]
     enum PySphericalPointInputs<'py> {
+        // NOTE: AnyGeometry MUST be the first option in this enum, otherwise it will attempt to match another pattern
+        AnyGeometry(AnyGeometry),
         NumpyArray(PyReadonlyArray1<'py, f64>),
         Tuple((f64, f64, f64)),
         List(Vec<f64>),
-        AnyGeometry(AnyGeometry),
     }
 
     #[derive(FromPyObject)]
@@ -69,11 +70,10 @@ mod py_sphersgeo {
 
         /// from the given coordinates, build an xyz vector representing a point on the sphere
         #[classmethod]
-        #[pyo3(name = "from_lonlat", signature=(coordinates, degrees=true))]
+        #[pyo3(name = "from_lonlat")]
         fn py_from_lonlat(
             _: &Bound<'_, PyType>,
             coordinates: PySphericalPointLonLatInputs,
-            degrees: bool,
         ) -> PyResult<Self> {
             let coordinates = match coordinates {
                 PySphericalPointLonLatInputs::NumpyArray(coordinates) => {
@@ -83,7 +83,7 @@ mod py_sphersgeo {
                 PySphericalPointLonLatInputs::List(list) => Array::from_vec(list),
             };
 
-            match Self::try_from_lonlat(&coordinates.view(), degrees) {
+            match Self::try_from_lonlat(&coordinates.view()) {
                 Ok(result) => Ok(result),
                 Err(err) => Err(PyValueError::new_err(err)),
             }
@@ -96,9 +96,9 @@ mod py_sphersgeo {
         }
 
         /// convert this point on the sphere to angular coordinates
-        #[pyo3(name = "to_lonlat", signature=(degrees=true))]
-        fn py_to_lonlat<'py>(&self, py: Python<'py>, degrees: bool) -> Bound<'py, PyArray1<f64>> {
-            self.to_lonlat(degrees).into_pyarray(py)
+        #[pyo3(name = "to_lonlat")]
+        fn py_to_lonlat<'py>(&self, py: Python<'py>) -> Bound<'py, PyArray1<f64>> {
+            self.to_lonlat().into_pyarray(py)
         }
 
         /// normalize this vector to length 1 (the unit sphere) while preserving direction
@@ -108,9 +108,9 @@ mod py_sphersgeo {
         }
 
         /// angle on the sphere between this point and two other points
-        #[pyo3(name = "angle_between", signature=(a, b, degrees=true))]
-        fn py_angle_between(&self, a: &SphericalPoint, b: &SphericalPoint, degrees: bool) -> f64 {
-            self.angle_between(a, b, degrees)
+        #[pyo3(name = "angle_between")]
+        fn py_angle_between(&self, a: &SphericalPoint, b: &SphericalPoint) -> f64 {
+            self.angle_between(a, b)
         }
 
         /// create n number of points equally spaced on an arc between this point and another point
@@ -137,9 +137,9 @@ mod py_sphersgeo {
         }
 
         /// rotate this xyz vector by theta angle around another xyz vector
-        #[pyo3(name = "vector_rotate_around", signature=(other, theta, degrees=true))]
-        fn py_vector_rotate_around(&self, other: &Self, theta: f64, degrees: bool) -> Self {
-            self.vector_rotate_around(other, &theta, degrees)
+        #[pyo3(name = "vector_rotate_around")]
+        fn py_vector_rotate_around(&self, other: &Self, theta: f64) -> Self {
+            self.vector_rotate_around(other, &theta)
         }
 
         #[getter]
@@ -177,19 +177,15 @@ mod py_sphersgeo {
             self.convex_hull()
         }
 
-        #[pyo3(name = "distance", signature=(other, degrees=true))]
-        fn py_distance(&self, other: AnyGeometry, degrees: bool) -> f64 {
+        #[pyo3(name = "distance")]
+        fn py_distance(&self, other: AnyGeometry) -> f64 {
             match other {
-                AnyGeometry::SphericalPoint(point) => self.distance(&point, degrees),
-                AnyGeometry::MultiSphericalPoint(multipoint) => self.distance(&multipoint, degrees),
-                AnyGeometry::ArcString(arcstring) => self.distance(&arcstring, degrees),
-                AnyGeometry::MultiArcString(multiarcstring) => {
-                    self.distance(&multiarcstring, degrees)
-                }
-                AnyGeometry::SphericalPolygon(polygon) => self.distance(&polygon, degrees),
-                AnyGeometry::MultiSphericalPolygon(multipolygon) => {
-                    self.distance(&multipolygon, degrees)
-                }
+                AnyGeometry::SphericalPoint(point) => self.distance(&point),
+                AnyGeometry::MultiSphericalPoint(multipoint) => self.distance(&multipoint),
+                AnyGeometry::ArcString(arcstring) => self.distance(&arcstring),
+                AnyGeometry::MultiArcString(multiarcstring) => self.distance(&multiarcstring),
+                AnyGeometry::SphericalPolygon(polygon) => self.distance(&polygon),
+                AnyGeometry::MultiSphericalPolygon(multipolygon) => self.distance(&multipolygon),
             }
         }
 
@@ -300,13 +296,13 @@ mod py_sphersgeo {
     #[derive(FromPyObject)]
     #[allow(clippy::large_enum_variant)]
     enum PyMultiSphericalPointInputs<'py> {
+        // NOTE: AnyGeometry MUST be the first option in this enum, otherwise it will attempt to match another pattern
+        AnyGeometry(AnyGeometry),
         NumpyArray(PyReadonlyArray2<'py, f64>),
         ListOfTuples(Vec<(f64, f64, f64)>),
         NestedList(Vec<Vec<f64>>),
         FlatList(Vec<f64>),
         PointList(Vec<SphericalPoint>),
-        // TODO: fix error with collapse_axis: Index 4 must be less than axis length 4 for array with shape [4, 3]
-        AnyGeometry(AnyGeometry),
     }
 
     #[derive(FromPyObject)]
@@ -357,11 +353,10 @@ mod py_sphersgeo {
 
         /// from the given coordinates, build xyz vectors representing points on the sphere
         #[classmethod]
-        #[pyo3(name = "from_lonlat", signature=(coordinates, degrees=true))]
+        #[pyo3(name = "from_lonlat")]
         fn py_from_lonlat(
             _: &Bound<'_, PyType>,
             coordinates: PyMultiSphericalPointLonLatInputs,
-            degrees: bool,
         ) -> PyResult<Self> {
             let coordinates = match coordinates {
                 PyMultiSphericalPointLonLatInputs::NumpyArray(coordinates) => {
@@ -390,7 +385,7 @@ mod py_sphersgeo {
                 }
             };
 
-            match Self::try_from_lonlat(&coordinates.view(), degrees) {
+            match Self::try_from_lonlat(&coordinates.view()) {
                 Ok(result) => Ok(result),
                 Err(err) => Err(PyValueError::new_err(err)),
             }
@@ -403,9 +398,9 @@ mod py_sphersgeo {
         }
 
         /// convert to angle coordinates along the sphere
-        #[pyo3(name = "to_lonlat", signature=(degrees=true))]
-        fn py_to_lonlat<'py>(&self, py: Python<'py>, degrees: bool) -> Bound<'py, PyArray2<f64>> {
-            self.to_lonlat(degrees).into_pyarray(py)
+        #[pyo3(name = "to_lonlat")]
+        fn py_to_lonlat<'py>(&self, py: Python<'py>) -> Bound<'py, PyArray2<f64>> {
+            self.to_lonlat().into_pyarray(py)
         }
 
         /// normalize the underlying vectors to length 1 (the unit sphere) while preserving direction
@@ -415,9 +410,9 @@ mod py_sphersgeo {
         }
 
         /// rotate the underlying vector by theta angle around other vectors
-        #[pyo3(name = "vector_rotate_around", signature=(other, theta, degrees=true))]
-        fn py_vector_rotate_around(&self, other: &Self, theta: f64, degrees: bool) -> Self {
-            self.vector_rotate_around(other, theta, degrees)
+        #[pyo3(name = "vector_rotate_around")]
+        fn py_vector_rotate_around(&self, other: &Self, theta: f64) -> Self {
+            self.vector_rotate_around(other, theta)
         }
 
         /// lengths of the underlying xyz vectors
@@ -427,15 +422,14 @@ mod py_sphersgeo {
         }
 
         /// angles on the sphere between these points and other sets of points
-        #[pyo3(name="angles_between", signature=(a, b, degrees=true))]
+        #[pyo3(name = "angles_between")]
         fn py_angles_between<'py>(
             &self,
             py: Python<'py>,
             a: &MultiSphericalPoint,
             b: &MultiSphericalPoint,
-            degrees: bool,
         ) -> Bound<'py, PyArray1<f64>> {
-            self.angles_between(a, b, degrees).into_pyarray(py)
+            self.angles_between(a, b).into_pyarray(py)
         }
 
         /// whether these points share a line with the given points
@@ -485,19 +479,15 @@ mod py_sphersgeo {
         }
 
         /// closest angular distance on the sphere between this geometry and another
-        #[pyo3(name = "distance", signature=(other, degrees=true))]
-        fn py_distance(&self, other: AnyGeometry, degrees: bool) -> f64 {
+        #[pyo3(name = "distance")]
+        fn py_distance(&self, other: AnyGeometry) -> f64 {
             match other {
-                AnyGeometry::SphericalPoint(point) => self.distance(&point, degrees),
-                AnyGeometry::MultiSphericalPoint(multipoint) => self.distance(&multipoint, degrees),
-                AnyGeometry::ArcString(arcstring) => self.distance(&arcstring, degrees),
-                AnyGeometry::MultiArcString(multiarcstring) => {
-                    self.distance(&multiarcstring, degrees)
-                }
-                AnyGeometry::SphericalPolygon(polygon) => self.distance(&polygon, degrees),
-                AnyGeometry::MultiSphericalPolygon(multipolygon) => {
-                    self.distance(&multipolygon, degrees)
-                }
+                AnyGeometry::SphericalPoint(point) => self.distance(&point),
+                AnyGeometry::MultiSphericalPoint(multipoint) => self.distance(&multipoint),
+                AnyGeometry::ArcString(arcstring) => self.distance(&arcstring),
+                AnyGeometry::MultiArcString(multiarcstring) => self.distance(&multiarcstring),
+                AnyGeometry::SphericalPolygon(polygon) => self.distance(&polygon),
+                AnyGeometry::MultiSphericalPolygon(multipolygon) => self.distance(&multipolygon),
             }
         }
 
@@ -642,8 +632,9 @@ mod py_sphersgeo {
     #[derive(FromPyObject)]
     #[allow(clippy::large_enum_variant)]
     enum PyArcStringInputs<'py> {
-        MultiPointInput(PyMultiSphericalPointInputs<'py>),
+        // NOTE: AnyGeometry MUST be the first option in this enum, otherwise it will attempt to match another pattern
         AnyGeometry(AnyGeometry),
+        MultiPointInput(PyMultiSphericalPointInputs<'py>),
     }
 
     #[pymethods]
@@ -755,19 +746,15 @@ mod py_sphersgeo {
         }
 
         /// closest angular distance on the sphere between this geometry and another
-        #[pyo3(name = "distance", signature=(other, degrees=true))]
-        fn py_distance(&self, other: AnyGeometry, degrees: bool) -> f64 {
+        #[pyo3(name = "distance")]
+        fn py_distance(&self, other: AnyGeometry) -> f64 {
             match other {
-                AnyGeometry::SphericalPoint(point) => self.distance(&point, degrees),
-                AnyGeometry::MultiSphericalPoint(multipoint) => self.distance(&multipoint, degrees),
-                AnyGeometry::ArcString(arcstring) => self.distance(&arcstring, degrees),
-                AnyGeometry::MultiArcString(multiarcstring) => {
-                    self.distance(&multiarcstring, degrees)
-                }
-                AnyGeometry::SphericalPolygon(polygon) => self.distance(&polygon, degrees),
-                AnyGeometry::MultiSphericalPolygon(multipolygon) => {
-                    self.distance(&multipolygon, degrees)
-                }
+                AnyGeometry::SphericalPoint(point) => self.distance(&point),
+                AnyGeometry::MultiSphericalPoint(multipoint) => self.distance(&multipoint),
+                AnyGeometry::ArcString(arcstring) => self.distance(&arcstring),
+                AnyGeometry::MultiArcString(multiarcstring) => self.distance(&multiarcstring),
+                AnyGeometry::SphericalPolygon(polygon) => self.distance(&polygon),
+                AnyGeometry::MultiSphericalPolygon(multipolygon) => self.distance(&multipolygon),
             }
         }
 
@@ -874,8 +861,9 @@ mod py_sphersgeo {
     #[derive(FromPyObject)]
     #[allow(clippy::large_enum_variant)]
     enum PyMultiArcStringInputs<'py> {
-        ListOfArcStrings(Vec<PyArcStringInputs<'py>>),
+        // NOTE: AnyGeometry MUST be the first option in this enum, otherwise it will attempt to match another pattern
         AnyGeometry(AnyGeometry),
+        ListOfArcStrings(Vec<PyArcStringInputs<'py>>),
     }
 
     #[pymethods]
@@ -957,19 +945,15 @@ mod py_sphersgeo {
         }
 
         /// closest angular distance on the sphere between this geometry and another
-        #[pyo3(name = "distance", signature=(other, degrees=true))]
-        fn py_distance(&self, other: AnyGeometry, degrees: bool) -> f64 {
+        #[pyo3(name = "distance")]
+        fn py_distance(&self, other: AnyGeometry) -> f64 {
             match other {
-                AnyGeometry::SphericalPoint(point) => self.distance(&point, degrees),
-                AnyGeometry::MultiSphericalPoint(multipoint) => self.distance(&multipoint, degrees),
-                AnyGeometry::ArcString(arcstring) => self.distance(&arcstring, degrees),
-                AnyGeometry::MultiArcString(multiarcstring) => {
-                    self.distance(&multiarcstring, degrees)
-                }
-                AnyGeometry::SphericalPolygon(polygon) => self.distance(&polygon, degrees),
-                AnyGeometry::MultiSphericalPolygon(multipolygon) => {
-                    self.distance(&multipolygon, degrees)
-                }
+                AnyGeometry::SphericalPoint(point) => self.distance(&point),
+                AnyGeometry::MultiSphericalPoint(multipoint) => self.distance(&multipoint),
+                AnyGeometry::ArcString(arcstring) => self.distance(&arcstring),
+                AnyGeometry::MultiArcString(multiarcstring) => self.distance(&multiarcstring),
+                AnyGeometry::SphericalPolygon(polygon) => self.distance(&polygon),
+                AnyGeometry::MultiSphericalPolygon(multipolygon) => self.distance(&multipolygon),
             }
         }
 
@@ -1102,18 +1086,16 @@ mod py_sphersgeo {
         }
 
         #[classmethod]
-        #[pyo3(name="from_cone", signature=(center, radius, degrees=true, steps=16))]
+        #[pyo3(name="from_cone", signature=(center, radius, steps=16))]
         fn py_from_cone(
             _: &Bound<'_, PyType>,
             center: PySphericalPointInputs,
             radius: f64,
-            degrees: bool,
             steps: usize,
         ) -> PyResult<Self> {
             Ok(Self::from_cone(
                 &SphericalPoint::py_new(center)?,
                 &radius,
-                degrees,
                 steps,
             ))
         }
@@ -1169,19 +1151,15 @@ mod py_sphersgeo {
         }
 
         /// closest angular distance on the sphere between this geometry and another
-        #[pyo3(name = "distance", signature=(other, degrees=true))]
-        fn py_distance(&self, other: AnyGeometry, degrees: bool) -> f64 {
+        #[pyo3(name = "distance")]
+        fn py_distance(&self, other: AnyGeometry) -> f64 {
             match other {
-                AnyGeometry::SphericalPoint(point) => self.distance(&point, degrees),
-                AnyGeometry::MultiSphericalPoint(multipoint) => self.distance(&multipoint, degrees),
-                AnyGeometry::ArcString(arcstring) => self.distance(&arcstring, degrees),
-                AnyGeometry::MultiArcString(multiarcstring) => {
-                    self.distance(&multiarcstring, degrees)
-                }
-                AnyGeometry::SphericalPolygon(polygon) => self.distance(&polygon, degrees),
-                AnyGeometry::MultiSphericalPolygon(multipolygon) => {
-                    self.distance(&multipolygon, degrees)
-                }
+                AnyGeometry::SphericalPoint(point) => self.distance(&point),
+                AnyGeometry::MultiSphericalPoint(multipoint) => self.distance(&multipoint),
+                AnyGeometry::ArcString(arcstring) => self.distance(&arcstring),
+                AnyGeometry::MultiArcString(multiarcstring) => self.distance(&multiarcstring),
+                AnyGeometry::SphericalPolygon(polygon) => self.distance(&polygon),
+                AnyGeometry::MultiSphericalPolygon(multipolygon) => self.distance(&multipolygon),
             }
         }
 
@@ -1288,9 +1266,10 @@ mod py_sphersgeo {
     #[derive(FromPyObject)]
     #[allow(clippy::large_enum_variant)]
     enum PyMultiSphericalPolygonInputs<'py> {
+        // NOTE: AnyGeometry MUST be the first option in this enum, otherwise it will attempt to match another pattern
+        AnyGeometry(AnyGeometry),
         ListOfArcString(Vec<PyArcStringInputs<'py>>),
         ListOfPolygons(Vec<SphericalPolygon>),
-        AnyGeometry(AnyGeometry),
     }
 
     #[pymethods]
@@ -1360,19 +1339,15 @@ mod py_sphersgeo {
             self.convex_hull()
         }
 
-        #[pyo3(name = "distance", signature=(other, degrees=true))]
-        fn py_distance(&self, other: AnyGeometry, degrees: bool) -> f64 {
+        #[pyo3(name = "distance")]
+        fn py_distance(&self, other: AnyGeometry) -> f64 {
             match other {
-                AnyGeometry::SphericalPoint(point) => self.distance(&point, degrees),
-                AnyGeometry::MultiSphericalPoint(multipoint) => self.distance(&multipoint, degrees),
-                AnyGeometry::ArcString(arcstring) => self.distance(&arcstring, degrees),
-                AnyGeometry::MultiArcString(multiarcstring) => {
-                    self.distance(&multiarcstring, degrees)
-                }
-                AnyGeometry::SphericalPolygon(polygon) => self.distance(&polygon, degrees),
-                AnyGeometry::MultiSphericalPolygon(multipolygon) => {
-                    self.distance(&multipolygon, degrees)
-                }
+                AnyGeometry::SphericalPoint(point) => self.distance(&point),
+                AnyGeometry::MultiSphericalPoint(multipoint) => self.distance(&multipoint),
+                AnyGeometry::ArcString(arcstring) => self.distance(&arcstring),
+                AnyGeometry::MultiArcString(multiarcstring) => self.distance(&multiarcstring),
+                AnyGeometry::SphericalPolygon(polygon) => self.distance(&polygon),
+                AnyGeometry::MultiSphericalPolygon(multipolygon) => self.distance(&multipolygon),
             }
         }
 
@@ -1533,35 +1508,31 @@ mod py_sphersgeo {
         }
 
         #[pyfunction]
-        #[pyo3(name = "vector_arc_angle_between", signature=(a, b, c, degrees=true))]
+        #[pyo3(name = "vector_arc_angle_between")]
         fn py_vector_arc_angle_between(
             a: PyReadonlyArray1<f64>,
             b: PyReadonlyArray1<f64>,
             c: PyReadonlyArray1<f64>,
-            degrees: bool,
         ) -> f64 {
             crate::sphericalpoint::angle_between_vectors(
                 &a.as_array(),
                 &b.as_array(),
                 &c.as_array(),
-                degrees,
             )
         }
 
         #[pyfunction]
-        #[pyo3(name = "vector_arc_angles", signature=(a, b, c, degrees=true))]
+        #[pyo3(name = "vector_arc_angles")]
         fn py_vector_arc_angles<'py>(
             py: Python<'py>,
             a: PyReadonlyArray2<f64>,
             b: PyReadonlyArray2<f64>,
             c: PyReadonlyArray2<f64>,
-            degrees: bool,
         ) -> Bound<'py, PyArray1<f64>> {
             crate::sphericalpoint::angles_between_vectors(
                 &a.as_array(),
                 &b.as_array(),
                 &c.as_array(),
-                degrees,
             )
             .into_pyarray(py)
         }

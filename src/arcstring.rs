@@ -333,16 +333,15 @@ impl Geometry for ArcString {
 }
 
 impl GeometricOperations<&SphericalPoint> for &ArcString {
-    fn distance(self, other: &SphericalPoint, degrees: bool) -> f64 {
-        let mut distances = Zip::from(self.points.xyz.rows())
-            .and(crate::sphericalpoint::shift_rows(&self.points.xyz.view(), 1).rows())
-            .par_map_collect(|a, b| arc_distance_to_point(&a, &b, &other.xyz.view()));
-
-        if degrees {
-            distances = distances.to_degrees();
-        }
-
-        crate::sphericalpoint::min_1darray(&distances.view()).unwrap_or(f64::NAN)
+    fn distance(self, other: &SphericalPoint) -> f64 {
+        crate::sphericalpoint::min_1darray(
+            &Zip::from(self.points.xyz.rows())
+                .and(crate::sphericalpoint::shift_rows(&self.points.xyz.view(), 1).rows())
+                .par_map_collect(|a, b| arc_distance_to_point(&a, &b, &other.xyz.view()))
+                .to_degrees()
+                .view(),
+        )
+        .unwrap_or(f64::NAN)
     }
 
     fn contains(self, other: &SphericalPoint) -> bool {
@@ -375,7 +374,7 @@ impl GeometricOperations<&SphericalPoint> for &ArcString {
 }
 
 impl GeometricOperations<&MultiSphericalPoint> for &ArcString {
-    fn distance(self, other: &MultiSphericalPoint, degrees: bool) -> f64 {
+    fn distance(self, other: &MultiSphericalPoint) -> f64 {
         let mut distances = Array1::<f64>::uninit(self.points.xyz.nrows() * other.xyz.nrows());
         for (index, point) in other.xyz.rows().into_iter().enumerate() {
             Zip::from(self.points.xyz.rows())
@@ -385,13 +384,7 @@ impl GeometricOperations<&MultiSphericalPoint> for &ArcString {
                     index * other.xyz.nrows()..(index + 1) * other.xyz.nrows()
                 ]));
         }
-        let mut distances = unsafe { distances.assume_init() };
-
-        if degrees {
-            distances = distances.to_degrees();
-        }
-
-        min_1darray(&distances.view()).unwrap_or(f64::NAN)
+        min_1darray(&unsafe { distances.assume_init() }.to_degrees().view()).unwrap_or(f64::NAN)
     }
 
     fn contains(self, other: &MultiSphericalPoint) -> bool {
@@ -437,7 +430,7 @@ impl GeometricOperations<&MultiSphericalPoint> for &ArcString {
 }
 
 impl GeometricOperations<&ArcString> for &ArcString {
-    fn distance(self, other: &ArcString, degrees: bool) -> f64 {
+    fn distance(self, other: &ArcString) -> f64 {
         todo!()
     }
 
@@ -524,8 +517,8 @@ impl GeometricOperations<&ArcString> for &ArcString {
 }
 
 impl GeometricOperations<&MultiArcString> for &ArcString {
-    fn distance(self, other: &MultiArcString, degrees: bool) -> f64 {
-        other.distance(self, degrees)
+    fn distance(self, other: &MultiArcString) -> f64 {
+        other.distance(self)
     }
 
     fn contains(self, other: &MultiArcString) -> bool {
@@ -554,8 +547,8 @@ impl GeometricOperations<&MultiArcString> for &ArcString {
 }
 
 impl GeometricOperations<&crate::sphericalpolygon::SphericalPolygon> for &ArcString {
-    fn distance(self, other: &crate::sphericalpolygon::SphericalPolygon, degrees: bool) -> f64 {
-        other.distance(self, degrees)
+    fn distance(self, other: &crate::sphericalpolygon::SphericalPolygon) -> f64 {
+        other.distance(self)
     }
 
     fn contains(self, _: &crate::sphericalpolygon::SphericalPolygon) -> bool {
@@ -587,12 +580,8 @@ impl GeometricOperations<&crate::sphericalpolygon::SphericalPolygon> for &ArcStr
 }
 
 impl GeometricOperations<&crate::sphericalpolygon::MultiSphericalPolygon> for &ArcString {
-    fn distance(
-        self,
-        other: &crate::sphericalpolygon::MultiSphericalPolygon,
-        degrees: bool,
-    ) -> f64 {
-        other.distance(self, degrees)
+    fn distance(self, other: &crate::sphericalpolygon::MultiSphericalPolygon) -> f64 {
+        other.distance(self)
     }
 
     fn contains(self, _: &crate::sphericalpolygon::MultiSphericalPolygon) -> bool {
@@ -832,10 +821,10 @@ impl ExtendMultiGeometry<ArcString> for MultiArcString {
 }
 
 impl GeometricOperations<&SphericalPoint> for &MultiArcString {
-    fn distance(self, other: &SphericalPoint, degrees: bool) -> f64 {
+    fn distance(self, other: &SphericalPoint) -> f64 {
         self.arcstrings
             .par_iter()
-            .map(|arcstring| arcstring.distance(other, degrees))
+            .map(|arcstring| arcstring.distance(other))
             .min_by(|a, b| a.partial_cmp(b).unwrap())
             .unwrap()
     }
@@ -870,10 +859,10 @@ impl GeometricOperations<&SphericalPoint> for &MultiArcString {
 }
 
 impl GeometricOperations<&MultiSphericalPoint> for &MultiArcString {
-    fn distance(self, other: &MultiSphericalPoint, degrees: bool) -> f64 {
+    fn distance(self, other: &MultiSphericalPoint) -> f64 {
         self.arcstrings
             .par_iter()
-            .map(|arcstring| arcstring.distance(other, degrees))
+            .map(|arcstring| arcstring.distance(other))
             .min_by(|a, b| a.partial_cmp(b).unwrap())
             .unwrap()
     }
@@ -918,10 +907,10 @@ impl GeometricOperations<&MultiSphericalPoint> for &MultiArcString {
 }
 
 impl GeometricOperations<&ArcString> for &MultiArcString {
-    fn distance(self, other: &ArcString, degrees: bool) -> f64 {
+    fn distance(self, other: &ArcString) -> f64 {
         self.arcstrings
             .par_iter()
-            .map(|arcstring| arcstring.distance(other, degrees))
+            .map(|arcstring| arcstring.distance(other))
             .min_by(|a, b| a.partial_cmp(b).unwrap())
             .unwrap()
     }
@@ -972,10 +961,10 @@ impl GeometricOperations<&ArcString> for &MultiArcString {
 }
 
 impl GeometricOperations<&MultiArcString> for &MultiArcString {
-    fn distance(self, other: &MultiArcString, degrees: bool) -> f64 {
+    fn distance(self, other: &MultiArcString) -> f64 {
         self.arcstrings
             .par_iter()
-            .map(|arcstring| arcstring.distance(other, degrees))
+            .map(|arcstring| arcstring.distance(other))
             .min_by(|a, b| a.partial_cmp(b).unwrap())
             .unwrap()
     }
@@ -1024,10 +1013,10 @@ impl GeometricOperations<&MultiArcString> for &MultiArcString {
 }
 
 impl GeometricOperations<&crate::sphericalpolygon::SphericalPolygon> for &MultiArcString {
-    fn distance(self, other: &crate::sphericalpolygon::SphericalPolygon, degrees: bool) -> f64 {
+    fn distance(self, other: &crate::sphericalpolygon::SphericalPolygon) -> f64 {
         self.arcstrings
             .par_iter()
-            .map(|arcstring| arcstring.distance(other, degrees))
+            .map(|arcstring| arcstring.distance(other))
             .min_by(|a, b| a.partial_cmp(b).unwrap())
             .unwrap()
     }
@@ -1070,14 +1059,10 @@ impl GeometricOperations<&crate::sphericalpolygon::SphericalPolygon> for &MultiA
 }
 
 impl GeometricOperations<&crate::sphericalpolygon::MultiSphericalPolygon> for &MultiArcString {
-    fn distance(
-        self,
-        other: &crate::sphericalpolygon::MultiSphericalPolygon,
-        degrees: bool,
-    ) -> f64 {
+    fn distance(self, other: &crate::sphericalpolygon::MultiSphericalPolygon) -> f64 {
         self.arcstrings
             .par_iter()
-            .map(|arcstring| arcstring.distance(other, degrees))
+            .map(|arcstring| arcstring.distance(other))
             .min_by(|a, b| a.partial_cmp(b).unwrap())
             .unwrap()
     }
