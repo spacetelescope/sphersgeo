@@ -63,7 +63,10 @@ mod py_sphersgeo {
 
         #[classmethod]
         #[pyo3(name = "normalize")]
-        fn py_normalize(_: &Bound<'_, PyType>, point: PySphericalPointInputs) -> PyResult<Self> {
+        fn py_normalize<'py>(
+            cls: &Bound<'py, PyType>,
+            point: PySphericalPointInputs,
+        ) -> PyResult<Self> {
             // TODO: normalize vector before passing to constructor
             Ok(Self::py_new(point)?.normalized())
         }
@@ -71,8 +74,8 @@ mod py_sphersgeo {
         /// from the given coordinates, build an xyz vector representing a point on the sphere
         #[classmethod]
         #[pyo3(name = "from_lonlat")]
-        fn py_from_lonlat(
-            _: &Bound<'_, PyType>,
+        fn py_from_lonlat<'py>(
+            cls: &Bound<'py, PyType>,
             coordinates: PySphericalPointLonLatInputs,
         ) -> PyResult<Self> {
             let coordinates = match coordinates {
@@ -367,8 +370,8 @@ mod py_sphersgeo {
 
         #[classmethod]
         #[pyo3(name = "normalize")]
-        fn py_normalize(
-            _: &Bound<'_, PyType>,
+        fn py_normalize<'py>(
+            cls: &Bound<'py, PyType>,
             points: PyMultiSphericalPointInputs,
         ) -> PyResult<Self> {
             // TODO: normalize vectors before passing to constructor
@@ -378,8 +381,8 @@ mod py_sphersgeo {
         /// from the given coordinates, build xyz vectors representing points on the sphere
         #[classmethod]
         #[pyo3(name = "from_lonlat")]
-        fn py_from_lonlat(
-            _: &Bound<'_, PyType>,
+        fn py_from_lonlat<'py>(
+            cls: &Bound<'py, PyType>,
             coordinates: PyMultiSphericalPointLonLatInputs,
         ) -> PyResult<Self> {
             let coordinates = match coordinates {
@@ -1194,8 +1197,8 @@ mod py_sphersgeo {
 
         #[classmethod]
         #[pyo3(name="from_cone", signature=(center, radius, steps=16))]
-        fn py_from_cone(
-            _: &Bound<'_, PyType>,
+        fn py_from_cone<'py>(
+            cls: &Bound<'py, PyType>,
             center: PySphericalPointInputs,
             radius: f64,
             steps: usize,
