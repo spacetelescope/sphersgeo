@@ -187,9 +187,15 @@ def test_crosses_self():
     # longer self-crossing
     ABCDFE = ArcString([A, B, C, D, F, E])
     assert ABCDFE.crosses_self
+    len(ABCDFE.crossings_with_self) == 1
     assert_allclose(
         ABCDFE.crossings_with_self.to_lonlats(degrees=True), [(358.316743, -1.708471)]
     )
+
+    # double self-crossing
+    ABCDFEc = ArcString([A, B, C, D, F, E], closed=True)
+    assert ABCDFEc.crosses_self
+    len(ABCDFEc.crossings_with_self) == 2
 
     # non-self-crossing
     ACBD = ArcString([A, C, B, D])
