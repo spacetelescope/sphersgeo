@@ -67,7 +67,7 @@ mod py_sphersgeo {
             point: PySphericalPointInputs,
         ) -> PyResult<Self> {
             // TODO: normalize vector before passing to constructor
-            Ok(Self::py_new(point)?.normalized())
+            Ok(Self::py_new(point)?.is_unit())
         }
 
         /// from the given coordinates, build an xyz vector representing a point on the sphere
@@ -106,13 +106,13 @@ mod py_sphersgeo {
         /// normalize this vector to length 1 (the unit sphere) while preserving direction
         #[getter]
         fn get_normalized(&self) -> Self {
-            self.normalized()
+            self.is_unit()
         }
 
         /// angle on the sphere between this point and two other points
         #[pyo3(name = "angle_between")]
         fn py_angle_between(&self, a: &SphericalPoint, b: &SphericalPoint) -> f64 {
-            self.angle_between(a, b)
+            self.two_arc_angle(a, b)
         }
 
         /// create n number of points equally spaced on an arc between this point and another point
@@ -455,7 +455,7 @@ mod py_sphersgeo {
             a: &MultiSphericalPoint,
             b: &MultiSphericalPoint,
         ) -> Bound<'py, PyArray1<f64>> {
-            self.angles_between(a, b).into_pyarray(py)
+            self.two_arc_angles(a, b).into_pyarray(py)
         }
 
         /// whether these points share a line with the given points
@@ -1652,11 +1652,7 @@ mod py_sphersgeo {
             b: PyReadonlyArray1<f64>,
             n: usize,
         ) -> PyResult<Bound<'py, PyArray2<f64>>> {
-            match crate::arcstring::interpolate_points_along_vector_arc(
-                &a.as_array(),
-                &b.as_array(),
-                n,
-            ) {
+            match crate::arcstring::xyz_interpolate_between(&a.as_array(), &b.as_array(), n) {
                 Ok(result) => Ok(result.into_pyarray(py)),
                 Err(err) => Err(PyValueError::new_err(err)),
             }

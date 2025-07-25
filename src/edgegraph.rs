@@ -1,8 +1,8 @@
 use crate::arcstring::ArcString;
 use crate::geometry::{GeometricOperations, Geometry};
-use crate::sphericalpoint::MultiSphericalPoint;
+use crate::sphericalpoint::{xyz_eq, MultiSphericalPoint};
 use crate::sphericalpolygon::SphericalPolygon;
-use ndarray::{s, stack, Array1, Array2, Axis};
+use ndarray::{s, Array1};
 
 pub trait ToGraph<S: Geometry> {
     fn to_graph(&self) -> EdgeGraph<S>;
@@ -10,8 +10,8 @@ pub trait ToGraph<S: Geometry> {
 
 #[derive(Clone, Debug)]
 pub struct Edge<'a, G: Geometry> {
-    pub a: Array1<f64>,
-    pub b: Array1<f64>,
+    pub a: &'a [f64; 3],
+    pub b: &'a [f64; 3],
     /// parent geometrie(s) that this edge belongs to
     pub parent_geometries: Vec<&'a G>,
 }
@@ -20,13 +20,14 @@ impl<'a, G> Edge<'a, G>
 where
     G: Geometry,
 {
-    pub fn points(&self) -> Array2<f64> {
-        stack![Axis(0), self.a, self.b]
+    pub fn points(&self) -> Vec<&'a [f64; 3]> {
+        vec![self.a, self.b]
     }
 
     pub fn arc(&self) -> ArcString {
         ArcString {
-            points: MultiSphericalPoint::try_from(self.points()).unwrap(),
+            points: MultiSphericalPoint::try_from(vec![self.a.to_owned(), self.b.to_owned()])
+                .unwrap(),
             closed: false,
         }
     }
@@ -91,7 +92,7 @@ impl<'a, G> EdgeGraph<'a, G>
 where
     G: Geometry + PartialEq,
 {
-    pub fn add_edge(&mut self, a: Array1<f64>, b: Array1<f64>, geometries: Vec<&'a G>) {
+    pub fn add_edge(&mut self, a: &'a [f64; 3], b: &'a [f64; 3], geometries: Vec<&'a G>) {
         for geometry in &geometries {
             if !self.geometries.contains(geometry) {
                 self.geometries.push(geometry);
@@ -99,11 +100,9 @@ where
         }
 
         // check if edge already exists...
-        if let Some(existing_edge_index) = self
-            .edges
-            .iter()
-            .position(|edge| a == edge.a && b == edge.b)
-        {
+        if let Some(existing_edge_index) = self.edges.iter().position(|edge| {
+            (xyz_eq(a, edge.a) && xyz_eq(b, edge.b)) || (xyz_eq(a, edge.b) && xyz_eq(b, edge.a))
+        }) {
             if let Some(existing_edge) = self.edges.get_mut(existing_edge_index) {
                 for geometry in &geometries {
                     if !existing_edge.parent_geometries.contains(geometry) {
@@ -160,7 +159,7 @@ where
 }
 
 impl<'a> EdgeGraph<'a, SphericalPolygon> {
-    pub fn split_edges(&mut self) -> bool {
+    pub fn split_edges(&'a mut self) -> bool {
         let mut changed = false;
         let mut edges: Vec<Edge<'a, SphericalPolygon>> = vec![];
         while let Some(edge_a) = self.edges.pop() {
@@ -168,19 +167,17 @@ impl<'a> EdgeGraph<'a, SphericalPolygon> {
             for edge_b in &edges {
                 // check if edge intersects any points...
                 let vertices = edge_b.arc().points;
-                if let Some(vertices) = edge_a.arc().intersection(&vertices) {
+                if crate::sphericalpoint::xyzs_collinear(edge_a.a, edge_b.a, edge_a.b)
+                    || crate::sphericalpoint::xyzs_collinear(edge_a.a, edge_b.b, edge_a.b)
+                {
                     let arcstrings = crate::arcstring::split_arc_at_points(
-                        &edge_a.arc().points.xyz.view(),
-                        &vertices.xyz.view(),
+                        vec![edge_a.a, edge_a.b],
+                        vec![edge_b.a, edge_b.b],
                     );
 
                     // send the new edges to the end of the edge list, to be analyzed again for further possible intersections
                     for arc in arcstrings {
-                        self.add_edge(
-                            arc.slice(s![0, ..]).to_owned(),
-                            arc.slice(s![1, ..]).to_owned(),
-                            edge_a.parent_geometries.to_owned(),
-                        );
+                        self.add_edge(arc[0], arc[1], edge_a.parent_geometries.to_owned());
                     }
                     crossed = true;
                     changed = true;
@@ -188,26 +185,26 @@ impl<'a> EdgeGraph<'a, SphericalPolygon> {
                 // check if edge intersects any other edges...
                 } else if let Some(intersection) = edge_a.arc().intersection(&edge_b.arc()) {
                     // assume intersection between two arcs will always only have 1 row
-                    let crossing: Array1<f64> = intersection.xyz.slice(s![0, ..]).to_owned();
+                    let crossing = intersection.xyzs[0];
                     // create four new edges
                     let mut edge_a1 = Edge {
-                        a: edge_a.a.to_owned(),
-                        b: crossing.to_owned(),
+                        a: edge_a.a,
+                        b: &crossing,
                         parent_geometries: edge_a.parent_geometries.to_owned(),
                     };
                     let mut edge_a2 = Edge {
-                        a: crossing.to_owned(),
-                        b: edge_a.b.to_owned(),
+                        a: &crossing,
+                        b: edge_a.b,
                         parent_geometries: edge_a.parent_geometries.to_owned(),
                     };
                     let mut edge_b1 = Edge {
-                        a: edge_b.a.to_owned(),
-                        b: crossing.to_owned(),
+                        a: edge_b.a,
+                        b: &crossing,
                         parent_geometries: edge_b.parent_geometries.to_owned(),
                     };
                     let mut edge_b2 = Edge {
-                        a: crossing.to_owned(),
-                        b: edge_b.b.to_owned(),
+                        a: &crossing,
+                        b: edge_b.b,
                         parent_geometries: edge_b.parent_geometries.to_owned(),
                     };
 
@@ -262,33 +259,23 @@ impl<'a> EdgeGraph<'a, ArcString> {
                 // check if edge intersects any points...
                 let mut splitting_points = vec![];
 
-                for endpoint in [edge_b.a.view(), edge_b.b.view()] {
+                for endpoint in [edge_b.a, edge_b.b] {
                     // skip if the point is equal to one of the endpoints
-                    if (&edge_a.a - &endpoint).abs().sum() > tolerance
-                        && (&endpoint - &edge_a.b).abs().sum() > tolerance
-                        && crate::sphericalpoint::vectors_collinear(
-                            &edge_a.a.view(),
-                            &endpoint,
-                            &edge_a.b.view(),
-                        )
+                    if xyz_eq(edge_a.a, endpoint)
+                        && xyz_eq(endpoint, edge_a.b)
+                        && crate::sphericalpoint::xyzs_collinear(edge_a.a, endpoint, edge_a.b)
                     {
                         splitting_points.push(endpoint);
                     }
                 }
 
                 if !splitting_points.is_empty() {
-                    let arcstrings = crate::arcstring::split_arc_at_points(
-                        &edge_a.points().view(),
-                        &stack(Axis(0), splitting_points.as_slice()).unwrap().view(),
-                    );
+                    let arcstrings =
+                        crate::arcstring::split_arc_at_points(edge_a.points(), splitting_points);
 
                     // send the new edges to the end of the edge list, to be analyzed again for further possible intersections
                     for arc in arcstrings {
-                        self.add_edge(
-                            arc.slice(s![0, ..]).to_owned(),
-                            arc.slice(s![1, ..]).to_owned(),
-                            edge_a.parent_geometries.to_owned(),
-                        );
+                        self.add_edge(arc[0], arc[1], edge_a.parent_geometries.to_owned());
                     }
                     crossed = true;
                     changed = true;
@@ -300,23 +287,23 @@ impl<'a> EdgeGraph<'a, ArcString> {
 
                     // create four new edges
                     let mut edge_a1 = Edge {
-                        a: edge_a.a.to_owned(),
-                        b: crossing.to_owned(),
+                        a: edge_a.a,
+                        b: crossing,
                         parent_geometries: edge_a.parent_geometries.to_owned(),
                     };
                     let mut edge_a2 = Edge {
-                        a: crossing.to_owned(),
-                        b: edge_a.b.to_owned(),
+                        a: crossing,
+                        b: edge_a.b,
                         parent_geometries: edge_a.parent_geometries.to_owned(),
                     };
                     let mut edge_b1 = Edge {
-                        a: edge_b.a.to_owned(),
-                        b: crossing.to_owned(),
+                        a: edge_b.a,
+                        b: crossing,
                         parent_geometries: edge_b.parent_geometries.to_owned(),
                     };
                     let mut edge_b2 = Edge {
-                        a: crossing.to_owned(),
-                        b: edge_b.b.to_owned(),
+                        a: crossing,
+                        b: edge_b.b,
                         parent_geometries: edge_b.parent_geometries.to_owned(),
                     };
 

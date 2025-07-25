@@ -1,15 +1,16 @@
 use crate::{
-    arcstring::{vector_arc_crossing, ArcString, MultiArcString},
+    arcstring::{xyz_two_arc_crossing, ArcString, MultiArcString},
     edgegraph::{EdgeGraph, GeometryGraph, ToGraph},
     geometry::{GeometricOperations, Geometry, GeometryCollection, MultiGeometry},
     sphericalpoint::{
-        angle_between_vectors_radians, vector_arc_radians, MultiSphericalPoint, SphericalPoint,
+        xyz_add_xyz, xyz_cross, xyz_div_f64, xyz_mul_xyz, xyz_radians_over_sphere_between,
+        xyz_sub_xyz, xyz_sum, xyz_two_arc_angle_radians, xyzs_mean, xyzs_sum, MultiSphericalPoint,
+        SphericalPoint,
     },
 };
 use ndarray::{
-    array, concatenate,
     parallel::prelude::{IntoParallelRefIterator, ParallelIterator},
-    s, stack, Array1, ArrayView1, ArrayView2, Axis, Zip,
+    Array1, Axis, Zip,
 };
 use pyo3::prelude::*;
 use std::{cmp::Ordering, fmt::Display, iter::Sum};
@@ -23,18 +24,14 @@ use std::{cmp::Ordering, fmt::Display, iter::Sum};
 /// - Klain, D. A. (2019). A probabilistic proof of the spherical excess formula (No. arXiv:1909.04505). arXiv. https://doi.org/10.48550/arXiv.1909.04505
 /// - Miller, Robert D. Computing the area of a spherical polygon. Graphics Gems IV. 1994. Academic Press. doi:10.5555/180895.180907
 ///   `pdf <https://www.google.com/books/edition/Graphics_Gems_IV/CCqzMm_-WucC?hl=en&gbpv=1&dq=Graphics%20Gems%20IV.%20p132&pg=PA133&printsec=frontcover>`_
-pub fn spherical_triangle_area(
-    a: &ArrayView1<f64>,
-    b: &ArrayView1<f64>,
-    c: &ArrayView1<f64>,
-) -> f64 {
+pub fn spherical_triangle_area(a: &[f64; 3], b: &[f64; 3], c: &[f64; 3]) -> f64 {
     // let area_radians_squared = angle_between_vectors_radians(c, a, b)
     //     + angle_between_vectors_radians(a, b, c)
     //     + angle_between_vectors_radians(b, c, a)
     //     - std::f64::consts::PI;
-    let ab = vector_arc_radians(a, b, false);
-    let bc = vector_arc_radians(b, c, false);
-    let ca = vector_arc_radians(c, a, false);
+    let ab = xyz_radians_over_sphere_between(a, b);
+    let bc = xyz_radians_over_sphere_between(b, c);
+    let ca = xyz_radians_over_sphere_between(c, a);
     let s = (ab + bc + ca) / 2.0;
     let area_radians_squared = 4.0
         * ((s / 2.0).tan()
@@ -49,18 +46,18 @@ pub fn spherical_triangle_area(
 
 // use the classical even-crossings ray algorithm for point-in-polygon
 pub fn point_in_polygon_boundary(
-    point: &ArrayView1<f64>,
-    polygon_interior_xyz: &ArrayView1<f64>,
-    polygon_boundary_xyzs: &ArrayView2<f64>,
+    point: &[f64; 3],
+    polygon_interior_xyz: &[f64; 3],
+    polygon_boundary_xyzs: &Vec<[f64; 3]>,
 ) -> bool {
     // record the number of times the ray intersects the exterior boundary arcstring
     let mut crossings = 0;
-    for index in -1..polygon_boundary_xyzs.nrows() as i32 - 2 {
-        if vector_arc_crossing(
+    for index in 0..polygon_boundary_xyzs.len() - 1 {
+        if xyz_two_arc_crossing(
             point,
             polygon_interior_xyz,
-            &polygon_boundary_xyzs.slice(s![index, ..]),
-            &polygon_boundary_xyzs.slice(s![index + 1, ..]),
+            &polygon_boundary_xyzs[index],
+            &polygon_boundary_xyzs[index + 1],
         )
         .is_some()
         {
@@ -72,90 +69,109 @@ pub fn point_in_polygon_boundary(
     crossings % 2 == 0
 }
 
+fn polygon_boundary_is_convex(xyzs: &Vec<[f64; 3]>) -> bool {
+    // if all orientations are positive, the polygon is convex
+    let orient = orientation(xyzs);
+
+    let positive_dominant = orient.iter().sum::<f64>() > 0.0;
+    orient.iter().all(|orientation| {
+        if positive_dominant {
+            orientation > &0.0
+        } else {
+            orientation < &0.0
+        }
+    })
+}
+
 /// The normal vector to the two arcs containing a vertex points; outward
 /// from the sphere if the angle is clockwise, and inward if the angle is
 /// counter-clockwise. The sign of the inner product of the normal vector
 /// with the vertex tells you this. The polygon is ordered clockwise if
 /// the vertices are predominantly clockwise and counter-clockwise if
 /// the reverse.
-fn orientation(xyzs: &ArrayView2<f64>) -> Array1<f64> {
-    let points = concatenate![
-        Axis(0),
-        xyzs.view(),
-        xyzs.slice(s![1, ..]).broadcast((1, 3)).unwrap(),
-    ];
+fn orientation(xyzs: &Vec<[f64; 3]>) -> Vec<f64> {
+    (0..xyzs.len() - 2)
+        .map(|index| {
+            let a = xyzs[index];
+            let b = xyzs[index + 1];
+            let c = xyzs[index + 2];
 
-    let a = xyzs.slice(s![..xyzs.nrows() - 2, ..]);
-    let b = xyzs.slice(s![1..xyzs.nrows() - 1, ..]);
-    let c = xyzs.slice(s![2.., ..]);
-
-    (&b.reversed_axes()
-        * &crate::sphericalpoint::cross_vectors(&(&a - &b).view(), &(&c - &b).view()).view())
-        .sum_axis(Axis(1))
+            xyz_sum(&xyz_mul_xyz(
+                &b,
+                &xyz_cross(&xyz_sub_xyz(&a, &b), &xyz_sub_xyz(&c, &b)),
+            ))
+        })
+        .collect()
 }
 
-fn centroid_from_polygon_boundary(boundary: &ArcString) -> SphericalPoint {
-    let xyz = if boundary.points.xyz.nrows() <= 4 {
-        // the centroid of a convex polygon is the mean of its vertices
-        boundary.centroid().normalized().xyz
-    } else {
-        let mut orient = orientation(&boundary.points.xyz.view());
-        if orient.sum() < 0.0 {
-            orient *= -1.0;
-        }
+fn centroid_from_polygon_boundary(xyzs: &Vec<[f64; 3]>) -> SphericalPoint {
+    let mut orient = orientation(&xyzs);
 
-        // the centroid of a concave polygon is the mean of its interior area
-        let midpoints = Zip::from(boundary.points.xyz.slice(s![..-2, ..]).rows())
-            .and(
-                concatenate![
-                    Axis(0),
-                    boundary.points.xyz.slice(s![3.., ..]),
-                    boundary
-                        .points
-                        .xyz
-                        .slice(s![1, ..])
-                        .broadcast((1, 3))
-                        .unwrap()
-                ]
-                .rows(),
-            )
-            .par_map_collect(|a_xyz, c_xyz| (&a_xyz + &c_xyz) / 2.0);
-        orient
-            .iter()
-            .zip(midpoints)
-            .max_by(|x, y| x.0.partial_cmp(y.0).unwrap())
-            .unwrap()
-            .1
-    };
-    SphericalPoint { xyz }
+    // make positive orientation the dominant
+    if orient.iter().sum::<f64>() < 0.0 {
+        orient = orient.iter().map(|value| value * -1.0).collect();
+    }
+
+    // if all orientations are positive, the polygon is convex
+    SphericalPoint::from(if orient.iter().all(|orientation| orientation > &0.0) {
+        // the centroid of a convex polygon is the simple mean of its vertices
+        xyzs_mean(xyzs)
+    } else {
+        // get the centroid of all midpoints between the endpoints of each convex triad (acute interior angle)
+        xyzs_mean(
+            &orient
+                .iter()
+                .enumerate()
+                .filter_map(|(index, orientation)| {
+                    if orientation > &0.0 {
+                        // midpoint between endpoint of convex triad (acute interior angle)
+                        Some(xyz_div_f64(
+                            &xyz_add_xyz(
+                                &xyzs[index],
+                                &xyzs[if index >= xyzs.len() - 2 {
+                                    index - xyzs.len()
+                                } else {
+                                    index
+                                } + 2],
+                            ),
+                            &2.0,
+                        ))
+                    } else {
+                        None
+                    }
+                })
+                .collect::<Vec<[f64; 3]>>(),
+        )
+    })
 }
 
 /// choose an interior point from the smaller area of the two regions created by the given boundary
 fn interior_point_from_polygon_boundary(boundary: &ArcString) -> Result<SphericalPoint, String> {
-    // remember: the centroid of the boundary arcstring COULD be outside the polygon!
     let boundary_centroid = boundary.centroid();
 
-    if boundary.points.xyz.nrows() <= 4 {
+    if boundary.points.len() <= 4 {
         Ok(boundary_centroid)
     } else {
-        let points = concatenate![
-            Axis(0),
-            boundary.points.xyz,
-            boundary.points.xyz.slice(s![..3, ..])
-        ];
+        // the centroid of the boundary arcstring COULD be outside the polygon if the boundary is not convex
 
         // build two lists of triangle centroids, segregated by the exterior boundary of the polygon (we don't know which is which yet)
         let mut side_a = vec![];
         let mut side_b = vec![];
-        for index in 0..points.nrows() - 2 {
+        for index in 0..boundary.points.len() - 2 {
             let triangle_centroid = SphericalPoint {
-                xyz: points.slice(s![index..index + 3, ..]).sum_axis(Axis(0)) / 3.0,
+                xyz: xyz_div_f64(
+                    &xyzs_sum(&boundary.points.xyzs[index..index + 3].to_vec()),
+                    &3.0,
+                ),
             };
 
-            let ray = ArcString::try_from(MultiSphericalPoint::from(&vec![
-                triangle_centroid.to_owned(),
-                boundary_centroid.to_owned(),
-            ]))
+            let ray = ArcString::try_from(
+                MultiSphericalPoint::try_from(vec![
+                    triangle_centroid.to_owned(),
+                    boundary_centroid.to_owned(),
+                ])
+                .unwrap(),
+            )
             .unwrap();
 
             if ray.crosses(boundary) {
@@ -201,7 +217,7 @@ impl SphericalPolygon {
         if let Some(crossings_with_self) = boundary.crossings_with_self() {
             Err(format!(
                 "exterior boundary crosses itself {} times",
-                crossings_with_self.xyz.nrows()
+                crossings_with_self.len()
             ))
         } else {
             let interior_point = if let Some(interior_point) = interior_point {
@@ -239,16 +255,13 @@ impl SphericalPolygon {
             .min_by(|(_, a), (_, b)| a.partial_cmp(b).unwrap_or(Ordering::Equal))
             .unwrap()
             .0;
-        let perpendicular = center.vector_cross(&SphericalPoint::normalize(
-            &if mindex == 0 {
-                array![1., 0., 0.]
-            } else if mindex == 1 {
-                array![0., 1., 0.]
-            } else {
-                array![0., 0., 1.]
-            }
-            .view(),
-        ));
+        let perpendicular = center.vector_cross(&SphericalPoint::from(if mindex == 0 {
+            [1., 0., 0.]
+        } else if mindex == 1 {
+            [0., 1., 0.]
+        } else {
+            [0., 0., 1.]
+        }));
 
         // Rotate by radius around the perpendicular vector to get the "pen"
         let xyz = center.vector_rotate_around(&perpendicular, radius);
@@ -269,49 +282,25 @@ impl SphericalPolygon {
             .to_vec();
 
         Self::new(
-            ArcString::try_from(MultiSphericalPoint::try_from(&vertices).unwrap()).unwrap(),
+            ArcString::try_from(MultiSphericalPoint::try_from(vertices).unwrap()).unwrap(),
             Some(center.to_owned()),
         )
         .unwrap()
     }
 
-    /// find the point on the sphere outside of this polygon farthest from any vertex
-    pub fn antipode(&self) -> SphericalPoint {
-        // Compute the minimum distance between all polygon points and each antipode to a polygon point
-        let points = self.boundary.points.xyz.slice(s![..-1, ..]);
-        SphericalPoint {
-            xyz: points
-                .rows()
-                .into_iter()
-                .min_by(|a, b| {
-                    crate::sphericalpoint::max_1darray(
-                        &(&(a * -1.0).broadcast((points.nrows(), 3)).unwrap() * &points)
-                            .sum_axis(Axis(1))
-                            .view(),
-                    )
-                    .partial_cmp(&crate::sphericalpoint::max_1darray(
-                        &(&(b * -1.0).broadcast((points.nrows(), 3)).unwrap() * &points)
-                            .sum_axis(Axis(1))
-                            .view(),
-                    ))
-                    .unwrap()
-                })
-                .unwrap()
-                .to_owned(),
-        }
-    }
-
     /// invert this polygon on the sphere
     pub fn inverse(&self) -> SphericalPolygon {
-        Self {
-            boundary: self.boundary.to_owned(),
-            interior_point: self.antipode(),
-        }
+        Self::new(self.boundary.to_owned(), Some(&self.centroid() * &-1.0)).unwrap()
+    }
+
+    /// whether all interior angles are clockwise
+    pub fn is_convex(&self) -> bool {
+        polygon_boundary_is_convex(&self.boundary.points.xyzs)
     }
 
     /// whether the points in this polygon are in clockwise order
     pub fn is_clockwise(&self) -> bool {
-        orientation(&self.boundary.points.xyz.view()).sum() > 0.0
+        orientation(&self.boundary.points.xyzs).iter().sum::<f64>() > 0.0
     }
 }
 
@@ -323,50 +312,51 @@ impl Geometry for &SphericalPolygon {
     /// surface area of a spherical polygon via deconstructing into triangles
     /// https://www.math.csi.cuny.edu/abhijit/623/spherical-triangle.pdf
     fn area(&self) -> f64 {
-        let centroid = self.centroid();
-
-        let points = concatenate![
-            Axis(0),
-            self.boundary.points.xyz,
-            self.boundary.points.xyz.slice(s![..3, ..])
-        ];
-
         // calculate the interior angles of the polygon comprised of the given points
-        // build two lists of triangle centroids, segregated by the exterior boundary of the polygon (we don't know which is which yet)
-        let mut angles_radians = vec![];
-        for index in 0..points.nrows() - 3 {
-            let triangle = points.slice(s![index..index + 3, ..]);
+        let angles = (0..self.boundary.points.len() - 3)
+            .map(|index| {
+                let triangle = vec![
+                    self.boundary.points.xyzs[index],
+                    self.boundary.points.xyzs[if index >= self.boundary.points.xyzs.len() - 1 {
+                        index - self.boundary.points.xyzs.len()
+                    } else {
+                        index
+                    } + 1],
+                    self.boundary.points.xyzs[if index >= self.boundary.points.xyzs.len() - 2 {
+                        index - self.boundary.points.xyzs.len()
+                    } else {
+                        index
+                    } + 2],
+                ];
 
-            let triangle_centroid = SphericalPoint {
-                xyz: triangle.sum_axis(Axis(0)) / 3.0,
-            };
+                let triangle_centroid = SphericalPoint {
+                    xyz: xyzs_mean(&triangle),
+                };
 
-            let ray = ArcString::try_from(MultiSphericalPoint::from(&vec![
-                triangle_centroid.to_owned(),
-                centroid.to_owned(),
-            ]))
-            .unwrap();
+                let ray = ArcString::try_from(
+                    MultiSphericalPoint::try_from(vec![
+                        triangle_centroid.to_owned(),
+                        self.interior_point.to_owned(),
+                    ])
+                    .unwrap(),
+                )
+                .unwrap();
 
-            let angle_radians = angle_between_vectors_radians(
-                &triangle.slice(s![0, ..]),
-                &triangle.slice(s![1, ..]),
-                &triangle.slice(s![2, ..]),
-            );
+                let angle_radians =
+                    xyz_two_arc_angle_radians(&triangle[0], &triangle[1], &triangle[2]);
 
-            angles_radians.push(if ray.crosses(&self.boundary) {
-                // invert angle if it's on the exterior of the polygon
-                2.0 * std::f64::consts::PI - angle_radians
-            } else {
-                angle_radians
-            });
-        }
+                if ray.crosses(&self.boundary) {
+                    // invert angle if it's on the exterior of the polygon
+                    2.0 * std::f64::consts::PI - angle_radians
+                } else {
+                    angle_radians
+                }
+                .to_degrees()
+            })
+            .collect::<Vec<f64>>();
 
-        let angles_radians = Array1::<f64>::from(angles_radians);
-        let area_radians_squared =
-            angles_radians.sum() - ((angles_radians.len() - 2) as f64 * std::f64::consts::PI);
-
-        // convert to degrees squared
-        area_radians_squared.abs().sqrt().to_degrees().powi(2)
+        // sum the interior angles and subtract to get the spherical excess (area)
+        angles.iter().sum::<f64>() - ((angles.len() - 2) as f64 * std::f64::consts::PI.to_degrees())
     }
 
     fn length(&self) -> f64 {
@@ -408,7 +398,7 @@ impl Geometry for SphericalPolygon {
     }
 
     fn centroid(&self) -> crate::sphericalpoint::SphericalPoint {
-        centroid_from_polygon_boundary(&self.boundary)
+        centroid_from_polygon_boundary(&self.boundary.points.xyzs)
     }
 
     fn boundary(&self) -> Option<ArcString> {
@@ -431,9 +421,9 @@ impl GeometricOperations<SphericalPoint> for SphericalPolygon {
 
     fn contains(&self, other: &SphericalPoint) -> bool {
         point_in_polygon_boundary(
-            &other.xyz.view(),
-            &self.interior_point.xyz.view(),
-            &self.boundary.points.xyz.view(),
+            &other.xyz,
+            &self.interior_point.xyz,
+            &self.boundary.points.xyzs,
         )
     }
 
@@ -474,12 +464,9 @@ impl GeometricOperations<MultiSphericalPoint> for SphericalPolygon {
     }
 
     fn contains(&self, other: &MultiSphericalPoint) -> bool {
-        for xyz in other.xyz.rows() {
-            if !point_in_polygon_boundary(
-                &xyz,
-                &self.interior_point.xyz.view(),
-                &self.boundary.points.xyz.view(),
-            ) {
+        for xyz in &other.xyzs {
+            if !point_in_polygon_boundary(xyz, &self.interior_point.xyz, &self.boundary.points.xyzs)
+            {
                 // if the point is NOT within the polygon exterior
                 return false;
             }
@@ -502,12 +489,9 @@ impl GeometricOperations<MultiSphericalPoint> for SphericalPolygon {
     }
 
     fn intersects(&self, other: &MultiSphericalPoint) -> bool {
-        for xyz in other.xyz.rows() {
-            if point_in_polygon_boundary(
-                &xyz,
-                &self.interior_point.xyz.view(),
-                &self.boundary.points.xyz.view(),
-            ) {
+        for xyz in &other.xyzs {
+            if point_in_polygon_boundary(xyz, &self.interior_point.xyz, &self.boundary.points.xyzs)
+            {
                 return true;
             }
         }
@@ -517,19 +501,24 @@ impl GeometricOperations<MultiSphericalPoint> for SphericalPolygon {
     }
 
     fn intersection(&self, other: &MultiSphericalPoint) -> Option<MultiSphericalPoint> {
-        let mut intersections = vec![];
-
-        for xyz in other.xyz.rows() {
-            if point_in_polygon_boundary(
-                &xyz,
-                &self.interior_point.xyz.view(),
-                &self.boundary.points.xyz.view(),
-            ) {
-                intersections.push(xyz);
-            }
-        }
-
-        MultiSphericalPoint::try_from(stack(Axis(0), intersections.as_slice()).unwrap()).ok()
+        MultiSphericalPoint::try_from(
+            other
+                .xyzs
+                .iter()
+                .filter_map(|xyz| {
+                    if point_in_polygon_boundary(
+                        xyz,
+                        &self.interior_point.xyz,
+                        &self.boundary.points.xyzs,
+                    ) {
+                        Some(*xyz)
+                    } else {
+                        None
+                    }
+                })
+                .collect::<Vec<[f64; 3]>>(),
+        )
+        .ok()
     }
 
     fn split(&self, other: &MultiSphericalPoint) -> MultiSphericalPolygon {
@@ -549,15 +538,10 @@ impl GeometricOperations<ArcString> for SphericalPolygon {
     }
 
     fn contains(&self, other: &ArcString) -> bool {
+        // endpoints of an arcstring are not part of the set
         self.contains(
-            &MultiSphericalPoint::try_from(
-                other
-                    .points
-                    .xyz
-                    .slice(s![1..other.points.xyz.nrows() - 1, ..])
-                    .to_owned(),
-            )
-            .unwrap(),
+            &MultiSphericalPoint::try_from(other.points.xyzs[1..other.points.len() - 1].to_owned())
+                .unwrap(),
         )
     }
 
@@ -613,10 +597,10 @@ impl GeometricOperations<ArcString> for SphericalPolygon {
                             // an arcstring only splits the polygon if it touches the boundary twice
                             if crate::arcstring::arcstring_contains_point(
                                 &self.boundary,
-                                &crossing_segment.points.xyz.slice(s![0, ..]),
+                                &crossing_segment.points.xyzs[0],
                             ) && crate::arcstring::arcstring_contains_point(
                                 &self.boundary,
-                                &crossing_segment.points.xyz.slice(s![-1, ..]),
+                                &crossing_segment.points.xyzs[crossing_segment.points.len() - 1],
                             ) {
                                 // this polygon will be split into two
                                 polygon_removal_indices.push(index);
@@ -964,12 +948,14 @@ impl Geometry for &MultiSphericalPolygon {
     }
 
     fn centroid(&self) -> crate::sphericalpoint::SphericalPoint {
-        let centroids: Vec<SphericalPoint> = self
-            .polygons
-            .par_iter()
-            .map(|polygon| polygon.centroid())
-            .collect();
-        MultiSphericalPoint::from(&centroids).centroid()
+        MultiSphericalPoint::try_from(
+            self.polygons
+                .par_iter()
+                .map(|polygon| polygon.centroid().xyz)
+                .collect::<Vec<[f64; 3]>>(),
+        )
+        .unwrap()
+        .centroid()
     }
 
     fn boundary(&self) -> Option<MultiArcString> {

@@ -1,84 +1,190 @@
 use crate::geometry::{GeometricOperations, Geometry, MultiGeometry};
 use kiddo::{ImmutableKdTree, SquaredEuclidean};
-use numpy::ndarray::{
-    array, concatenate, s, stack, Array1, Array2, ArrayView1, ArrayView2, Axis, Zip,
-};
+use numpy::ndarray::{array, Array1, Array2, ArrayView1, Axis};
 use pyo3::prelude::*;
 use rayon::prelude::*;
 use std::{
     fmt::Display,
     iter::Sum,
-    ops::{Add, AddAssign},
+    ops::{Add, AddAssign, Div, DivAssign, Mul, MulAssign, Neg, Sub, SubAssign},
 };
 
-#[inline(always)]
-pub fn min_1darray(arr: &ArrayView1<f64>) -> Option<f64> {
-    if arr.is_any_nan() || arr.is_any_infinite() {
-        None
-    } else {
-        Some(
-            *(arr
-                .into_par_iter()
-                .min_by(|a, b| a.partial_cmp(b).unwrap())
-                .unwrap()),
-        )
-    }
-}
-
-#[inline(always)]
-pub fn max_1darray(arr: &ArrayView1<f64>) -> Option<f64> {
-    if arr.is_any_nan() || arr.is_any_infinite() {
-        None
-    } else {
-        Some(
-            *(arr
-                .into_par_iter()
-                .max_by(|a, b| a.partial_cmp(b).unwrap())
-                .unwrap()),
-        )
-    }
-}
-
-pub fn shift_rows(from: &ArrayView2<f64>, by: i32) -> Array2<f64> {
-    let mut to = Array2::<f64>::uninit(from.dim());
-    from.slice(s![-by.., ..])
-        .assign_to(to.slice_mut(s![..by, ..]));
-    from.slice(s![..-by, ..])
-        .assign_to(to.slice_mut(s![by.., ..]));
-
-    unsafe { to.assume_init() }
-}
-
-/// normalize the given vector to length 1 (the unit sphere) while preserving direction
-pub fn normalize_vector(xyz: &ArrayView1<f64>) -> Array1<f64> {
-    xyz / vector_length(xyz)
-}
-
-/// normalize the given vectors to length 1 (the unit sphere) while preserving direction
-pub fn normalize_vectors(xyz: &ArrayView2<f64>) -> Array2<f64> {
-    xyz / &vector_lengths(xyz).broadcast((1, xyz.nrows())).unwrap().t()
-}
-
-fn vector_kdtree(xyz: &ArrayView2<f64>) -> ImmutableKdTree<f64, 3> {
-    Zip::from(xyz.rows())
-        .par_map_collect(|row| [row[0], row[1], row[2]])
-        .as_slice()
-        .unwrap()
-        .into()
-}
-
-/// length of the given xyz vector
+/// length of the underlying xyz vector
 ///
 ///     r = sqrt(x^2 + y^2 + z^2)
-pub fn vector_length(vector: &ArrayView1<f64>) -> f64 {
-    vector.pow2().sum().sqrt()
+fn xyz_length(xyz: &[f64; 3]) -> f64 {
+    (xyz[0].powi(2) + xyz[1].powi(2) + xyz[2].powi(2)).sqrt()
 }
 
-/// lengths of the given xyz vectors
+pub fn xyz_dot(a: &[f64; 3], b: &[f64; 3]) -> f64 {
+    xyz_sum(&xyz_mul_xyz(a, b))
+}
+
+pub fn xyz_cross(a: &[f64; 3], b: &[f64; 3]) -> [f64; 3] {
+    [
+        a[1] * b[2] - a[2] * b[1],
+        a[2] * b[0] - a[0] * b[2],
+        a[0] * b[1] - a[1] * b[0],
+    ]
+}
+
+pub fn xyz_add_xyz(a: &[f64; 3], b: &[f64; 3]) -> [f64; 3] {
+    [a[0] + b[0], a[1] + b[1], a[2] + b[2]]
+}
+
+pub fn xyz_sub_xyz(a: &[f64; 3], b: &[f64; 3]) -> [f64; 3] {
+    [a[0] - b[0], a[1] - b[1], a[2] - b[2]]
+}
+
+pub fn xyz_mul_xyz(a: &[f64; 3], b: &[f64; 3]) -> [f64; 3] {
+    [a[0] * b[0], a[1] * b[1], a[2] * b[2]]
+}
+
+pub fn xyz_div_xyz(a: &[f64; 3], b: &[f64; 3]) -> [f64; 3] {
+    [a[0] / b[0], a[1] / b[1], a[2] / b[2]]
+}
+
+pub fn xyz_add_f64(a: &[f64; 3], b: &f64) -> [f64; 3] {
+    [a[0] + b, a[1] + b, a[2] + b]
+}
+
+pub fn xyz_sub_f64(a: &[f64; 3], b: &f64) -> [f64; 3] {
+    [a[0] - b, a[1] - b, a[2] - b]
+}
+
+pub fn xyz_mul_f64(a: &[f64; 3], b: &f64) -> [f64; 3] {
+    [a[0] * b, a[1] * b, a[2] * b]
+}
+
+pub fn xyz_div_f64(a: &[f64; 3], b: &f64) -> [f64; 3] {
+    [a[0] / b, a[1] / b, a[2] / b]
+}
+
+pub fn xyz_neg(xyz: &[f64; 3]) -> [f64; 3] {
+    [-xyz[0], -xyz[1], -xyz[2]]
+}
+
+pub fn xyz_sum(xyz: &[f64; 3]) -> f64 {
+    xyz[0] + xyz[1] + xyz[2]
+}
+
+pub fn xyz_abs(xyz: &[f64; 3]) -> [f64; 3] {
+    [xyz[0].abs(), xyz[1].abs(), xyz[2].abs()]
+}
+
+pub fn xyz_eq(a: &[f64; 3], b: &[f64; 3]) -> bool {
+    xyz_sum(&xyz_abs(&xyz_sub_xyz(a, b))) < 2e-8
+}
+
+pub fn xyzs_sum(xyzs: &Vec<[f64; 3]>) -> [f64; 3] {
+    let mut sum = [0.0, 0.0, 0.0];
+    for xyz in xyzs {
+        sum = xyz_add_xyz(&sum, &xyz);
+    }
+    sum
+}
+
+pub fn xyzs_mean(xyzs: &Vec<[f64; 3]>) -> [f64; 3] {
+    xyz_div_f64(&xyzs_sum(xyzs), &(xyzs.len() as f64))
+}
+
+/// from the given coordinates, build an xyz vector representing a point on the sphere
+///
+/// With radius *r*, longitude *l*, and latitude *b*:
+///
+///     x = r * cos(l) * cos(b)
+///     y = r * sin(l) * cos(b)
+///     z = r * sin(b)
+///
+/// References
+/// ----------
+/// - Miller, Robert D. Computing the area of a spherical polygon. Graphics Gems IV. 1994. Academic Press. doi:10.5555/180895.180907
+fn lonlat_to_xyz(lonlat: &[f64; 2]) -> [f64; 3] {
+    let lon = lonlat[0].to_radians();
+    let lat = lonlat[1].to_radians();
+    let (lon_sin, lon_cos) = lon.sin_cos();
+    let (lat_sin, lat_cos) = lat.sin_cos();
+
+    [lon_cos * lat_cos, lon_sin * lat_cos, lat_sin]
+}
+
+/// convert this point on the sphere to angular coordinates
+///
+/// With radius *r*, longitude *l*, and latitude *b*:
 ///
 ///     r = sqrt(x^2 + y^2 + z^2)
-pub fn vector_lengths(vectors: &ArrayView2<f64>) -> Array1<f64> {
-    vectors.pow2().sum_axis(Axis(1)).sqrt()
+///     l = arctan(y / x)
+///     b = arcsin(z / r)
+///
+/// References
+/// ----------
+/// - Miller, Robert D. Computing the area of a spherical polygon. Graphics Gems IV. 1994. Academic Press. doi:10.5555/180895.180907
+fn xyz_to_lonlat(xyz: &[f64; 3]) -> [f64; 2] {
+    if xyz_eq(xyz, &[0.0, 0.0, 0.0]) {
+        // directionless vector
+        return [f64::NAN, 0.0];
+    }
+
+    let mut lon = xyz[1].atan2(xyz[0]);
+    let full_rotation = 2.0 * std::f64::consts::PI;
+    if lon < 0.0 {
+        lon += full_rotation;
+    } else if lon > full_rotation {
+        lon -= full_rotation;
+    }
+
+    let lat = xyz[2].atan2((xyz[0].powi(2) + xyz[1].powi(2)).sqrt());
+
+    [lon.to_degrees(), lat.to_degrees()]
+}
+
+/// rotate xyz vector by theta angle around another xyz vector
+fn xyz_rotate_around(a: &[f64; 3], b: &[f64; 3], theta: &f64) -> [f64; 3] {
+    let theta = theta.to_radians();
+    let theta_sin = theta.sin();
+    let theta_cos = theta.cos();
+
+    let a = array![a[0], a[1], a[2]];
+    let b = array![a[0], a[1], a[2]];
+
+    let rotated = -&b * -&a * &b * (1.0 - theta_cos)
+        + (&a * theta_cos)
+        + array![
+            -b[2] * a[1] + b[1] * a[2],
+            b[2] * a[0] - b[0] * a[2],
+            -b[1] * a[0] - b[0] * a[1],
+        ] * theta_sin;
+
+    [rotated[0], rotated[1], rotated[2]]
+}
+
+/// radians subtended between two points on the sphere
+///
+/// Notes
+/// -----
+/// The length is computed using the following:
+///
+///     l = arccos(A ⋅ B) / r^2
+///
+/// References
+/// ----------
+/// - https://www.mathforengineers.com/math-calculators/angle-between-two-vectors-in-spherical-coordinates.html
+pub fn xyz_radians_over_sphere_between(a: &[f64; 3], b: &[f64; 3]) -> f64 {
+    if xyz_eq(a, b) {
+        0.0
+    } else {
+        let distance = xyz_dot(a, b).acos();
+        if !distance.is_nan() {
+            distance
+        } else {
+            let crossed = xyz_cross(a, b);
+
+            // avoid domain issues of a.dot(b).acos()
+            (crossed[0].powi(2) + crossed[1].powi(2) + crossed[2].powi(2))
+                .sqrt()
+                .atan2(xyz_dot(a, b))
+        }
+    }
 }
 
 /// given three XYZ vector points on the sphere (`a`, `b`, and `c`), retrieve the angle at `b` formed by arcs `ab` and `bc`
@@ -88,11 +194,7 @@ pub fn vector_lengths(vectors: &ArrayView2<f64>) -> Array1<f64> {
 /// References:
 /// - Miller, Robert D. Computing the area of a spherical polygon. Graphics Gems IV. p132. 1994. Academic Press. doi:10.5555/180895.180907
 ///   `pdf <https://www.google.com/books/edition/Graphics_Gems_IV/CCqzMm_-WucC?hl=en&gbpv=1&dq=Graphics%20Gems%20IV.%20p132&pg=PA133&printsec=frontcover>`_
-pub fn angle_between_vectors_radians(
-    a: &ArrayView1<f64>,
-    b: &ArrayView1<f64>,
-    c: &ArrayView1<f64>,
-) -> f64 {
+pub fn xyz_two_arc_angle_radians(a: &[f64; 3], b: &[f64; 3], c: &[f64; 3]) -> f64 {
     let tolerance = 3e-11;
 
     // let abx = cross_vector(&a, &b);
@@ -122,13 +224,9 @@ pub fn angle_between_vectors_radians(
     //
     // angle
 
-    let a = normalize_vector(a);
-    let b = normalize_vector(b);
-    let c = normalize_vector(c);
-
-    let ab = vector_arc_radians(&a.view(), &b.view(), true);
-    let bc = vector_arc_radians(&b.view(), &c.view(), true);
-    let ca = vector_arc_radians(&c.view(), &a.view(), true);
+    let ab = xyz_radians_over_sphere_between(a, b);
+    let bc = xyz_radians_over_sphere_between(b, c);
+    let ca = xyz_radians_over_sphere_between(c, a);
 
     let mut radians = if ca < tolerance {
         // if the opposite side of the triangle is negligibly small
@@ -148,57 +246,33 @@ pub fn angle_between_vectors_radians(
     radians
 }
 
-/// given three arrays of XYZ vectors on the unit sphere (A, B, and C), element-wise retrieve the angles at B between arcs AB and arcs BC
-///
-/// References:
-/// - Miller, Robert D. Computing the area of a spherical polygon. Graphics Gems IV. 1994. Academic Press. doi:10.5555/180895.180907
-///   `pdf <https://www.google.com/books/edition/Graphics_Gems_IV/CCqzMm_-WucC?hl=en&gbpv=1&dq=Graphics%20Gems%20IV.%20p132&pg=PA133&printsec=frontcover>`_
-pub fn angles_between_vectors_radians(
-    a: &ArrayView2<f64>,
-    b: &ArrayView2<f64>,
-    c: &ArrayView2<f64>,
-) -> Array1<f64> {
-    let abx = cross_vectors(a, b);
-    let bcx = cross_vectors(b, c);
-    let x = cross_vectors(&abx.view(), &bcx.view());
-
-    let diff = (b * x).sum_axis(Axis(1));
-    let mut inner = (abx * bcx).sum_axis(Axis(1));
-    inner.par_mapv_inplace(|v| v.acos());
-
-    let radians = stack(Axis(0), &[inner.view(), diff.view()])
-        .unwrap()
-        .map_axis(Axis(0), |v| {
-            if v[1] < 0.0 {
-                (2.0 * std::f64::consts::PI) - v[0]
-            } else {
-                v[0]
-            }
-        });
-
-    radians
+/// whether the angle formed between A->B->C is a clockwise turn
+fn xyz_two_arc_is_clockwise(a: &[f64; 3], b: &[f64; 3], c: &[f64; 3]) -> bool {
+    xyz_sum(&xyz_mul_xyz(
+        &xyz_cross(&xyz_sub_xyz(a, b), &xyz_sub_xyz(c, b)),
+        b,
+    )) > 0.0
 }
 
-/// whether the three points exist on the same line
-pub fn vectors_collinear(a: &ArrayView1<f64>, b: &ArrayView1<f64>, c: &ArrayView1<f64>) -> bool {
-    let tolerance = 2e-8;
-
-    if (a - b).abs().sum() < tolerance || (b - c).abs().sum() < tolerance {
+/// whether the three xyz points exist on the same great-circle arc
+pub fn xyzs_collinear(a: &[f64; 3], b: &[f64; 3], c: &[f64; 3]) -> bool {
+    if xyz_eq(a, b) || xyz_eq(b, c) {
         true
     } else {
         // let area = spherical_triangle_area(a, b, c);
         // area.is_nan() || area < tolerance
 
-        let abc = angle_between_vectors_radians(a, b, c);
-        let cab = angle_between_vectors_radians(c, a, b);
-        let bca = angle_between_vectors_radians(b, c, a);
+        let abc = xyz_two_arc_angle_radians(a, b, c);
+        let cab = xyz_two_arc_angle_radians(c, a, b);
+        let bca = xyz_two_arc_angle_radians(b, c, a);
 
+        let tolerance = 2e-8;
         abc < tolerance
             || cab < tolerance
             || bca < tolerance
-            || (abc - std::f64::consts::PI).abs() < tolerance
-            || (cab - std::f64::consts::PI).abs() < tolerance
-            || (bca - std::f64::consts::PI).abs() < tolerance
+            || (abc - std::f64::consts::PI.to_degrees()).abs() < tolerance
+            || (cab - std::f64::consts::PI.to_degrees()).abs() < tolerance
+            || (bca - std::f64::consts::PI.to_degrees()).abs() < tolerance
 
         // let left = arc_length(&a, &p);
         // let right = arc_length(&p, &b);
@@ -213,194 +287,91 @@ pub fn vectors_collinear(a: &ArrayView1<f64>, b: &ArrayView1<f64>, c: &ArrayView
         // }
     }
 }
-pub fn cross_vector(a: &ArrayView1<f64>, b: &ArrayView1<f64>) -> Array1<f64> {
-    let ax = a[0];
-    let ay = a[1];
-    let az = a[2];
-    let bx = b[0];
-    let by = b[1];
-    let bz = b[2];
 
-    array![ay * bz - az * by, az * bx - ax * bz, ax * by - ay * bx]
-}
-
-pub fn cross_vectors(a: &ArrayView2<f64>, b: &ArrayView2<f64>) -> Array2<f64> {
-    let ax = a.slice(s![.., 0]);
-    let ay = a.slice(s![.., 1]);
-    let az = a.slice(s![.., 2]);
-    let bx = b.slice(s![.., 0]);
-    let by = b.slice(s![.., 1]);
-    let bz = b.slice(s![.., 2]);
-
-    let result = stack(
-        Axis(0),
-        &[
-            (&ay * &bz - az - by).view(),
-            (&az * &bx - &ax * &bz).view(),
-            (&ax * &by - &ay * &ax).view(),
-        ],
-    );
-    result.unwrap()
-}
-
-/// radians subtended by this arc on the sphere
-///
-/// Notes
-/// -----
-/// The length is computed using the following:
-///
-///     l = arccos(A ⋅ B) / r^2
-///
-/// References
-/// ----------
-/// - https://www.mathforengineers.com/math-calculators/angle-between-two-vectors-in-spherical-coordinates.html
-pub fn vector_arc_radians(a: &ArrayView1<f64>, b: &ArrayView1<f64>, normalized: bool) -> f64 {
-    if (a - b).abs().sum() < 1e-10 {
-        0.0
-    } else {
-        let distance = (a.dot(b)
-            / if normalized {
-                1.0
-            } else {
-                a.pow2().sum().sqrt() * b.pow2().sum().sqrt()
-            })
-        .acos();
-
-        if !distance.is_nan() {
-            distance
-        } else {
-            let crossed = if !normalized {
-                let a_norm = normalize_vector(a);
-                let b_norm = normalize_vector(b);
-                cross_vector(&a_norm.view(), &b_norm.view())
-            } else {
-                cross_vector(a, b)
-            };
-
-            // avoid domain issues of a.dot(b).acos()
-            crossed.view().pow2().sum().sqrt().atan2(a.dot(b))
-        }
-    }
-}
-
-fn vector_arcs_clockwise_turn(
-    a: &ArrayView1<f64>,
-    b: &ArrayView1<f64>,
-    c: &ArrayView1<f64>,
-) -> bool {
-    (b * &cross_vector(&(a - b).view(), &(c - b).view()).view()).sum() > 0.0
-}
-
-/// convert the given xyz vector to angular coordinates on the sphere
-///
-/// With radius *r*, longitude *l*, and latitude *b*:
-///
-///     r = sqrt(x^2 + y^2 + z^2)
-///     l = arctan(y / x)
-///     b = arcsin(z / r)
-///
-/// References
-/// ----------
-/// - Miller, Robert D. Computing the area of a spherical polygon. Graphics Gems IV. 1994. Academic Press. doi:10.5555/180895.180907
-pub fn vector_to_lonlat(xyz: &ArrayView1<f64>) -> Array1<f64> {
-    if xyz.abs().sum() == 0.0 {
-        // directionless vector
-        return array![f64::NAN, 0.0];
-    }
-
-    let mut lon = xyz[1].atan2(xyz[0]);
-    let full_rotation = 2.0 * std::f64::consts::PI;
-    if lon < 0.0 {
-        lon += full_rotation;
-    } else if lon > full_rotation {
-        lon -= full_rotation;
-    }
-
-    let lat = xyz[2].atan2((xyz[0].powi(2) + xyz[1].powi(2)).sqrt());
-
-    let radians = array![lon, lat,];
-    radians.to_degrees()
-}
-
-pub fn vectors_to_lonlats(xyzs: &ArrayView2<f64>) -> Array2<f64> {
-    let mut lons = Zip::from(xyzs.rows()).par_map_collect(|xyz| {
-        if xyz.abs().sum() == 0.0 {
-            // directionless vector
-            f64::NAN
-        } else {
-            xyz[1].atan2(xyz[0])
-        }
-    });
-
-    // mod longitudes past a full rotation
-    let full_rotation = 2.0 * std::f64::consts::PI;
-    lons.par_mapv_inplace(|lon| {
-        if lon < 0.0 {
-            lon + full_rotation
-        } else if lon > full_rotation {
-            lon - full_rotation
-        } else {
-            lon
-        }
-    });
-
-    // let lats = Zip::from(xyzs.slice(s![.., 2]))
-    //     .and(&vector_lengths(xyzs))
-    //     .par_map_collect(|z, r| (z / r).asin());
-    let lats = Zip::from(xyzs.rows())
-        .par_map_collect(|xyz| xyz[2].atan2((xyz[0].powi(2) + xyz[1].powi(2)).sqrt()));
-
-    let radians = stack(Axis(1), &[lons.view(), lats.view()]).unwrap();
-    radians.to_degrees()
-}
-
-pub fn point_within_kdtree(xyz: &ArrayView1<f64>, kdtree: &ImmutableKdTree<f64, 3>) -> bool {
-    // so we must also normalize this point to compare them
-    let xyz = normalize_vector(xyz);
-
+pub fn point_within_kdtree(xyz: &[f64; 3], kdtree: &ImmutableKdTree<f64, 3>) -> bool {
     // take advantage of the kdtree's distance function in 3D space
-    let tolerance = 1e-10;
-    let nearest = kdtree.nearest_one::<SquaredEuclidean>(&[xyz[0], xyz[1], xyz[2]]);
-
-    nearest.distance < tolerance
+    kdtree.nearest_one::<SquaredEuclidean>(xyz).distance < 1e-10
 }
 
-/// xyz vector representing a point on the sphere
+/// 3D Cartesian vector representing a point on the unit sphere
 #[pyclass]
 #[derive(Clone, Debug)]
 pub struct SphericalPoint {
-    pub xyz: Array1<f64>,
+    pub xyz: [f64; 3],
 }
 
-impl TryFrom<Array1<f64>> for SphericalPoint {
+impl From<&[f64; 3]> for SphericalPoint {
+    fn from(xyz: &[f64; 3]) -> Self {
+        Self::from(*xyz)
+    }
+}
+
+impl From<[f64; 3]> for SphericalPoint {
+    fn from(xyz: [f64; 3]) -> Self {
+        let length = xyz_length(&xyz);
+        let xyz = if length < 2e-8 {
+            xyz
+        } else {
+            [xyz[0] / length, xyz[1] / length, xyz[2] / length]
+        };
+        Self { xyz }
+    }
+}
+
+impl From<&(f64, f64, f64)> for SphericalPoint {
+    fn from(xyz: &(f64, f64, f64)) -> Self {
+        Self::from([xyz.0, xyz.1, xyz.2])
+    }
+}
+
+impl TryFrom<&Vec<f64>> for SphericalPoint {
     type Error = String;
 
-    fn try_from(xyz: Array1<f64>) -> Result<Self, Self::Error> {
-        if xyz.len() != 3 {
-            Err(format!("3D vector should have length 3, not {}", xyz.len()))
+    fn try_from(xyz: &Vec<f64>) -> Result<Self, Self::Error> {
+        let length = xyz.len();
+        if length != 3 {
+            Err(format!("3D vector should have length 3, not {length}"))
         } else {
-            Ok(Self { xyz })
+            Ok(Self::from([xyz[0], xyz[1], xyz[2]]))
         }
     }
 }
 
-impl From<SphericalPoint> for Array1<f64> {
+impl TryFrom<&Array1<f64>> for SphericalPoint {
+    type Error = String;
+
+    fn try_from(xyz: &Array1<f64>) -> Result<Self, Self::Error> {
+        let length = xyz.len();
+        if length != 3 {
+            Err(format!("3D vector should have length 3, not {length}"))
+        } else {
+            Ok(Self::from([xyz[0], xyz[1], xyz[2]]))
+        }
+    }
+}
+
+impl<'a> TryFrom<&ArrayView1<'a, f64>> for SphericalPoint {
+    type Error = String;
+
+    fn try_from(xyz: &ArrayView1<'a, f64>) -> Result<Self, Self::Error> {
+        let length = xyz.len();
+        if length != 3 {
+            Err(format!("3D vector should have length 3, not {length}"))
+        } else {
+            Ok(Self::from([xyz[0], xyz[1], xyz[2]]))
+        }
+    }
+}
+
+impl From<SphericalPoint> for [f64; 3] {
     fn from(point: SphericalPoint) -> Self {
         point.xyz
     }
 }
 
-impl<'p> From<&'p SphericalPoint> for ArrayView1<'p, f64> {
-    fn from(point: &'p SphericalPoint) -> Self {
-        point.xyz.view()
-    }
-}
-
-impl TryFrom<Vec<f64>> for SphericalPoint {
-    type Error = String;
-
-    fn try_from(xyz: Vec<f64>) -> Result<Self, Self::Error> {
-        Self::try_from(Array1::<f64>::from_vec(xyz))
+impl From<SphericalPoint> for Array1<f64> {
+    fn from(point: SphericalPoint) -> Self {
+        array![point.xyz[0], point.xyz[1], point.xyz[2]]
     }
 }
 
@@ -410,84 +381,153 @@ impl From<SphericalPoint> for Vec<f64> {
     }
 }
 
-impl From<[f64; 3]> for SphericalPoint {
-    fn from(xyz: [f64; 3]) -> Self {
-        Self {
-            xyz: Array1::<f64>::from_vec(xyz.to_vec()),
-        }
+impl Add<&SphericalPoint> for &SphericalPoint {
+    type Output = SphericalPoint;
+
+    fn add(self, rhs: &SphericalPoint) -> Self::Output {
+        Self::Output::from(xyz_add_xyz(&self.xyz, &rhs.xyz))
     }
 }
 
-impl From<(f64, f64, f64)> for SphericalPoint {
-    fn from(xyz: (f64, f64, f64)) -> Self {
-        Self {
-            xyz: array![xyz.0, xyz.1, xyz.2],
-        }
+impl Sub<&SphericalPoint> for &SphericalPoint {
+    type Output = SphericalPoint;
+
+    fn sub(self, rhs: &SphericalPoint) -> Self::Output {
+        Self::Output::from(xyz_sub_xyz(&self.xyz, &rhs.xyz))
     }
 }
 
-impl From<SphericalPoint> for [f64; 3] {
-    fn from(point: SphericalPoint) -> Self {
-        Self::try_from(point.xyz.to_vec()).unwrap()
+impl Mul<&SphericalPoint> for &SphericalPoint {
+    type Output = SphericalPoint;
+
+    fn mul(self, rhs: &SphericalPoint) -> Self::Output {
+        Self::Output::from(xyz_mul_xyz(&self.xyz, &rhs.xyz))
     }
 }
 
-impl From<&SphericalPoint> for MultiSphericalPoint {
-    fn from(point: &SphericalPoint) -> Self {
-        MultiSphericalPoint::try_from(point.xyz.to_shape((1, 3)).unwrap().to_owned()).unwrap()
+impl Div<&SphericalPoint> for &SphericalPoint {
+    type Output = SphericalPoint;
+
+    fn div(self, rhs: &SphericalPoint) -> Self::Output {
+        Self::Output::from(xyz_div_xyz(&self.xyz, &rhs.xyz))
+    }
+}
+
+impl AddAssign<&SphericalPoint> for SphericalPoint {
+    fn add_assign(&mut self, rhs: &SphericalPoint) {
+        self.xyz[0] += rhs.xyz[0];
+        self.xyz[1] += rhs.xyz[1];
+        self.xyz[2] += rhs.xyz[2];
+    }
+}
+
+impl SubAssign<&SphericalPoint> for SphericalPoint {
+    fn sub_assign(&mut self, rhs: &SphericalPoint) {
+        self.xyz[0] -= rhs.xyz[0];
+        self.xyz[1] -= rhs.xyz[1];
+        self.xyz[2] -= rhs.xyz[2];
+    }
+}
+
+impl MulAssign<&SphericalPoint> for SphericalPoint {
+    fn mul_assign(&mut self, rhs: &SphericalPoint) {
+        self.xyz[0] *= rhs.xyz[0];
+        self.xyz[1] *= rhs.xyz[1];
+        self.xyz[2] *= rhs.xyz[2];
+    }
+}
+
+impl DivAssign<&SphericalPoint> for SphericalPoint {
+    fn div_assign(&mut self, rhs: &SphericalPoint) {
+        self.xyz[0] /= rhs.xyz[0];
+        self.xyz[1] /= rhs.xyz[1];
+        self.xyz[2] /= rhs.xyz[2];
+    }
+}
+
+impl Add<&f64> for &SphericalPoint {
+    type Output = SphericalPoint;
+
+    fn add(self, rhs: &f64) -> Self::Output {
+        Self::Output::from(&xyz_add_f64(&self.xyz, rhs))
+    }
+}
+
+impl Sub<&f64> for &SphericalPoint {
+    type Output = SphericalPoint;
+
+    fn sub(self, rhs: &f64) -> Self::Output {
+        Self::Output::from(&xyz_sub_f64(&self.xyz, rhs))
+    }
+}
+
+impl Mul<&f64> for &SphericalPoint {
+    type Output = SphericalPoint;
+
+    fn mul(self, rhs: &f64) -> Self::Output {
+        Self::Output::from(&xyz_mul_f64(&self.xyz, rhs))
+    }
+}
+
+impl Div<&f64> for &SphericalPoint {
+    type Output = SphericalPoint;
+
+    fn div(self, rhs: &f64) -> Self::Output {
+        Self::Output::from(&xyz_div_f64(&self.xyz, rhs))
+    }
+}
+
+impl AddAssign<&f64> for SphericalPoint {
+    fn add_assign(&mut self, rhs: &f64) {
+        self.xyz[0] += rhs;
+        self.xyz[1] += rhs;
+        self.xyz[2] += rhs;
+    }
+}
+
+impl SubAssign<&f64> for SphericalPoint {
+    fn sub_assign(&mut self, rhs: &f64) {
+        self.xyz[0] -= rhs;
+        self.xyz[1] -= rhs;
+        self.xyz[2] -= rhs;
+    }
+}
+
+impl MulAssign<&f64> for SphericalPoint {
+    fn mul_assign(&mut self, rhs: &f64) {
+        self.xyz[0] *= rhs;
+        self.xyz[1] *= rhs;
+        self.xyz[2] *= rhs;
+    }
+}
+
+impl DivAssign<&f64> for SphericalPoint {
+    fn div_assign(&mut self, rhs: &f64) {
+        self.xyz[0] /= rhs;
+        self.xyz[1] /= rhs;
+        self.xyz[2] /= rhs;
+    }
+}
+
+impl Neg for SphericalPoint {
+    type Output = SphericalPoint;
+
+    fn neg(self) -> Self::Output {
+        Self::Output::from([-self.xyz[0], -self.xyz[1], -self.xyz[2]])
     }
 }
 
 impl SphericalPoint {
-    /// normalize the given xyz vector
-    pub fn normalize(xyz: &ArrayView1<f64>) -> Self {
-        Self::try_from(normalize_vector(xyz)).unwrap()
+    pub fn new(x: f64, y: f64, z: f64) -> Self {
+        Self::from([x, y, z])
     }
 
-    /// from the given coordinates, build an xyz vector representing a point on the sphere
-    ///
-    /// With radius *r*, longitude *l*, and latitude *b*:
-    ///
-    ///     x = r * cos(l) * cos(b)
-    ///     y = r * sin(l) * cos(b)
-    ///     z = r * sin(b)
-    ///
-    /// References
-    /// ----------
-    /// - Miller, Robert D. Computing the area of a spherical polygon. Graphics Gems IV. 1994. Academic Press. doi:10.5555/180895.180907
-    pub fn try_from_lonlat(coordinates: &ArrayView1<f64>) -> Result<Self, String> {
-        if coordinates.len() == 2 {
-            let coordinates = coordinates.to_radians();
-            let (lon_sin, lon_cos) = coordinates[0].sin_cos();
-            let (lat_sin, lat_cos) = coordinates[1].sin_cos();
-
-            Ok(Self::try_from(array![lon_cos * lat_cos, lon_sin * lat_cos, lat_sin]).unwrap())
-        } else {
-            Err(format!(
-                "lonlat array should have length 2, not {}",
-                coordinates.len()
-            ))
-        }
+    pub fn from_lonlat(lonlat: &[f64; 2]) -> Self {
+        Self::from(lonlat_to_xyz(lonlat))
     }
 
-    /// convert this point on the sphere to angular coordinates
-    ///
-    /// With radius *r*, longitude *l*, and latitude *b*:
-    ///
-    ///     r = sqrt(x^2 + y^2 + z^2)
-    ///     l = arctan(y / x)
-    ///     b = arcsin(z / r)
-    ///
-    /// References
-    /// ----------
-    /// - Miller, Robert D. Computing the area of a spherical polygon. Graphics Gems IV. 1994. Academic Press. doi:10.5555/180895.180907
-    pub fn to_lonlat(&self) -> Array1<f64> {
-        vector_to_lonlat(&self.xyz.view())
-    }
-
-    /// normalize this vector to length 1 (the unit sphere) while preserving direction
-    pub fn normalized(&self) -> Self {
-        Self::try_from(normalize_vector(&self.xyz.view())).unwrap()
+    pub fn to_lonlat(&self) -> [f64; 2] {
+        xyz_to_lonlat(&self.xyz)
     }
 
     /// create n number of points equally spaced on an arc between this point and another point
@@ -496,95 +536,57 @@ impl SphericalPoint {
         other: &Self,
         n: usize,
     ) -> Result<MultiSphericalPoint, String> {
-        MultiSphericalPoint::try_from(crate::arcstring::interpolate_points_along_vector_arc(
-            &self.xyz.view(),
-            &other.xyz.view(),
-            n,
+        MultiSphericalPoint::try_from(crate::arcstring::xyz_interpolate_between(
+            &self.xyz, &other.xyz, n,
         )?)
     }
 
-    /// angle on the sphere between this point and two other points
-    pub fn angle_between(&self, a: &SphericalPoint, b: &SphericalPoint) -> f64 {
-        angle_between_vectors_radians(&a.xyz.view(), &self.xyz.view(), &b.xyz.view()).to_degrees()
+    pub fn two_arc_angle(&self, a: &SphericalPoint, b: &SphericalPoint) -> f64 {
+        xyz_two_arc_angle_radians(&a.xyz, &self.xyz, &b.xyz).to_degrees()
     }
 
     /// whether this point shares a line with two other points
     pub fn collinear(&self, a: &SphericalPoint, b: &SphericalPoint) -> bool {
-        vectors_collinear(&a.xyz.view(), &self.xyz.view(), &b.xyz.view())
+        xyzs_collinear(&a.xyz, &self.xyz, &b.xyz)
     }
 
-    /// length of the underlying xyz vector
-    ///
-    ///     r = sqrt(x^2 + y^2 + z^2)
+    pub fn clockwise_turn(&self, a: &Self, b: &Self) -> bool {
+        xyz_two_arc_is_clockwise(&a.xyz, &self.xyz, &b.xyz)
+    }
+
     pub fn vector_length(&self) -> f64 {
-        vector_length(&self.xyz.view())
+        xyz_length(&self.xyz)
     }
 
     pub fn vector_cross(&self, other: &Self) -> Self {
-        let crossed = cross_vector(&self.into(), &other.into());
-        Self::try_from(crossed).unwrap()
+        Self::from(xyz_cross(&self.xyz, &other.xyz))
+    }
+
+    pub fn vector_dot(&self, other: &Self) -> f64 {
+        xyz_dot(&self.xyz, &other.xyz)
     }
 
     /// rotate this xyz vector by theta angle around another xyz vector
     pub fn vector_rotate_around(&self, other: &Self, theta: &f64) -> Self {
-        let a = &self.normalized().xyz;
-        let ax = a[0];
-        let ay = a[1];
-        let az = a[2];
-
-        let b = &other.normalized().xyz;
-        let bx = b[0];
-        let by = b[1];
-        let bz = b[2];
-
-        let theta = theta.to_radians();
-        let theta_sin = theta.sin();
-        let theta_cos = theta.cos();
-
-        Self::try_from(
-            -b * -a * b * (1.0 - theta_cos)
-                + a * theta_cos
-                + array![-bz * ay + by * az, bz * ax - bx * az, -by * ax - bx * ay,] * theta_sin,
-        )
-        .unwrap()
+        Self::from(xyz_rotate_around(&self.xyz, &other.xyz, theta))
     }
 }
 
 impl Display for SphericalPoint {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "SphericalPoint({})", self.xyz)
+        write!(f, "SphericalPoint({:?})", self.xyz)
     }
 }
 
 impl PartialEq for SphericalPoint {
     fn eq(&self, other: &SphericalPoint) -> bool {
-        let tolerance = 3e-11;
-        (&self.xyz - &other.xyz).abs().sum() < tolerance
-    }
-}
-
-impl Add<&SphericalPoint> for &SphericalPoint {
-    type Output = MultiSphericalPoint;
-
-    fn add(self, rhs: &SphericalPoint) -> Self::Output {
-        MultiSphericalPoint::try_from(stack(Axis(0), &[self.xyz.view(), rhs.xyz.view()]).unwrap())
-            .unwrap()
-    }
-}
-
-impl Add<&MultiSphericalPoint> for &SphericalPoint {
-    type Output = MultiSphericalPoint;
-
-    fn add(self, rhs: &MultiSphericalPoint) -> MultiSphericalPoint {
-        let mut owned = rhs.to_owned();
-        owned.push(self.to_owned());
-        owned
+        xyz_eq(&self.xyz, &other.xyz)
     }
 }
 
 impl Geometry for &SphericalPoint {
     fn vertices(&self) -> MultiSphericalPoint {
-        self.to_owned().into()
+        (*self).to_owned().into()
     }
 
     fn area(&self) -> f64 {
@@ -614,7 +616,7 @@ impl Geometry for &SphericalPoint {
 
 impl Geometry for SphericalPoint {
     fn vertices(&self) -> MultiSphericalPoint {
-        self.into()
+        self.to_owned().into()
     }
 
     fn area(&self) -> f64 {
@@ -644,11 +646,7 @@ impl Geometry for SphericalPoint {
 
 impl GeometricOperations<SphericalPoint> for SphericalPoint {
     fn distance(&self, other: &SphericalPoint) -> f64 {
-        if self.xyz == other.xyz {
-            0.0
-        } else {
-            vector_arc_radians(&self.xyz.view(), &other.xyz.view(), false).to_degrees()
-        }
+        xyz_radians_over_sphere_between(&self.xyz, &other.xyz).to_degrees()
     }
 
     fn contains(&self, _: &SphericalPoint) -> bool {
@@ -680,7 +678,7 @@ impl GeometricOperations<SphericalPoint> for SphericalPoint {
     }
 
     fn split(&self, other: &SphericalPoint) -> MultiSphericalPoint {
-        MultiSphericalPoint::from(self)
+        MultiSphericalPoint::from(self.to_owned())
     }
 }
 
@@ -718,7 +716,7 @@ impl GeometricOperations<MultiSphericalPoint> for SphericalPoint {
     }
 
     fn split(&self, other: &MultiSphericalPoint) -> MultiSphericalPoint {
-        MultiSphericalPoint::from(self)
+        MultiSphericalPoint::from(self.to_owned())
     }
 }
 
@@ -756,7 +754,7 @@ impl GeometricOperations<crate::arcstring::ArcString> for SphericalPoint {
     }
 
     fn split(&self, other: &crate::arcstring::ArcString) -> MultiSphericalPoint {
-        MultiSphericalPoint::from(self)
+        MultiSphericalPoint::from(self.to_owned())
     }
 }
 
@@ -794,7 +792,7 @@ impl GeometricOperations<crate::arcstring::MultiArcString> for SphericalPoint {
     }
 
     fn split(&self, other: &crate::arcstring::MultiArcString) -> MultiSphericalPoint {
-        MultiSphericalPoint::from(self)
+        MultiSphericalPoint::from(self.to_owned())
     }
 }
 
@@ -835,7 +833,7 @@ impl GeometricOperations<crate::sphericalpolygon::SphericalPolygon> for Spherica
     }
 
     fn split(&self, other: &crate::sphericalpolygon::SphericalPolygon) -> MultiSphericalPoint {
-        MultiSphericalPoint::from(self)
+        MultiSphericalPoint::from(self.to_owned())
     }
 }
 
@@ -876,7 +874,7 @@ impl GeometricOperations<crate::sphericalpolygon::MultiSphericalPolygon> for Sph
     }
 
     fn split(&self, other: &crate::sphericalpolygon::MultiSphericalPolygon) -> MultiSphericalPoint {
-        MultiSphericalPoint::from(self)
+        MultiSphericalPoint::from(self.to_owned())
     }
 }
 
@@ -884,109 +882,125 @@ impl GeometricOperations<crate::sphericalpolygon::MultiSphericalPolygon> for Sph
 #[pyclass]
 #[derive(Clone, Debug)]
 pub struct MultiSphericalPoint {
-    pub xyz: Array2<f64>,
-    // this kdtree is built off of normalized versions of the xyz vectors
+    pub xyzs: Vec<[f64; 3]>,
     pub kdtree: ImmutableKdTree<f64, 3>,
-}
-
-impl From<&Vec<SphericalPoint>> for MultiSphericalPoint {
-    fn from(points: &Vec<SphericalPoint>) -> Self {
-        let mut xyz = Array2::<f64>::uninit((points.len(), 3));
-        for (index, row) in xyz.axis_iter_mut(Axis(0)).enumerate() {
-            points[index].xyz.assign_to(row);
-        }
-        Self::try_from(unsafe { xyz.assume_init() }).unwrap()
-    }
-}
-
-impl From<&Vec<MultiSphericalPoint>> for MultiSphericalPoint {
-    fn from(multipoints: &Vec<MultiSphericalPoint>) -> Self {
-        let mut xyzs = vec![];
-        for multipoint in multipoints {
-            xyzs.push(multipoint.xyz.view());
-        }
-        // TODO: remove duplicates
-        Self::try_from(concatenate(Axis(0), xyzs.as_slice()).unwrap()).unwrap()
-    }
-}
-
-impl From<&MultiSphericalPoint> for Array1<SphericalPoint> {
-    fn from(points: &MultiSphericalPoint) -> Self {
-        Zip::from(points.xyz.rows())
-            .par_map_collect(|row| SphericalPoint::try_from(row.to_owned()).unwrap())
-    }
-}
-
-impl From<&MultiSphericalPoint> for Vec<SphericalPoint> {
-    fn from(points: &MultiSphericalPoint) -> Self {
-        let array: Array1<SphericalPoint> = points.into();
-        array.to_vec()
-    }
-}
-
-impl TryFrom<Array2<f64>> for MultiSphericalPoint {
-    type Error = String;
-
-    fn try_from(xyz: Array2<f64>) -> Result<Self, Self::Error> {
-        if xyz.shape()[0] > 0 && xyz.shape()[1] != 3 {
-            Err(format!(
-                "array of 3D vectors should have shape Nx3, not {}x{}",
-                xyz.shape()[0],
-                xyz.shape()[1]
-            ))
-        } else {
-            let kdtree = vector_kdtree(&normalize_vectors(&xyz.view()).view());
-            Ok(Self { xyz, kdtree })
-        }
-    }
-}
-
-impl From<MultiSphericalPoint> for Array2<f64> {
-    fn from(points: MultiSphericalPoint) -> Self {
-        points.xyz
-    }
-}
-
-impl<'p> From<&'p MultiSphericalPoint> for ArrayView2<'p, f64> {
-    fn from(points: &'p MultiSphericalPoint) -> Self {
-        points.xyz.view()
-    }
 }
 
 impl TryFrom<Vec<[f64; 3]>> for MultiSphericalPoint {
     type Error = String;
 
     fn try_from(xyzs: Vec<[f64; 3]>) -> Result<Self, Self::Error> {
-        if !xyzs.is_empty() {
-            let kdtree = ImmutableKdTree::<f64, 3>::from(xyzs.as_slice());
-            Ok(Self {
-                xyz: xyzs.into(),
-                kdtree,
-            })
-        } else {
+        if xyzs.is_empty() {
             Err(String::from("no points provided"))
+        } else {
+            let xyzs: Vec<[f64; 3]> = xyzs
+                .into_iter()
+                .map(|xyz| {
+                    let length = xyz_length(&xyz);
+                    if length < 2e-8 {
+                        xyz
+                    } else {
+                        [xyz[0] / length, xyz[1] / length, xyz[2] / length]
+                    }
+                })
+                .collect();
+            let kdtree = ImmutableKdTree::<f64, 3>::from(xyzs.as_slice());
+            Ok(Self { xyzs, kdtree })
         }
     }
 }
 
-impl From<&MultiSphericalPoint> for Vec<[f64; 3]> {
-    fn from(points: &MultiSphericalPoint) -> Self {
+impl From<&Vec<MultiSphericalPoint>> for MultiSphericalPoint {
+    fn from(multipoints: &Vec<MultiSphericalPoint>) -> Self {
+        let mut points = multipoints[0].xyzs.to_owned();
+        for index in 1..multipoints.len() {
+            for point in &multipoints[index].xyzs {
+                if !points.contains(&point) {
+                    points.push(point.to_owned());
+                }
+            }
+        }
+
+        // we can assume that existing multipoints are at least length 1
+        Self::try_from(points).unwrap()
+    }
+}
+
+impl From<SphericalPoint> for MultiSphericalPoint {
+    fn from(point: SphericalPoint) -> Self {
+        Self::try_from(vec![point.xyz]).unwrap()
+    }
+}
+
+impl TryFrom<Vec<SphericalPoint>> for MultiSphericalPoint {
+    type Error = String;
+
+    fn try_from(points: Vec<SphericalPoint>) -> Result<Self, String> {
+        Self::try_from(
+            points
+                .iter()
+                .map(|point| point.xyz)
+                .collect::<Vec<[f64; 3]>>(),
+        )
+    }
+}
+
+impl TryFrom<Array2<f64>> for MultiSphericalPoint {
+    type Error = String;
+
+    fn try_from(xyzs: Array2<f64>) -> Result<Self, Self::Error> {
+        let columns = xyzs.shape()[1];
+        if columns != 3 {
+            Err(format!(
+                "array of 3D vectors should have shape Nx3, not Nx{columns}",
+            ))
+        } else {
+            Self::try_from(
+                xyzs.rows()
+                    .into_iter()
+                    .map(|xyz| [xyz[0], xyz[1], xyz[2]])
+                    .collect::<Vec<[f64; 3]>>(),
+            )
+        }
+    }
+}
+
+impl From<MultiSphericalPoint> for Vec<SphericalPoint> {
+    fn from(points: MultiSphericalPoint) -> Self {
         points
-            .xyz
-            .rows()
+            .xyzs
             .into_iter()
-            .map(|row| row.to_vec().try_into().unwrap())
+            .map(|xyz| SphericalPoint { xyz })
             .collect()
     }
 }
 
-impl From<&Vec<(f64, f64, f64)>> for MultiSphericalPoint {
-    fn from(xyzs: &Vec<(f64, f64, f64)>) -> Self {
-        let mut xyz = Array2::<f64>::uninit((xyzs.len(), 3));
-        for (index, tuple) in xyzs.iter().enumerate() {
-            array![tuple.0, tuple.1, tuple.2].assign_to(xyz.index_axis_mut(Axis(0), index));
+impl From<&MultiSphericalPoint> for Array2<f64> {
+    fn from(points: &MultiSphericalPoint) -> Self {
+        let mut xyzs = Array2::uninit((points.len(), 3));
+        for (index, row) in xyzs.axis_iter_mut(Axis(0)).enumerate() {
+            let xyz = points.xyzs[index];
+            array![xyz[0], xyz[1], xyz[2]].assign_to(row);
         }
-        Self::try_from(unsafe { xyz.assume_init() }).unwrap()
+
+        unsafe { xyzs.assume_init() }
+    }
+}
+
+impl From<MultiSphericalPoint> for Vec<[f64; 3]> {
+    fn from(points: MultiSphericalPoint) -> Self {
+        points.xyzs
+    }
+}
+
+impl From<&Vec<(f64, f64, f64)>> for MultiSphericalPoint {
+    fn from(points: &Vec<(f64, f64, f64)>) -> Self {
+        let mut xyzs = Array2::<f64>::uninit((points.len(), 3));
+        for (index, row) in xyzs.axis_iter_mut(Axis(0)).enumerate() {
+            let xyz = points[index];
+            array![xyz.0, xyz.1, xyz.2].assign_to(row);
+        }
+        Self::try_from(unsafe { xyzs.assume_init() }).unwrap()
     }
 }
 
@@ -997,13 +1011,11 @@ impl TryFrom<&Vec<Vec<f64>>> for MultiSphericalPoint {
         let mut xyz = Array2::<f64>::uninit((list.len(), 3));
         for (index, row) in xyz.axis_iter_mut(Axis(0)).enumerate() {
             let point = &list[index];
-            if point.len() == 3 {
-                Array1::<f64>::from_vec(point.to_owned()).assign_to(row)
+            let length = point.len();
+            if length != 3 {
+                return Err(format!("3D vector should have length 3, not {length}",));
             } else {
-                return Err(format!(
-                    "3D vector should have length 3, not {}",
-                    point.len()
-                ));
+                Array1::<f64>::from_vec(point.to_owned()).assign_to(row)
             }
         }
         Self::try_from(unsafe { xyz.assume_init() })
@@ -1017,25 +1029,14 @@ impl<'a> TryFrom<&Vec<ArrayView1<'a, f64>>> for MultiSphericalPoint {
         let mut xyz = Array2::<f64>::uninit((list.len(), 3));
         for (index, row) in xyz.axis_iter_mut(Axis(0)).enumerate() {
             let point = &list[index];
-            if point.len() == 3 {
-                point.assign_to(row);
+            let length = point.len();
+            if length != 3 {
+                return Err(format!("3D vector should have length 3, not {length}",));
             } else {
-                return Err(format!(
-                    "3D vector should have length 3, not {}",
-                    point.len()
-                ));
+                point.assign_to(row);
             }
         }
         Self::try_from(unsafe { xyz.assume_init() })
-    }
-}
-
-impl TryFrom<&Vec<Array1<f64>>> for MultiSphericalPoint {
-    type Error = String;
-
-    fn try_from(list: &Vec<Array1<f64>>) -> Result<Self, Self::Error> {
-        let list: Vec<ArrayView1<f64>> = list.par_iter().map(|point| point.view()).collect();
-        Self::try_from(&list)
     }
 }
 
@@ -1062,24 +1063,6 @@ impl<'a> TryFrom<&ArrayView1<'a, f64>> for MultiSphericalPoint {
 }
 
 impl MultiSphericalPoint {
-    /// normalize the given xyz vectors
-    pub fn normalize(xyz: &ArrayView2<f64>) -> Result<Self, String> {
-        if xyz.shape()[1] != 3 {
-            Err(format!(
-                "array of 3D vectors should have shape Nx3, not {}x{}",
-                xyz.shape()[0],
-                xyz.shape()[1]
-            ))
-        } else {
-            let normalized = normalize_vectors(xyz);
-            let kdtree = vector_kdtree(&normalized.view());
-            Ok(Self {
-                xyz: normalized,
-                kdtree,
-            })
-        }
-    }
-
     /// from the given coordinates, build xyz vectors representing points on the sphere
     ///
     /// With radius *r*, longitude *l*, and latitude *b*:
@@ -1091,36 +1074,13 @@ impl MultiSphericalPoint {
     /// References
     /// ----------
     /// - Miller, Robert D. Computing the area of a spherical polygon. Graphics Gems IV. 1994. Academic Press. doi:10.5555/180895.180907
-    pub fn try_from_lonlat(coordinates: &ArrayView2<f64>) -> Result<Self, String> {
-        if coordinates.shape()[1] == 2 {
-            let coordinates = coordinates.to_radians();
-
-            let lon = coordinates.slice(s![.., 0]);
-            let lat = coordinates.slice(s![.., 1]);
-            let lon_sin = &lon.sin();
-            let lat_sin = &lat.sin();
-            let lon_cos = &lon.cos();
-            let lat_cos = &lat.cos();
-
-            Ok(Self::try_from(
-                stack(
-                    Axis(1),
-                    &[
-                        (lon_cos * lat_cos).view(),
-                        (lon_sin * lat_cos).view(),
-                        lat_sin.view(),
-                    ],
-                )
-                .unwrap(),
-            )
-            .unwrap())
-        } else {
-            Err(format!(
-                "array of lonlats should have shape Nx2, not {}x{}",
-                coordinates.shape()[0],
-                coordinates.shape()[1],
-            ))
-        }
+    pub fn try_from_lonlat(lonlats: &Vec<[f64; 2]>) -> Result<Self, String> {
+        Self::try_from(
+            lonlats
+                .iter()
+                .map(|lonlat| lonlat_to_xyz(lonlat))
+                .collect::<Vec<[f64; 3]>>(),
+        )
     }
 
     pub fn nearest(&self, point: &SphericalPoint) -> usize {
@@ -1135,16 +1095,7 @@ impl MultiSphericalPoint {
     }
 
     fn recreate_kdtree(&mut self) {
-        self.kdtree = vector_kdtree(&normalize_vectors(&self.xyz.view()).view())
-    }
-
-    /// normalize the underlying vectors to length 1 (the unit sphere) while preserving direction
-    pub fn normalized(&self) -> Self {
-        let normalized = normalize_vectors(&self.xyz.view());
-        Self {
-            xyz: normalized,
-            kdtree: self.kdtree.to_owned(),
-        }
+        self.kdtree = ImmutableKdTree::<f64, 3>::from(self.xyzs.as_slice());
     }
 
     /// convert to angle coordinates along the sphere
@@ -1158,81 +1109,38 @@ impl MultiSphericalPoint {
     /// References
     /// ----------
     /// - Miller, Robert D. Computing the area of a spherical polygon. Graphics Gems IV. 1994. Academic Press. doi:10.5555/180895.180907
-    pub fn to_lonlat(&self) -> Array2<f64> {
-        vectors_to_lonlats(&self.xyz.view())
+    pub fn to_lonlat(&self) -> Vec<[f64; 2]> {
+        self.xyzs.iter().map(|xyz| xyz_to_lonlat(xyz)).collect()
     }
 
     /// lengths of the underlying xyz vectors
     ///
     ///     r = sqrt(x^2 + y^2 + z^2)
-    pub fn vector_lengths(&self) -> Array1<f64> {
-        vector_lengths(&self.xyz.view())
+    pub fn vector_lengths(&self) -> Vec<f64> {
+        self.xyzs.iter().map(|xyz| xyz_length(xyz)).collect()
     }
 
     pub fn vector_cross(&self, other: &Self) -> Self {
-        let crossed = cross_vectors(&self.into(), &other.into());
-        Self::try_from(crossed).unwrap()
-    }
-
-    /// rotate the underlying vector by theta angle around other vectors
-    pub fn vector_rotate_around(&self, other: &Self, theta: f64) -> Self {
-        let a = &self.normalized().xyz;
-        let ax = a.slice(s![.., 0]);
-        let ay = a.slice(s![.., 1]);
-        let az = a.slice(s![.., 2]);
-
-        let b = &other.normalized().xyz;
-        let bx = b.slice(s![.., 0]);
-        let by = b.slice(s![.., 1]);
-        let bz = b.slice(s![.., 2]);
-
-        let theta = theta.to_radians();
-        let theta_sin = theta.sin();
-        let theta_cos = theta.cos();
-
         Self::try_from(
-            -b * -a * b * (1.0 - theta_cos)
-                + a * theta_cos
-                + stack(
-                    Axis(0),
-                    &[
-                        (-&bz * ay + &by * &az).view(),
-                        (&bz * &ax - &bx * &az).view(),
-                        (-&by * ax - &bx * &ay).view(),
-                    ],
-                )
-                .unwrap()
-                    * theta_sin,
+            self.xyzs
+                .iter()
+                .zip(other.xyzs.iter())
+                .map(|(a, b)| xyz_cross(a, b))
+                .collect::<Vec<[f64; 3]>>(),
         )
         .unwrap()
     }
 
-    pub fn angles_between(&self, a: &MultiSphericalPoint, b: &MultiSphericalPoint) -> Array1<f64> {
-        // vector_arc_angles(&a.xyz.view(), &self.xyz.view(), &b.xyz.view())
-        Zip::from(self.xyz.rows())
-            .and(a.xyz.rows())
-            .and(b.xyz.rows())
-            .par_map_collect(|point, a, b| angle_between_vectors_radians(&point, &a, &b))
-            .to_degrees()
-    }
-
-    pub fn collinear(&self, a: &SphericalPoint, b: &SphericalPoint) -> Array1<bool> {
-        let points: Vec<SphericalPoint> = self.into();
-        Array1::from_vec(
-            points
-                .par_iter()
-                .map(|point| vectors_collinear(&a.xyz.view(), &point.xyz.view(), &b.xyz.view()))
-                .collect(),
+    /// rotate the underlying vectors by theta angle around other vectors
+    pub fn vector_rotate_around(&self, other: &Self, theta: f64) -> Self {
+        Self::try_from(
+            self.xyzs
+                .iter()
+                .zip(other.xyzs.iter())
+                .map(|(a, b)| xyz_rotate_around(a, b, &theta))
+                .collect::<Vec<[f64; 3]>>(),
         )
-    }
-
-    fn push_xyz(&mut self, xyz: &ArrayView1<f64>, recreate: bool) {
-        if !point_within_kdtree(xyz, &self.kdtree) {
-            self.xyz.push_row(*xyz).unwrap();
-            if recreate {
-                self.recreate_kdtree();
-            }
-        }
+        .unwrap()
     }
 }
 
@@ -1245,36 +1153,31 @@ impl Sum for MultiSphericalPoint {
 
 impl Display for MultiSphericalPoint {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "MultiSphericalPoint({})", self.xyz)
+        write!(f, "MultiSphericalPoint({:?})", self.xyzs)
     }
 }
 
 impl PartialEq for MultiSphericalPoint {
     fn eq(&self, other: &MultiSphericalPoint) -> bool {
-        let tolerance = 2e-8;
-        if self.len() == other.len() && self.xyz.sum() == other.xyz.sum() {
-            let mut rows: Vec<ArrayView1<f64>> = Zip::from(self.xyz.rows())
-                .par_map_collect(|xyz| xyz)
-                .to_vec();
-            let mut other_rows: Vec<ArrayView1<f64>> = Zip::from(self.xyz.rows())
-                .par_map_collect(|xyz| xyz)
-                .to_vec();
+        if self.len() == other.len() {
+            for xyz in &self.xyzs {
+                let mut found = false;
+                for other_xyz in &other.xyzs {
+                    if xyz_eq(xyz, other_xyz) {
+                        found = true;
+                        break;
+                    }
+                }
 
-            rows.sort_by(|a, b| a.sum().partial_cmp(&b.sum()).unwrap());
-            other_rows.sort_by(|a, b| a.sum().partial_cmp(&b.sum()).unwrap());
+                if !found {
+                    return false;
+                }
+            }
 
-            return Zip::from(stack(Axis(0), rows.as_slice()).unwrap().rows())
-                .and(stack(Axis(0), other_rows.as_slice()).unwrap().rows())
-                .all(|a, b| (&a - &b).abs().sum() < tolerance);
+            return true;
         }
 
         false
-    }
-}
-
-impl PartialEq<Vec<SphericalPoint>> for MultiSphericalPoint {
-    fn eq(&self, other: &Vec<SphericalPoint>) -> bool {
-        self.kdtree == MultiSphericalPoint::from(other).kdtree
     }
 }
 
@@ -1324,14 +1227,12 @@ impl Geometry for &MultiSphericalPoint {
     }
 
     fn representative(&self) -> SphericalPoint {
-        SphericalPoint {
-            xyz: self.xyz.slice(s![0, ..]).to_owned(),
-        }
+        SphericalPoint::from(self.xyzs[0])
     }
 
     fn centroid(&self) -> crate::sphericalpoint::SphericalPoint {
-        crate::sphericalpoint::SphericalPoint::try_from(self.xyz.mean_axis(Axis(0)).unwrap())
-            .unwrap()
+        let mean = Array2::<f64>::from(*self).mean_axis(Axis(0)).unwrap();
+        SphericalPoint::from([mean[0], mean[1], mean[2]])
     }
 
     fn boundary(&self) -> Option<MultiSphericalPoint> {
@@ -1356,62 +1257,47 @@ impl Geometry for &MultiSphericalPoint {
         }
 
         // list of vertices on the convex hull
-        let mut convex_hull = vec![];
-
-        // list of all normalized vector points on the sphere
-        let mut points = Zip::from(normalize_vectors(&self.xyz.view()).rows())
-            .par_map_collect(|row| [row[0], row[1], row[2]])
-            .to_vec();
-
-        // mutable kd-tree in 3D space
-        let mut points_kdtree = kiddo::KdTree::<f64, 3>::from(&points);
+        let mut convex_hull_point_indices = vec![];
 
         // mean center of all points
-        let centroid = normalize_vector(&self.centroid().xyz.view());
+        let centroid = self.centroid();
 
         // the farthest point from the mean center must be on the convex hull
-        let farthest_neighbor_index = points_kdtree
-            .nearest_n::<SquaredEuclidean>(
-                centroid.as_slice().unwrap().try_into().unwrap(),
-                points.len(),
-            )
+        let num_candidates = std::num::NonZero::try_from(self.len() - 1).unwrap();
+        let farthest_neighbor_index = self
+            .kdtree
+            .nearest_n::<SquaredEuclidean>(&centroid.xyz, num_candidates)
             .last()
             .unwrap()
-            .item as usize;
-        convex_hull.push(points[farthest_neighbor_index]);
+            .item;
+        convex_hull_point_indices.push(farthest_neighbor_index);
 
         // iterate enough times to test all points
-        let mut interior_point_indices = vec![];
-        let mut convex_hull_indices = vec![];
-        for _ in 1..points.len() - 1 {
-            let convex_hull_tail = convex_hull.last().unwrap();
+        for _ in 0..self.len() {
+            let working_end =
+                self.xyzs[convex_hull_point_indices[convex_hull_point_indices.len() - 1] as usize];
 
-            let point_indices_sorted_by_distance =
-                points_kdtree.nearest_n::<SquaredEuclidean>(convex_hull_tail, points.len());
+            // query the kdtree for all points, sorting them by distance from the current working end of the convex hull
+            let candidates = self
+                .kdtree
+                .nearest_n::<SquaredEuclidean>(&working_end, num_candidates);
 
-            for candidate in point_indices_sorted_by_distance.iter().copied() {
-                let index = candidate.item as usize;
-                if !interior_point_indices.contains(&index) && !convex_hull_indices.contains(&index)
-                {
-                    let point = points[index];
+            for candidate in &candidates {
+                // skip candidates already on the convex hull...
+                if !convex_hull_point_indices.contains(&candidate.item) {
+                    let point = self.xyzs[candidate.item as usize];
 
+                    // test another point to see if the candidate has a clockwise turn toward it
                     let mut no_clockwise: bool = true;
-                    for other_candidate in &point_indices_sorted_by_distance {
-                        let other_index = other_candidate.item as usize;
-                        if other_index != index
-                            && !interior_point_indices.contains(&other_index)
-                            && !convex_hull_indices.contains(&other_index)
-                        {
-                            let other_point = points[other_candidate.item as usize];
-
+                    for test_point in &candidates {
+                        if test_point.item != candidate.item {
                             // if the candidate point is on the edge, it shouldn't have a clockwise turn to any other point
-                            if vector_arcs_clockwise_turn(
-                                &ArrayView1::<f64>::from(convex_hull_tail),
-                                &ArrayView1::<f64>::from(&point),
-                                &ArrayView1::<f64>::from(&other_point),
+                            if xyz_two_arc_is_clockwise(
+                                &working_end,
+                                &point,
+                                &self.xyzs[test_point.item as usize],
                             ) {
                                 no_clockwise = false;
-                                interior_point_indices.push(index);
                                 break;
                             }
                         }
@@ -1419,33 +1305,33 @@ impl Geometry for &MultiSphericalPoint {
 
                     // if the candidate point has no clockwise turns to any other point, it must be on the convex hull
                     if no_clockwise {
-                        convex_hull.push(point);
-                        convex_hull_indices.push(index);
-                        points_kdtree.remove(&point, candidate.item);
+                        convex_hull_point_indices.push(candidate.item);
                         break;
                     }
                 }
             }
 
             // if the last point in the chain equals the first, the arcstring is closed
-            if convex_hull.len() > 2 && convex_hull.last().unwrap() == convex_hull.first().unwrap()
+            if convex_hull_point_indices.len() > 2
+                && convex_hull_point_indices[0]
+                    == convex_hull_point_indices[convex_hull_point_indices.len() - 1]
             {
                 break;
             }
         }
 
-        // we can assume that all other candidates are interior to the convex hull
-        points.swap_remove(farthest_neighbor_index);
-        let interior_point = SphericalPoint {
-            xyz: ArrayView1::<f64>::from(points.first().unwrap()).to_owned(),
-        };
-
         crate::sphericalpolygon::SphericalPolygon::new(
             crate::arcstring::ArcString::try_from(
-                MultiSphericalPoint::try_from(convex_hull).unwrap(),
+                MultiSphericalPoint::try_from(
+                    convex_hull_point_indices
+                        .iter()
+                        .map(|index| self.xyzs[*index as usize])
+                        .collect::<Vec<[f64; 3]>>(),
+                )
+                .unwrap(),
             )
             .unwrap(),
-            Some(interior_point),
+            Some(centroid),
         )
         .ok()
     }
@@ -1483,32 +1369,26 @@ impl Geometry for MultiSphericalPoint {
 
 impl MultiGeometry<SphericalPoint> for MultiSphericalPoint {
     fn len(&self) -> usize {
-        self.xyz.nrows()
+        self.xyzs.len()
     }
+
     fn extend(&mut self, other: MultiSphericalPoint) {
-        other.xyz.rows().into_iter().for_each(|row| {
-            if !point_within_kdtree(&row, &self.kdtree) {
-                self.xyz.push_row(row.view()).unwrap()
-            }
-        });
+        self.xyzs.extend(other.xyzs);
         self.recreate_kdtree();
     }
 
-    fn push(&mut self, other: SphericalPoint) {
-        self.push_xyz(&other.xyz.view(), true);
+    fn push(&mut self, point: SphericalPoint) {
+        self.xyzs.push(point.xyz);
     }
 }
 
 impl GeometricOperations<SphericalPoint, SphericalPoint> for MultiSphericalPoint {
     fn distance(&self, other: &SphericalPoint) -> f64 {
-        SphericalPoint {
-            xyz: self.xyz.slice(s![self.nearest(other), ..]).to_owned(),
-        }
-        .distance(other)
+        SphericalPoint::from(self.xyzs[self.nearest(other)]).distance(other)
     }
 
     fn contains(&self, other: &SphericalPoint) -> bool {
-        point_within_kdtree(&other.xyz.view(), &self.kdtree)
+        point_within_kdtree(&other.xyz, &self.kdtree)
     }
 
     fn within(&self, _: &SphericalPoint) -> bool {
@@ -1542,27 +1422,20 @@ impl GeometricOperations<SphericalPoint, SphericalPoint> for MultiSphericalPoint
 
 impl GeometricOperations<MultiSphericalPoint, SphericalPoint> for MultiSphericalPoint {
     fn distance(&self, other: &MultiSphericalPoint) -> f64 {
-        if let Some(distance) = min_1darray(
-            &Zip::from(other.xyz.rows())
-                .par_map_collect(|other_xyz| {
-                    // since the kdtree is over normalized vectors, the nearest vector in 3D space is also the nearest in angular distance
-                    let nearest = self.kdtree.nearest_one::<SquaredEuclidean>(&[
-                        other_xyz[0],
-                        other_xyz[1],
-                        other_xyz[2],
-                    ]);
-                    vector_arc_radians(
-                        &self.xyz.slice(s![nearest.item as usize, ..]),
-                        &other_xyz,
-                        false,
-                    )
-                })
-                .view(),
-        ) {
-            distance.to_degrees()
-        } else {
-            f64::NAN
-        }
+        // retrieve the nearest point in the other multipoint to this multipoint
+        // using the normalized 3D Cartesian distance is much faster than angular distance
+        let nearest = SphericalPoint::from(
+            self.xyzs[other
+                .xyzs
+                .iter()
+                .map(|xyz| self.kdtree.nearest_one::<SquaredEuclidean>(xyz))
+                .min_by(|a, b| a.distance.partial_cmp(&b.distance).unwrap())
+                .unwrap()
+                .item as usize],
+        );
+
+        // get the distance of that point to this multipoint
+        self.distance(&nearest)
     }
 
     fn contains(&self, other: &MultiSphericalPoint) -> bool {
@@ -1571,9 +1444,8 @@ impl GeometricOperations<MultiSphericalPoint, SphericalPoint> for MultiSpherical
 
     fn within(&self, other: &MultiSphericalPoint) -> bool {
         if self.len() < other.len() {
-            self.xyz
-                .rows()
-                .into_iter()
+            self.xyzs
+                .iter()
                 .all(|xyz| point_within_kdtree(&xyz, &other.kdtree))
         } else {
             false
@@ -1587,9 +1459,8 @@ impl GeometricOperations<MultiSphericalPoint, SphericalPoint> for MultiSpherical
             (other, self)
         };
 
-        less.xyz
-            .rows()
-            .into_iter()
+        less.xyzs
+            .iter()
             .any(|xyz| point_within_kdtree(&xyz, &more.kdtree))
     }
 
@@ -1608,18 +1479,19 @@ impl GeometricOperations<MultiSphericalPoint, SphericalPoint> for MultiSpherical
             (other, self)
         };
 
-        let points: Vec<ArrayView1<f64>> = less
-            .xyz
-            .rows()
-            .into_iter()
-            .filter(|xyz| point_within_kdtree(xyz, &more.kdtree))
-            .collect();
-
-        if !points.is_empty() {
-            Some(MultiSphericalPoint::try_from(&points).unwrap())
-        } else {
-            None
-        }
+        MultiSphericalPoint::try_from(
+            less.xyzs
+                .iter()
+                .filter_map(|xyz| {
+                    if point_within_kdtree(xyz, &more.kdtree) {
+                        Some(*xyz)
+                    } else {
+                        None
+                    }
+                })
+                .collect::<Vec<[f64; 3]>>(),
+        )
+        .ok()
     }
 
     fn split(&self, other: &MultiSphericalPoint) -> MultiSphericalPoint {
@@ -1641,9 +1513,8 @@ impl GeometricOperations<crate::arcstring::ArcString, SphericalPoint> for MultiS
     }
 
     fn touches(&self, other: &crate::arcstring::ArcString) -> bool {
-        self.xyz
-            .rows()
-            .into_iter()
+        self.xyzs
+            .iter()
             .any(|xyz| crate::arcstring::arcstring_contains_point(other, &xyz))
     }
 
@@ -1656,18 +1527,19 @@ impl GeometricOperations<crate::arcstring::ArcString, SphericalPoint> for MultiS
     }
 
     fn intersection(&self, other: &crate::arcstring::ArcString) -> Option<MultiSphericalPoint> {
-        let intersections: Vec<ArrayView1<f64>> = self
-            .xyz
-            .rows()
-            .into_iter()
-            .filter(|xyz| crate::arcstring::arcstring_contains_point(other, xyz))
-            .collect();
-
-        if !intersections.is_empty() {
-            MultiSphericalPoint::try_from(&intersections).ok()
-        } else {
-            None
-        }
+        MultiSphericalPoint::try_from(
+            self.xyzs
+                .iter()
+                .filter_map(|xyz| {
+                    if crate::arcstring::arcstring_contains_point(other, xyz) {
+                        Some(*xyz)
+                    } else {
+                        None
+                    }
+                })
+                .collect::<Vec<[f64; 3]>>(),
+        )
+        .ok()
     }
 
     fn split(&self, other: &crate::arcstring::ArcString) -> MultiSphericalPoint {
@@ -1764,12 +1636,12 @@ impl GeometricOperations<crate::sphericalpolygon::MultiSphericalPolygon, Spheric
 
     fn within(&self, other: &crate::sphericalpolygon::MultiSphericalPolygon) -> bool {
         // TODO: find a better algorithm than brute-force; perhaps we can keep a kdtree of centroids for multigeometries?
-        self.xyz.rows().into_iter().all(|xyz| {
+        self.xyzs.iter().all(|xyz| {
             other.polygons.par_iter().any(|polygon| {
                 crate::sphericalpolygon::point_in_polygon_boundary(
                     &xyz,
-                    &polygon.interior_point.xyz.view(),
-                    &polygon.boundary.points.xyz.view(),
+                    &polygon.interior_point.xyz,
+                    &polygon.boundary.points.xyzs,
                 )
             })
         })

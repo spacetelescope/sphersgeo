@@ -232,15 +232,6 @@ pub struct AngularSeparation {}
 impl DistanceMetric<f64, 3> for AngularSeparation {
     #[inline]
     fn dist(a: &[f64; 3], b: &[f64; 3]) -> f64 {
-        #[inline]
-        fn normalize(vector: &[f64; 3]) -> [f64; 3] {
-            let l = (vector[0].powi(2) + vector[1].powi(2) + vector[2].powi(2)).sqrt();
-            [vector[0] / l, vector[1] / l, vector[2] / l]
-        }
-
-        let a = normalize(a);
-        let b = normalize(b);
-
         // radians subtended
         (a[0] * b[0] + a[1] * b[1] + a[2] * b[2]).acos()
     }
