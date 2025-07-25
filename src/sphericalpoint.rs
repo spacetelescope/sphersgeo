@@ -612,10 +612,6 @@ impl Geometry for &SphericalPoint {
     fn centroid(&self) -> crate::sphericalpoint::SphericalPoint {
         (*self).to_owned()
     }
-    fn bounds(&self, degrees: bool) -> crate::angularbounds::AngularBounds {
-        let lonlat = self.to_lonlat(degrees);
-        [lonlat[0], lonlat[1], lonlat[0], lonlat[1]].into()
-    }
 
     fn convex_hull(&self) -> Option<crate::sphericalpolygon::SphericalPolygon> {
         None
@@ -645,10 +641,6 @@ impl Geometry for SphericalPoint {
 
     fn centroid(&self) -> crate::sphericalpoint::SphericalPoint {
         self.to_owned()
-    }
-
-    fn bounds(&self, degrees: bool) -> crate::angularbounds::AngularBounds {
-        (&self).bounds(degrees)
     }
 
     fn convex_hull(&self) -> Option<crate::sphericalpolygon::SphericalPolygon> {
@@ -810,40 +802,6 @@ impl GeometricOperations<&crate::arcstring::MultiArcString> for &SphericalPoint 
 
     fn touches(self, other: &crate::arcstring::MultiArcString) -> bool {
         self.within(other)
-    }
-}
-
-impl GeometricOperations<&crate::angularbounds::AngularBounds> for &SphericalPoint {
-    fn distance(self, other: &crate::angularbounds::AngularBounds, degrees: bool) -> f64 {
-        other.distance(self, degrees)
-    }
-
-    fn contains(self, _: &crate::angularbounds::AngularBounds) -> bool {
-        false
-    }
-
-    fn within(self, other: &crate::angularbounds::AngularBounds) -> bool {
-        other.contains(self)
-    }
-
-    fn crosses(self, _: &crate::angularbounds::AngularBounds) -> bool {
-        false
-    }
-
-    fn intersects(self, other: &crate::angularbounds::AngularBounds) -> bool {
-        self.within(other)
-    }
-
-    fn intersection(self, other: &crate::angularbounds::AngularBounds) -> Option<SphericalPoint> {
-        if self.within(other) {
-            Some(self.to_owned())
-        } else {
-            None
-        }
-    }
-
-    fn touches(self, other: &crate::angularbounds::AngularBounds) -> bool {
-        other.touches(self)
     }
 }
 
@@ -1372,20 +1330,6 @@ impl Geometry for &MultiSphericalPoint {
             .unwrap()
     }
 
-    fn bounds(&self, degrees: bool) -> crate::angularbounds::AngularBounds {
-        let coordinates = self.to_lonlats(degrees);
-        let x = coordinates.slice(s![.., 0]);
-        let y = coordinates.slice(s![.., 1]);
-
-        [
-            min_1darray(&x).unwrap(),
-            min_1darray(&y).unwrap(),
-            max_1darray(&x).unwrap(),
-            max_1darray(&y).unwrap(),
-        ]
-        .into()
-    }
-
     /// This code implements Andrew's monotone chain algorithm, which is a simple
     /// variant of the Graham scan.  Rather than sorting by x-coordinate, instead
     /// we sort the points in CCW order around an origin O such that all points
@@ -1507,10 +1451,6 @@ impl Geometry for MultiSphericalPoint {
 
     fn centroid(&self) -> crate::sphericalpoint::SphericalPoint {
         (&self).centroid()
-    }
-
-    fn bounds(&self, degrees: bool) -> crate::angularbounds::AngularBounds {
-        (&self).bounds(degrees)
     }
 
     fn convex_hull(&self) -> Option<crate::sphericalpolygon::SphericalPolygon> {

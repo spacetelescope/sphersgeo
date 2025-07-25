@@ -49,8 +49,6 @@ class SphericalPoint:
     @property
     def length(self) -> float: ...
 
-    def bounds(self, degrees: bool = True) -> AngularBounds: ...
-
     @property
     def convex_hull(self) -> SphericalPolygon | None: ...
 
@@ -63,7 +61,6 @@ class SphericalPoint:
         | MultiSphericalPoint
         | ArcString
         | MultiArcString
-        | AngularBounds
         | SphericalPolygon
         | MultiSphericalPolygon,
         degrees: bool = True,
@@ -75,7 +72,6 @@ class SphericalPoint:
         | MultiSphericalPoint
         | ArcString
         | MultiArcString
-        | AngularBounds
         | SphericalPolygon
         | MultiSphericalPolygon,
     ) -> bool: ...
@@ -86,7 +82,6 @@ class SphericalPoint:
         | MultiSphericalPoint
         | ArcString
         | MultiArcString
-        | AngularBounds
         | SphericalPolygon
         | MultiSphericalPolygon,
     ) -> bool: ...
@@ -97,7 +92,6 @@ class SphericalPoint:
         | MultiSphericalPoint
         | ArcString
         | MultiArcString
-        | AngularBounds
         | SphericalPolygon
         | MultiSphericalPolygon,
     ) -> bool: ...
@@ -108,7 +102,6 @@ class SphericalPoint:
         | MultiSphericalPoint
         | ArcString
         | MultiArcString
-        | AngularBounds
         | SphericalPolygon
         | MultiSphericalPolygon,
     ) -> AnyGeometry | None: ...
@@ -177,8 +170,6 @@ class MultiSphericalPoint:
     @property
     def length(self) -> float: ...
 
-    def bounds(self, degrees: bool = True) -> AngularBounds: ...
-
     @property
     def convex_hull(self) -> SphericalPolygon | None: ...
 
@@ -191,7 +182,6 @@ class MultiSphericalPoint:
         | MultiSphericalPoint
         | ArcString
         | MultiArcString
-        | AngularBounds
         | SphericalPolygon
         | MultiSphericalPolygon,
         degrees: bool = True,
@@ -203,7 +193,6 @@ class MultiSphericalPoint:
         | MultiSphericalPoint
         | ArcString
         | MultiArcString
-        | AngularBounds
         | SphericalPolygon
         | MultiSphericalPolygon,
     ) -> bool: ...
@@ -214,7 +203,6 @@ class MultiSphericalPoint:
         | MultiSphericalPoint
         | ArcString
         | MultiArcString
-        | AngularBounds
         | SphericalPolygon
         | MultiSphericalPolygon,
     ) -> bool: ...
@@ -225,7 +213,6 @@ class MultiSphericalPoint:
         | MultiSphericalPoint
         | ArcString
         | MultiArcString
-        | AngularBounds
         | SphericalPolygon
         | MultiSphericalPolygon,
     ) -> bool: ...
@@ -236,7 +223,6 @@ class MultiSphericalPoint:
         | MultiSphericalPoint
         | ArcString
         | MultiArcString
-        | AngularBounds
         | SphericalPolygon
         | MultiSphericalPolygon,
     ) -> AnyGeometry | None: ...
@@ -279,8 +265,6 @@ class ArcString:
     @property
     def length(self) -> float: ...
 
-    def bounds(self, degrees: bool = True) -> AngularBounds: ...
-
     @property
     def convex_hull(self) -> SphericalPolygon | None: ...
 
@@ -293,7 +277,6 @@ class ArcString:
         | MultiSphericalPoint
         | ArcString
         | MultiArcString
-        | AngularBounds
         | SphericalPolygon
         | MultiSphericalPolygon,
         degrees: bool = True,
@@ -305,7 +288,6 @@ class ArcString:
         | MultiSphericalPoint
         | ArcString
         | MultiArcString
-        | AngularBounds
         | SphericalPolygon
         | MultiSphericalPolygon,
     ) -> bool: ...
@@ -316,7 +298,6 @@ class ArcString:
         | MultiSphericalPoint
         | ArcString
         | MultiArcString
-        | AngularBounds
         | SphericalPolygon
         | MultiSphericalPolygon,
     ) -> bool: ...
@@ -327,7 +308,6 @@ class ArcString:
         | MultiSphericalPoint
         | ArcString
         | MultiArcString
-        | AngularBounds
         | SphericalPolygon
         | MultiSphericalPolygon,
     ) -> bool: ...
@@ -338,7 +318,6 @@ class ArcString:
         | MultiSphericalPoint
         | ArcString
         | MultiArcString
-        | AngularBounds
         | SphericalPolygon
         | MultiSphericalPolygon,
     ) -> AnyGeometry | None: ...
@@ -360,8 +339,6 @@ class MultiArcString:
     @property
     def length(self) -> float: ...
 
-    def bounds(self, degrees: bool = True) -> AngularBounds: ...
-
     @property
     def convex_hull(self) -> SphericalPolygon | None: ...
 
@@ -374,7 +351,6 @@ class MultiArcString:
         | MultiSphericalPoint
         | ArcString
         | MultiArcString
-        | AngularBounds
         | SphericalPolygon
         | MultiSphericalPolygon,
         degrees: bool = True,
@@ -386,7 +362,6 @@ class MultiArcString:
         | MultiSphericalPoint
         | ArcString
         | MultiArcString
-        | AngularBounds
         | SphericalPolygon
         | MultiSphericalPolygon,
     ) -> bool: ...
@@ -397,7 +372,6 @@ class MultiArcString:
         | MultiSphericalPoint
         | ArcString
         | MultiArcString
-        | AngularBounds
         | SphericalPolygon
         | MultiSphericalPolygon,
     ) -> bool: ...
@@ -408,7 +382,6 @@ class MultiArcString:
         | MultiSphericalPoint
         | ArcString
         | MultiArcString
-        | AngularBounds
         | SphericalPolygon
         | MultiSphericalPolygon,
     ) -> bool: ...
@@ -419,88 +392,6 @@ class MultiArcString:
         | MultiSphericalPoint
         | ArcString
         | MultiArcString
-        | AngularBounds
-        | SphericalPolygon
-        | MultiSphericalPolygon,
-    ) -> AnyGeometry | None: ...
-
-
-class AngularBounds:
-    def __init__(
-        self,
-        min_x: float,
-        min_y: float,
-        max_x: float,
-        max_y: float,
-        degrees: bool = True,
-    ): ...
-
-    @property
-    def area(self) -> float: ...
-
-    @property
-    def length(self) -> float: ...
-
-    def bounds(self, degrees: bool = True) -> AngularBounds: ...
-
-    @property
-    def convex_hull(self) -> SphericalPolygon | None: ...
-
-    @property
-    def coords(self) -> MultiSphericalPoint: ...
-
-    def distance(
-        self,
-        other: SphericalPoint
-        | MultiSphericalPoint
-        | ArcString
-        | MultiArcString
-        | AngularBounds
-        | SphericalPolygon
-        | MultiSphericalPolygon,
-        degrees: bool = True,
-    ) -> float: ...
-
-    def contains(
-        self,
-        other: SphericalPoint
-        | MultiSphericalPoint
-        | ArcString
-        | MultiArcString
-        | AngularBounds
-        | SphericalPolygon
-        | MultiSphericalPolygon,
-    ) -> bool: ...
-
-    def within(
-        self,
-        other: SphericalPoint
-        | MultiSphericalPoint
-        | ArcString
-        | MultiArcString
-        | AngularBounds
-        | SphericalPolygon
-        | MultiSphericalPolygon,
-    ) -> bool: ...
-
-    def intersects(
-        self,
-        other: SphericalPoint
-        | MultiSphericalPoint
-        | ArcString
-        | MultiArcString
-        | AngularBounds
-        | SphericalPolygon
-        | MultiSphericalPolygon,
-    ) -> bool: ...
-
-    def intersection(
-        self,
-        other: SphericalPoint
-        | MultiSphericalPoint
-        | ArcString
-        | MultiArcString
-        | AngularBounds
         | SphericalPolygon
         | MultiSphericalPolygon,
     ) -> AnyGeometry | None: ...
@@ -552,8 +443,6 @@ class SphericalPolygon:
     @property
     def length(self) -> float: ...
 
-    def bounds(self, degrees: bool = True) -> AngularBounds: ...
-
     @property
     def convex_hull(self) -> SphericalPolygon | None: ...
 
@@ -566,7 +455,6 @@ class SphericalPolygon:
         | MultiSphericalPoint
         | ArcString
         | MultiArcString
-        | AngularBounds
         | SphericalPolygon
         | MultiSphericalPolygon,
         degrees: bool = True,
@@ -578,7 +466,6 @@ class SphericalPolygon:
         | MultiSphericalPoint
         | ArcString
         | MultiArcString
-        | AngularBounds
         | SphericalPolygon
         | MultiSphericalPolygon,
     ) -> bool: ...
@@ -589,7 +476,6 @@ class SphericalPolygon:
         | MultiSphericalPoint
         | ArcString
         | MultiArcString
-        | AngularBounds
         | SphericalPolygon
         | MultiSphericalPolygon,
     ) -> bool: ...
@@ -600,7 +486,6 @@ class SphericalPolygon:
         | MultiSphericalPoint
         | ArcString
         | MultiArcString
-        | AngularBounds
         | SphericalPolygon
         | MultiSphericalPolygon,
     ) -> bool: ...
@@ -611,7 +496,6 @@ class SphericalPolygon:
         | MultiSphericalPoint
         | ArcString
         | MultiArcString
-        | AngularBounds
         | SphericalPolygon
         | MultiSphericalPolygon,
     ) -> AnyGeometry | None: ...
@@ -626,8 +510,6 @@ class MultiSphericalPolygon:
     @property
     def length(self) -> float: ...
 
-    def bounds(self, degrees: bool = True) -> AngularBounds: ...
-
     @property
     def convex_hull(self) -> SphericalPolygon | None: ...
 
@@ -640,7 +522,6 @@ class MultiSphericalPolygon:
         | MultiSphericalPoint
         | ArcString
         | MultiArcString
-        | AngularBounds
         | SphericalPolygon
         | MultiSphericalPolygon,
         degrees: bool = True,
@@ -652,7 +533,6 @@ class MultiSphericalPolygon:
         | MultiSphericalPoint
         | ArcString
         | MultiArcString
-        | AngularBounds
         | SphericalPolygon
         | MultiSphericalPolygon,
     ) -> bool: ...
@@ -663,7 +543,6 @@ class MultiSphericalPolygon:
         | MultiSphericalPoint
         | ArcString
         | MultiArcString
-        | AngularBounds
         | SphericalPolygon
         | MultiSphericalPolygon,
     ) -> bool: ...
@@ -674,7 +553,6 @@ class MultiSphericalPolygon:
         | MultiSphericalPoint
         | ArcString
         | MultiArcString
-        | AngularBounds
         | SphericalPolygon
         | MultiSphericalPolygon,
     ) -> bool: ...
@@ -685,7 +563,6 @@ class MultiSphericalPolygon:
         | MultiSphericalPoint
         | ArcString
         | MultiArcString
-        | AngularBounds
         | SphericalPolygon
         | MultiSphericalPolygon,
     ) -> AnyGeometry | None: ...
@@ -696,6 +573,5 @@ class AnyGeometry(Enum):
     MultiSphericalPoint = (MultiSphericalPoint,)
     ArcString = (ArcString,)
     MultiArcString = (MultiArcString,)
-    AngularBounds = (AngularBounds,)
     SphericalPolygon = (SphericalPolygon,)
     MultiSphericalPolygon = (MultiSphericalPolygon,)

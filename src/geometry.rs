@@ -9,14 +9,8 @@ pub trait Geometry {
     // mean position of all possible points within the geometry
     fn centroid(&self) -> crate::sphericalpoint::SphericalPoint;
 
-    // bounds of this geometry
-    // WARNING: angular bounds may be misleading on a sphere!
-    fn bounds(&self, degrees: bool) -> crate::angularbounds::AngularBounds {
-        self.coords().bounds(degrees)
-    }
-
     /// lower dimension geometry that bounds the object
-    /// The boundary of a polygon is a line, the boundary of a line is a collection of points. The boundary of a point is an empty (null) collection.
+    /// The boundary of a polygon is a line, the boundary of a line is a collection of endpoints, and the boundary of a point is null.
     fn boundary(&self) -> Option<impl Geometry>;
 
     fn convex_hull(&self) -> Option<crate::sphericalpolygon::SphericalPolygon> {
@@ -90,8 +84,6 @@ pub enum AnyGeometry {
     #[pyo3(transparent)]
     MultiArcString(crate::arcstring::MultiArcString),
     #[pyo3(transparent)]
-    AngularBounds(crate::angularbounds::AngularBounds),
-    #[pyo3(transparent)]
     SphericalPolygon(crate::sphericalpolygon::SphericalPolygon),
     #[pyo3(transparent)]
     MultiSphericalPolygon(crate::sphericalpolygon::MultiSphericalPolygon),
@@ -104,7 +96,6 @@ impl Geometry for AnyGeometry {
             AnyGeometry::MultiSphericalPoint(multipoint) => multipoint.area(),
             AnyGeometry::ArcString(arcstring) => arcstring.area(),
             AnyGeometry::MultiArcString(multiarcstring) => multiarcstring.area(),
-            AnyGeometry::AngularBounds(bounding_box) => bounding_box.area(),
             AnyGeometry::SphericalPolygon(polygon) => polygon.area(),
             AnyGeometry::MultiSphericalPolygon(multipolygon) => multipolygon.area(),
         }
@@ -116,7 +107,6 @@ impl Geometry for AnyGeometry {
             AnyGeometry::MultiSphericalPoint(multipoint) => multipoint.length(),
             AnyGeometry::ArcString(arcstring) => arcstring.length(),
             AnyGeometry::MultiArcString(multiarcstring) => multiarcstring.length(),
-            AnyGeometry::AngularBounds(bounding_box) => bounding_box.length(),
             AnyGeometry::SphericalPolygon(polygon) => polygon.length(),
             AnyGeometry::MultiSphericalPolygon(multipolygon) => multipolygon.length(),
         }
@@ -128,21 +118,8 @@ impl Geometry for AnyGeometry {
             AnyGeometry::MultiSphericalPoint(multipoint) => multipoint.centroid(),
             AnyGeometry::ArcString(arcstring) => arcstring.centroid(),
             AnyGeometry::MultiArcString(multiarcstring) => multiarcstring.centroid(),
-            AnyGeometry::AngularBounds(bounding_box) => bounding_box.centroid(),
             AnyGeometry::SphericalPolygon(polygon) => polygon.centroid(),
             AnyGeometry::MultiSphericalPolygon(multipolygon) => multipolygon.centroid(),
-        }
-    }
-
-    fn bounds(&self, degrees: bool) -> crate::angularbounds::AngularBounds {
-        match self {
-            AnyGeometry::SphericalPoint(point) => point.bounds(degrees),
-            AnyGeometry::MultiSphericalPoint(multipoint) => multipoint.bounds(degrees),
-            AnyGeometry::ArcString(arcstring) => arcstring.bounds(degrees),
-            AnyGeometry::MultiArcString(multiarcstring) => multiarcstring.bounds(degrees),
-            AnyGeometry::AngularBounds(bounding_box) => bounding_box.bounds(degrees),
-            AnyGeometry::SphericalPolygon(polygon) => polygon.bounds(degrees),
-            AnyGeometry::MultiSphericalPolygon(multipolygon) => multipolygon.bounds(degrees),
         }
     }
 
@@ -152,7 +129,6 @@ impl Geometry for AnyGeometry {
             AnyGeometry::MultiSphericalPoint(multipoint) => multipoint.convex_hull(),
             AnyGeometry::ArcString(arcstring) => arcstring.convex_hull(),
             AnyGeometry::MultiArcString(multiarcstring) => multiarcstring.convex_hull(),
-            AnyGeometry::AngularBounds(bounding_box) => bounding_box.convex_hull(),
             AnyGeometry::SphericalPolygon(polygon) => polygon.convex_hull(),
             AnyGeometry::MultiSphericalPolygon(multipolygon) => multipolygon.convex_hull(),
         }
@@ -164,7 +140,6 @@ impl Geometry for AnyGeometry {
             AnyGeometry::MultiSphericalPoint(multipoint) => multipoint.coords(),
             AnyGeometry::ArcString(arcstring) => arcstring.coords(),
             AnyGeometry::MultiArcString(multiarcstring) => multiarcstring.coords(),
-            AnyGeometry::AngularBounds(bounding_box) => bounding_box.coords(),
             AnyGeometry::SphericalPolygon(polygon) => polygon.coords(),
             AnyGeometry::MultiSphericalPolygon(multipolygon) => multipolygon.coords(),
         }
@@ -184,9 +159,6 @@ impl Geometry for AnyGeometry {
             AnyGeometry::MultiArcString(multiarcstring) => multiarcstring
                 .boundary()
                 .map(|boundary| AnyGeometry::MultiSphericalPoint(boundary)),
-            AnyGeometry::AngularBounds(bounding_box) => bounding_box
-                .boundary()
-                .map(|boundary| AnyGeometry::ArcString(boundary)),
             AnyGeometry::SphericalPolygon(polygon) => polygon
                 .boundary()
                 .map(|boundary| AnyGeometry::ArcString(boundary)),
@@ -202,7 +174,6 @@ impl Geometry for AnyGeometry {
             AnyGeometry::MultiSphericalPoint(multipoint) => multipoint.representative_point(),
             AnyGeometry::ArcString(arcstring) => arcstring.representative_point(),
             AnyGeometry::MultiArcString(multiarcstring) => multiarcstring.representative_point(),
-            AnyGeometry::AngularBounds(bounding_box) => bounding_box.representative_point(),
             AnyGeometry::SphericalPolygon(polygon) => polygon.representative_point(),
             AnyGeometry::MultiSphericalPolygon(multipolygon) => multipolygon.representative_point(),
         }
@@ -230,12 +201,6 @@ impl From<crate::arcstring::ArcString> for AnyGeometry {
 impl From<crate::arcstring::MultiArcString> for AnyGeometry {
     fn from(value: crate::arcstring::MultiArcString) -> Self {
         AnyGeometry::MultiArcString(value)
-    }
-}
-
-impl From<crate::angularbounds::AngularBounds> for AnyGeometry {
-    fn from(value: crate::angularbounds::AngularBounds) -> Self {
-        AnyGeometry::AngularBounds(value)
     }
 }
 
