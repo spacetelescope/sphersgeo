@@ -18,7 +18,7 @@ pub fn interpolate_points_along_vector_arc(
     let n = if n < 2 { 2 } else { n };
     let t = Array1::<f64>::linspace(0.0, 1.0, n);
     let t = t.to_shape((n, 1)).unwrap();
-    let omega = vector_arc_length(a, b);
+    let omega = vector_arc_length(a, b, false);
 
     if a.len() == b.len() {
         if a.len() == 3 && b.len() == 3 {
@@ -120,20 +120,13 @@ pub fn arcstring_contains_point(arcstring: &ArcString, xyz: &ArrayView1<f64>) ->
         return true;
     }
 
-    let lonlat = crate::sphericalpoint::vector_to_lonlat(xyz, false);
-    // check if point is within the bounding box
-    if arcstring
-        .bounds(false)
-        .contains_lonlat(lonlat[0], lonlat[1])
-    {
-        // compare lengths to endpoints with the arc length
-        for index in 0..arcstring.points.xyz.nrows() - 1 {
-            let a = xyzs.slice(s![index, ..]);
-            let b = xyzs.slice(s![index + 1, ..]);
+    // iterate over endpoints and check if the collinear with the given point
+    for index in 0..arcstring.points.xyz.nrows() - 1 {
+        let a = xyzs.slice(s![index, ..]);
+        let b = xyzs.slice(s![index + 1, ..]);
 
-            if crate::sphericalpoint::vectors_collinear(&a.view(), xyz, &b.view()) {
-                return true;
-            }
+        if crate::sphericalpoint::vectors_collinear(&a.view(), xyz, &b.view()) {
+            return true;
         }
     }
 
@@ -269,7 +262,7 @@ impl ArcString {
     pub fn lengths(&self) -> Array1<f64> {
         Zip::from(self.points.xyz.slice(s![..-1, ..]).rows())
             .and(self.points.xyz.slice(s![1.., ..]).rows())
-            .par_map_collect(|a, b| vector_arc_length(&a, &b))
+            .par_map_collect(|a, b| vector_arc_length(&a, &b, false))
     }
 }
 
@@ -345,7 +338,7 @@ impl GeometricOperations<&SphericalPoint> for &ArcString {
     }
 
     fn contains(self, other: &SphericalPoint) -> bool {
-        self.points.contains(other) || arcstring_contains_point(self, &other.xyz.view())
+        arcstring_contains_point(self, &other.xyz.view())
     }
 
     fn within(self, _: &SphericalPoint) -> bool {
@@ -384,26 +377,19 @@ impl GeometricOperations<&MultiSphericalPoint> for &ArcString {
             return true;
         }
 
-        Zip::from(other.xyz.rows())
-            .and(other.to_lonlats(false).rows())
-            .any(|vector, lonlat| {
-                // check if point is within the bounding box
-                if self.bounds(false).contains_lonlat(lonlat[0], lonlat[1]) {
-                    let p = vector.view();
+        Zip::from(other.xyz.rows()).any(|xyz| {
+            // compare lengths to endpoints with the arc length
+            for index in 0..self.points.xyz.nrows() - 1 {
+                let a = self.points.xyz.slice(s![index, ..]);
+                let b = self.points.xyz.slice(s![index + 1, ..]);
 
-                    // compare lengths to endpoints with the arc length
-                    for index in 0..self.points.xyz.nrows() - 1 {
-                        let a = self.points.xyz.slice(s![index, ..]);
-                        let b = self.points.xyz.slice(s![index + 1, ..]);
-
-                        if crate::sphericalpoint::vectors_collinear(&a.view(), &p, &b.view()) {
-                            return true;
-                        }
-                    }
+                if crate::sphericalpoint::vectors_collinear(&a.view(), &xyz, &b.view()) {
+                    return true;
                 }
+            }
 
-                false
-            })
+            false
+        })
     }
 
     fn within(self, _: &MultiSphericalPoint) -> bool {

@@ -31,9 +31,9 @@ pub fn spherical_triangle_area(
     //     + angle_between_vectors(a, b, c, false)
     //     + angle_between_vectors(b, c, a, false)
     //     - std::f64::consts::PI
-    let ab = vector_arc_length(a, b);
-    let bc = vector_arc_length(b, c);
-    let ca = vector_arc_length(c, a);
+    let ab = vector_arc_length(a, b, false);
+    let bc = vector_arc_length(b, c, false);
+    let ca = vector_arc_length(c, a, false);
     let s = (ab + bc + ca) / 2.0;
     4.0 * ((s / 2.0).tan()
         * ((s - ab) / 2.0).tan()
@@ -1344,5 +1344,21 @@ impl GeometricOperations<&MultiSphericalPolygon> for &MultiSphericalPolygon {
         self.polygons
             .par_iter()
             .any(|polygon| polygon.touches(other))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    #[test]
+    fn test_from_cone() {
+        let lonlat = array![0., 21.];
+        let polygon = SphericalPolygon::from_cone(
+            &crate::sphericalpoint::SphericalPoint::try_from_lonlat(&lonlat.view(), true).unwrap(),
+            &8.0,
+            true,
+            64,
+        );
+        assert!(polygon.area() > 0.0);
     }
 }

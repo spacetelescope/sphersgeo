@@ -5,7 +5,7 @@ import sphersgeo
 import math
 
 
-def haversine(
+def haversine_distance(
     a: tuple[float, float], b: tuple[float, float], degrees: bool = True
 ) -> float:
     if degrees:
@@ -208,11 +208,11 @@ def test_distance():
     bc = MultiSphericalPoint(xyz[1:3, :])
     cd = MultiSphericalPoint(xyz[2:, :])
 
-    assert_allclose(a.distance(b), haversine(a.to_lonlat(True), b.to_lonlat(True)))
-    assert_allclose(b.distance(c), haversine(b.to_lonlat(True), c.to_lonlat(True)))
+    assert_allclose(a.distance(b), haversine_distance(a.to_lonlat(True), b.to_lonlat(True)))
+    assert_allclose(b.distance(c), haversine_distance(b.to_lonlat(True), c.to_lonlat(True)))
     assert_allclose(
         c.distance(d, degrees=False),
-        haversine(c.to_lonlat(False), d.to_lonlat(False), degrees=False),
+        haversine_distance(c.to_lonlat(False), d.to_lonlat(False), degrees=False),
     )
 
     assert a.distance(a) == 0.0
@@ -346,21 +346,25 @@ def test_add():
 
 
 def test_angle():
+    # right angle
     A = SphericalPoint((1.0, 0.0, 0.0))
     B = SphericalPoint((0.0, 1.0, 0.0))
     C = SphericalPoint((0.0, 0.0, 1.0))
     assert B.angle_between(A, C, degrees=False) == np.pi / 2
 
+    # antipodes
     A = SphericalPoint((1.0, 1.0, 1.0))
-    B = SphericalPoint((0.0, 0.0, 0.0))
+    B = SphericalPoint((0.0, 1.0, 0.0))
     C = SphericalPoint((-1.0, -1.0, -1.0))
     assert B.angle_between(A, C, degrees=False) == np.pi
 
+    # same point
     A = SphericalPoint((1.0, 1.0, 1.0))
-    B = SphericalPoint((0.0, 0.0, 0.0))
+    B = SphericalPoint((0.0, 1.0, 0.0))
     C = SphericalPoint((1.0, 1.0, 1.0))
     assert B.angle_between(A, C, degrees=False) == 0.0
 
+    # defined from lonlat
     A = SphericalPoint.from_lonlat((60.0, 45.0))
     B = SphericalPoint.from_lonlat((0.0, 90.0))
     C = SphericalPoint.from_lonlat((30.0, -3.0))
@@ -373,7 +377,22 @@ def test_angle_domain():
     A = SphericalPoint((0.0, 0.0, 0.0))
     B = SphericalPoint((0.0, 0.0, 0.0))
     C = SphericalPoint((0.0, 0.0, 0.0))
-    assert A.angle_between(B, C, degrees=False) == 0
+    assert np.isnan(B.angle_between(A, C, degrees=False))
+
+    A = SphericalPoint((1.0, 1.0, 1.0))
+    B = SphericalPoint((0.0, 0.0, 0.0))
+    C = SphericalPoint((-1.0, -1.0, -1.0))
+    assert np.isnan(B.angle_between(A, C, degrees=True))
+
+    A = SphericalPoint((0.0, 0.0, 0.0))
+    B = SphericalPoint((0.0, 1.0, 0.0))
+    C = SphericalPoint((1.0, 0.0, 0.0))
+    assert np.isnan(B.angle_between(A, C, degrees=True))
+
+    A = SphericalPoint((0.0, 0.0, 0.0))
+    B = SphericalPoint((0.0, 1.0, 0.0))
+    C = SphericalPoint((0.0, 0.0, 0.0))
+    assert np.isnan(B.angle_between(A, C, degrees=True))
 
 
 def test_angle_nearly_coplanar():
@@ -418,7 +437,7 @@ def test_collinear():
 
     # mirrored
     A = SphericalPoint((1.0, 1.0, 1.0))
-    B = SphericalPoint((0.0, 0.0, 0.0))
+    B = SphericalPoint((0.0, 1.0, 0.0))
     C = SphericalPoint((-1.0, -1.0, -1.0))
     assert B.collinear(A, C)
 

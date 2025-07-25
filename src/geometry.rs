@@ -9,6 +9,8 @@ pub trait Geometry {
     // mean position of all possible points within the geometry
     fn centroid(&self) -> crate::sphericalpoint::SphericalPoint;
 
+    // bounds of this geometry
+    // WARNING: angular bounds may be misleading on a sphere!
     fn bounds(&self, degrees: bool) -> crate::angularbounds::AngularBounds {
         self.coords().bounds(degrees)
     }

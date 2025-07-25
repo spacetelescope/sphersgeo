@@ -122,14 +122,19 @@ pub fn angle_between_vectors(
     //
     // angle
 
-    let ab = vector_arc_length(a, b);
-    let bc = vector_arc_length(b, c);
-    let ca = vector_arc_length(c, a);
+    let a = normalize_vector(a);
+    let b = normalize_vector(b);
+    let c = normalize_vector(c);
+
+    let ab = vector_arc_length(&a.view(), &b.view(), true);
+    let bc = vector_arc_length(&b.view(), &c.view(), true);
+    let ca = vector_arc_length(&c.view(), &a.view(), true);
 
     let mut angle = if ca < tolerance {
         // if the opposite side of the triangle is negligibly small
         0.0
     } else if ab < tolerance || bc < tolerance {
+        // if either adjacent side of the triangle is neglibly small
         (1.0 - ca.powi(2) / 2.0).acos()
     } else {
         ((ca.cos() - bc.cos() * ab.cos()) / (bc.sin() * ab.sin())).acos()
@@ -243,19 +248,43 @@ pub fn cross_vectors(a: &ArrayView2<f64>, b: &ArrayView2<f64>) -> Array2<f64> {
 }
 
 /// radians subtended by this arc on the sphere
-///    Notes
-///    -----
-///    The length is computed using the following:
 ///
-///       l = arccos(A ⋅ B) / r^2
-pub fn vector_arc_length(a: &ArrayView1<f64>, b: &ArrayView1<f64>) -> f64 {
-    // avoid domain issues of a.dot(b).acos()
-    cross_vector(a, b)
-        .view()
-        .pow2()
-        .sum()
-        .sqrt()
-        .atan2(a.dot(b))
+/// Notes
+/// -----
+/// The length is computed using the following:
+///
+///     l = arccos(A ⋅ B) / r^2
+///
+/// References
+/// ----------
+/// - https://www.mathforengineers.com/math-calculators/angle-between-two-vectors-in-spherical-coordinates.html
+pub fn vector_arc_length(a: &ArrayView1<f64>, b: &ArrayView1<f64>, normalized: bool) -> f64 {
+    if (a - b).abs().sum() < 1e-10 {
+        0.0
+    } else {
+        let distance = (a.dot(b)
+            / if normalized {
+                1.0
+            } else {
+                a.pow2().sum().sqrt() * b.pow2().sum().sqrt()
+            })
+        .acos();
+
+        if !distance.is_nan() {
+            distance
+        } else {
+            let crossed = if !normalized {
+                let a_norm = normalize_vector(a);
+                let b_norm = normalize_vector(b);
+                cross_vector(&a_norm.view(), &b_norm.view())
+            } else {
+                cross_vector(a, b)
+            };
+
+            // avoid domain issues of a.dot(b).acos()
+            crossed.view().pow2().sum().sqrt().atan2(a.dot(b))
+        }
+    }
 }
 
 fn vector_arcs_clockwise_turn(
@@ -498,7 +527,7 @@ impl SphericalPoint {
         angle_between_vectors(&a.xyz.view(), &self.xyz.view(), &b.xyz.view(), degrees)
     }
 
-    /// whether this point lies exactly between the given points
+    /// whether this point shares a line with two other points
     pub fn collinear(&self, a: &SphericalPoint, b: &SphericalPoint) -> bool {
         vectors_collinear(&a.xyz.view(), &self.xyz.view(), &b.xyz.view())
     }
@@ -643,7 +672,7 @@ impl GeometricOperations<&SphericalPoint> for &SphericalPoint {
         if self.xyz == other.xyz {
             0.0
         } else {
-            let distance = vector_arc_length(&self.xyz.view(), &other.xyz.view());
+            let distance = vector_arc_length(&self.xyz.view(), &other.xyz.view(), false);
             if degrees {
                 distance.to_degrees()
             } else {
@@ -1573,7 +1602,11 @@ impl GeometricOperations<&MultiSphericalPoint> for &MultiSphericalPoint {
                         other_xyz[1],
                         other_xyz[2],
                     ]);
-                    vector_arc_length(&self.xyz.slice(s![nearest.item as usize, ..]), &other_xyz)
+                    vector_arc_length(
+                        &self.xyz.slice(s![nearest.item as usize, ..]),
+                        &other_xyz,
+                        false,
+                    )
                 })
                 .view(),
         ) {

@@ -81,7 +81,7 @@ def test_cone_area():
         for lat in (0, 30, 60, 90, 120, 150, 180, 210, 240, 270, 300, 330):
             area = SphericalPolygon.from_cone(
                 SphericalPoint.from_lonlat((lon, lat)), radius=30, steps=64
-            ).area()
+            ).area
             if expected_area is None:
                 expected_area = area
                 print(expected_area)
