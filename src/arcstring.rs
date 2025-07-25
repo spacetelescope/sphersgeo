@@ -1,7 +1,7 @@
 use crate::{
     geometry::{ExtendMultiGeometry, GeometricOperations, Geometry, MultiGeometry},
     sphericalpoint::{
-        cross_vector, normalize_vector, point_within_kdtree, vector_arc_length,
+        cross_vector, min_1darray, normalize_vector, point_within_kdtree, vector_arc_length,
         MultiSphericalPoint, SphericalPoint,
     },
 };
@@ -118,6 +118,22 @@ pub fn arcstring_contains_point(arcstring: &ArcString, xyz: &ArrayView1<f64>) ->
     }
 
     false
+}
+
+/// for arc AB, the closest point T to given point C is
+///
+/// G = A x B
+/// F = C x G
+/// T = G x F
+///
+/// References
+/// ----------
+/// - https://stackoverflow.com/a/1302268
+fn arc_distance_to_point(a: &ArrayView1<f64>, b: &ArrayView1<f64>, xyz: &ArrayView1<f64>) -> f64 {
+    let g = crate::sphericalpoint::cross_vector(&a, &b);
+    let f = crate::sphericalpoint::cross_vector(xyz, &g.view());
+    let t = crate::sphericalpoint::cross_vector(&g.view(), &f.view());
+    vector_arc_length(&t.view(), xyz, false)
 }
 
 /// series of great circle arcs along the sphere
@@ -318,7 +334,15 @@ impl Geometry for ArcString {
 
 impl GeometricOperations<&SphericalPoint> for &ArcString {
     fn distance(self, other: &SphericalPoint, degrees: bool) -> f64 {
-        todo!()
+        let mut distances = Zip::from(self.points.xyz.rows())
+            .and(crate::sphericalpoint::shift_rows(&self.points.xyz.view(), 1).rows())
+            .par_map_collect(|a, b| arc_distance_to_point(&a, &b, &other.xyz.view()));
+
+        if degrees {
+            distances = distances.to_degrees();
+        }
+
+        crate::sphericalpoint::min_1darray(&distances.view()).unwrap_or(f64::NAN)
     }
 
     fn contains(self, other: &SphericalPoint) -> bool {
@@ -352,7 +376,22 @@ impl GeometricOperations<&SphericalPoint> for &ArcString {
 
 impl GeometricOperations<&MultiSphericalPoint> for &ArcString {
     fn distance(self, other: &MultiSphericalPoint, degrees: bool) -> f64 {
-        todo!()
+        let mut distances = Array1::<f64>::uninit(self.points.xyz.nrows() * other.xyz.nrows());
+        for (index, point) in other.xyz.rows().into_iter().enumerate() {
+            Zip::from(self.points.xyz.rows())
+                .and(crate::sphericalpoint::shift_rows(&self.points.xyz.view(), 1).rows())
+                .par_map_collect(|a, b| arc_distance_to_point(&a, &b, &point))
+                .assign_to(distances.slice_mut(s![
+                    index * other.xyz.nrows()..(index + 1) * other.xyz.nrows()
+                ]));
+        }
+        let mut distances = unsafe { distances.assume_init() };
+
+        if degrees {
+            distances = distances.to_degrees();
+        }
+
+        min_1darray(&distances.view()).unwrap_or(f64::NAN)
     }
 
     fn contains(self, other: &MultiSphericalPoint) -> bool {
