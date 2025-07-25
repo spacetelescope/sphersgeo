@@ -9,7 +9,7 @@ pub trait Geometry {
     fn length(&self) -> f64;
 
     /// point guaranteed to be within the object
-    fn representative_point(&self) -> crate::sphericalpoint::SphericalPoint;
+    fn representative(&self) -> crate::sphericalpoint::SphericalPoint;
 
     // mean position of all possible points within the geometry
     fn centroid(&self) -> crate::sphericalpoint::SphericalPoint;
@@ -123,14 +123,14 @@ impl Geometry for AnyGeometry {
         }
     }
 
-    fn representative_point(&self) -> crate::sphericalpoint::SphericalPoint {
+    fn representative(&self) -> crate::sphericalpoint::SphericalPoint {
         match self {
-            AnyGeometry::SphericalPoint(point) => point.representative_point(),
-            AnyGeometry::MultiSphericalPoint(multipoint) => multipoint.representative_point(),
-            AnyGeometry::ArcString(arcstring) => arcstring.representative_point(),
-            AnyGeometry::MultiArcString(multiarcstring) => multiarcstring.representative_point(),
-            AnyGeometry::SphericalPolygon(polygon) => polygon.representative_point(),
-            AnyGeometry::MultiSphericalPolygon(multipolygon) => multipolygon.representative_point(),
+            AnyGeometry::SphericalPoint(point) => point.representative(),
+            AnyGeometry::MultiSphericalPoint(multipoint) => multipoint.representative(),
+            AnyGeometry::ArcString(arcstring) => arcstring.representative(),
+            AnyGeometry::MultiArcString(multiarcstring) => multiarcstring.representative(),
+            AnyGeometry::SphericalPolygon(polygon) => polygon.representative(),
+            AnyGeometry::MultiSphericalPolygon(multipolygon) => multipolygon.representative(),
         }
     }
 
