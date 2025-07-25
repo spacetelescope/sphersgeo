@@ -1173,7 +1173,7 @@ mod py_sphersgeo {
                     .map(|geometry| AnyGeometry::MultiArcString(geometry)),
                 AnyGeometry::AngularBounds(bounds) => self
                     .intersection(&bounds)
-                    .map(|geometry| AnyGeometry::SphericalPolygon(geometry)),
+                    .map(|geometry| AnyGeometry::MultiSphericalPolygon(geometry)),
                 AnyGeometry::SphericalPolygon(polygon) => self
                     .intersection(&polygon)
                     .map(|geometry| AnyGeometry::MultiSphericalPolygon(geometry)),
