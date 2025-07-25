@@ -1,0 +1,30 @@
+name: cargo test
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    strategy:
+      matrix:
+        runs-on:
+          - "ubuntu-latest"
+          - "macos-13"  
+          - "macos-latest"  
+          - "windows-latest"
+    runs-on: ${{ matrix.runs-on }}
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - uses: dtolnay/rust-toolchain@stable
+      - run: cargo test
+
