@@ -1,13 +1,12 @@
+use crate::geometry::{GeometryCollection, MultiGeometry, SingleGeometry};
 use crate::vectorpoint::{cross_vectors, max_1darray, min_1darray, normalize_vector};
 use crate::{
-    geometry::BoundingBox,
+    geometry::{GeometricOperations, Geometry},
     vectorpoint::{MultiVectorPoint, VectorPoint},
 };
-use numpy::ndarray::{
-    Array1, Array2, ArrayView1, ArrayView2, Axis, Zip, array, concatenate, linspace, s, stack,
-};
+use numpy::ndarray::{concatenate, s, stack, Array1, Array2, ArrayView1, ArrayView2, Axis, Zip};
 use pyo3::prelude::*;
-use std::ops::Add;
+use std::ops::{Add, AddAssign};
 
 pub fn interpolate(
     a: &ArrayView1<f64>,
@@ -15,7 +14,7 @@ pub fn interpolate(
     n: usize,
 ) -> Result<Array2<f64>, String> {
     let n = if n < 2 { 2 } else { n };
-    let t = Array1::<f64>::from_iter(linspace(0.0, 1.0, n));
+    let t = Array1::<f64>::linspace(0.0, 1.0, n);
     let t = t.to_shape((n, 1)).unwrap();
     let omega = arc_length(a, b);
 
@@ -74,7 +73,11 @@ pub fn angle(a: &ArrayView1<f64>, b: &ArrayView1<f64>, c: &ArrayView1<f64>, degr
         (1.0 - ca.powi(2) / 2.0).acos()
     };
 
-    if degrees { angle.to_degrees() } else { angle }
+    if degrees {
+        angle.to_degrees()
+    } else {
+        angle
+    }
 }
 
 /// given points A, B, and C on the unit sphere, retrieve the angle at B between arc AB and arc BC
@@ -105,7 +108,11 @@ pub fn angles(
             }
         });
 
-    if degrees { angles.to_degrees() } else { angles }
+    if degrees {
+        angles.to_degrees()
+    } else {
+        angles
+    }
 }
 
 /// radians subtended by this arc on the sphere
@@ -147,15 +154,13 @@ impl Into<MultiVectorPoint> for ArcString {
     }
 }
 
-impl Into<Vec<ArcString>> for ArcString {
+impl Into<Vec<ArcString>> for &ArcString {
     fn into(self) -> Vec<ArcString> {
-        let vectors = self.points.xyz;
+        let vectors = &self.points.xyz;
         let mut arcs = vec![];
         for index in 0..vectors.nrows() - 1 {
             arcs.push(ArcString {
-                points: MultiVectorPoint {
-                    xyz: vectors.slice(s![index..index + 1, ..]).to_owned(),
-                },
+                points: MultiVectorPoint::new(vectors.slice(s![index..index + 1, ..]).to_owned()),
             })
         }
 
@@ -165,10 +170,10 @@ impl Into<Vec<ArcString>> for ArcString {
 
 impl ArcString {
     pub fn midpoints(&self) -> MultiVectorPoint {
-        MultiVectorPoint {
-            xyz: (&self.points.xyz.slice(s![..-1, ..]) + &self.points.xyz.slice(s![1.., ..]) / 2.0)
+        MultiVectorPoint::new(
+            (&self.points.xyz.slice(s![..-1, ..]) + &self.points.xyz.slice(s![1.., ..]) / 2.0)
                 .to_owned(),
-        }
+        )
     }
 
     pub fn lengths(&self) -> Array1<f64> {
@@ -176,14 +181,111 @@ impl ArcString {
             .and(self.points.xyz.slice(s![1.., ..]).rows())
             .par_map_collect(|a, b| arc_length(&a, &b))
     }
+}
 
-    pub fn length(&self) -> f64 {
+impl ToString for ArcString {
+    fn to_string(&self) -> String {
+        format!("ArcString({0})", self.points.to_string())
+    }
+}
+
+impl PartialEq for ArcString {
+    fn eq(&self, other: &ArcString) -> bool {
+        &self == &other
+    }
+}
+
+impl PartialEq<&ArcString> for ArcString {
+    fn eq(&self, other: &&ArcString) -> bool {
+        &self.points == &other.points
+    }
+}
+
+impl Geometry for &ArcString {
+    fn bounds(&self, degrees: bool) -> [f64; 4] {
+        let coordinates = self.points.to_lonlats(degrees);
+
+        let x = coordinates.slice(s![.., 0]);
+        let y = coordinates.slice(s![.., 1]);
+
+        [
+            min_1darray(&x).unwrap_or(std::f64::NAN),
+            min_1darray(&y).unwrap_or(std::f64::NAN),
+            max_1darray(&x).unwrap_or(std::f64::NAN),
+            max_1darray(&y).unwrap_or(std::f64::NAN),
+        ]
+    }
+
+    fn area(&self) -> f64 {
+        0.
+    }
+
+    fn length(&self) -> f64 {
         self.lengths().sum()
     }
 
-    pub fn contains(&self, point: &VectorPoint) -> bool {
+    fn convex_hull(&self) -> Option<crate::sphericalpolygon::SphericalPolygon> {
+        (&self.points).convex_hull()
+    }
+}
+
+impl Geometry for ArcString {
+    fn area(&self) -> f64 {
+        (&self).area()
+    }
+
+    fn length(&self) -> f64 {
+        (&self).length()
+    }
+
+    fn bounds(&self, degrees: bool) -> [f64; 4] {
+        (&self).bounds(degrees)
+    }
+
+    fn convex_hull(&self) -> Option<crate::sphericalpolygon::SphericalPolygon> {
+        (&self).convex_hull()
+    }
+}
+
+impl SingleGeometry for ArcString {}
+
+impl GeometricOperations<&ArcString> for &ArcString {
+    fn distance(&self, other: &ArcString) -> f64 {
+        // TODO: implement
+        -1.
+    }
+
+    fn contains(&self, other: &ArcString) -> bool {
+        // TODO: implement
+        false
+    }
+
+    fn within(&self, other: &ArcString) -> bool {
+        // TODO: implement
+        false
+    }
+
+    fn intersects(&self, other: &ArcString) -> bool {
+        // TODO: write an intersects algorithm
+        self.intersection(other).is_some()
+    }
+
+    #[allow(refining_impl_trait)]
+    fn intersection(&self, other: &ArcString) -> Option<MultiVectorPoint> {
+        // TODO: implement
+        None
+    }
+}
+
+impl GeometricOperations<&VectorPoint> for &ArcString {
+    fn distance(&self, other: &VectorPoint) -> f64 {
+        // TODO: implement
+        -1.
+    }
+
+    fn contains(&self, point: &VectorPoint) -> bool {
         // check if point is one of the vertices of this linestring
-        if self.points.contains(point) {
+        if (&self.points).contains(point) {
             return true;
         }
 
@@ -218,74 +320,25 @@ impl ArcString {
         return false;
     }
 
-    pub fn intersects(&self, other: &Self) -> bool {
-        // TODO: write an intersects algorithm
+    fn within(&self, other: &VectorPoint) -> bool {
+        false
+    }
+
+    fn intersects(&self, other: &VectorPoint) -> bool {
         self.intersection(other).is_some()
     }
 
-    pub fn intersection(&self, other: &Self) -> Option<MultiVectorPoint> {
+    #[allow(refining_impl_trait)]
+    fn intersection(&self, other: &VectorPoint) -> Option<VectorPoint> {
         // TODO: implement
         None
-    }
-}
-
-impl ToString for ArcString {
-    fn to_string(&self) -> String {
-        format!("ArcString({0})", self.points.to_string())
-    }
-}
-
-impl PartialEq for ArcString {
-    fn eq(&self, other: &ArcString) -> bool {
-        &self == &other
-    }
-}
-
-impl PartialEq<&ArcString> for ArcString {
-    fn eq(&self, other: &&ArcString) -> bool {
-        &self.points == &other.points
-    }
-}
-
-impl Add for ArcString {
-    type Output = Self;
-
-    fn add(self, rhs: Self) -> Self::Output {
-        &self + &rhs
-    }
-}
-
-impl Add<&ArcString> for &ArcString {
-    type Output = ArcString;
-
-    fn add(self, rhs: &ArcString) -> Self::Output {
-        Self::Output {
-            points: &self.points + &rhs.points,
-        }
-    }
-}
-
-impl BoundingBox for ArcString {
-    fn bounds(&self, degrees: bool) -> [f64; 4] {
-        let coordinates = self.points.to_lonlats(degrees);
-
-        let x = coordinates.slice(s![.., 0]);
-        let y = coordinates.slice(s![.., 1]);
-
-        [
-            min_1darray(&x).unwrap_or(std::f64::NAN),
-            min_1darray(&y).unwrap_or(std::f64::NAN),
-            max_1darray(&x).unwrap_or(std::f64::NAN),
-            max_1darray(&y).unwrap_or(std::f64::NAN),
-        ]
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::geometry::Distance;
-    use crate::vectorpoint::{MultiVectorPoint, VectorPoint};
+    use numpy::ndarray::{array, linspace, s};
 
     #[test]
     fn test_midpoint() {
@@ -324,12 +377,10 @@ mod tests {
             )
             .unwrap(),
         };
-        assert!(
-            arc.contains(
-                &VectorPoint::try_from_lonlat(&array![349.10660535, -12.30998866].view(), true)
-                    .unwrap()
-            )
-        );
+        assert!((&arc).contains(
+            &VectorPoint::try_from_lonlat(&array![349.10660535, -12.30998866].view(), true)
+                .unwrap()
+        ));
 
         let vertical_arc = ArcString {
             points: MultiVectorPoint::try_from_lonlats(
@@ -339,11 +390,8 @@ mod tests {
             .unwrap(),
         };
         for i in linspace(1., 29., 1) {
-            assert!(
-                vertical_arc.contains(
-                    &VectorPoint::try_from_lonlat(&array![60.0, i].view(), true).unwrap()
-                )
-            )
+            assert!((&vertical_arc)
+                .contains(&VectorPoint::try_from_lonlat(&array![60.0, i].view(), true).unwrap()))
         }
 
         let horizontal_arc = ArcString {
@@ -354,11 +402,8 @@ mod tests {
             .unwrap(),
         };
         for i in linspace(1., 29., 1) {
-            assert!(
-                horizontal_arc.contains(
-                    &VectorPoint::try_from_lonlat(&array![i, 60.0].view(), true).unwrap()
-                )
-            );
+            assert!((&horizontal_arc)
+                .contains(&VectorPoint::try_from_lonlat(&array![i, 60.0].view(), true).unwrap()));
         }
     }
 
@@ -373,55 +418,41 @@ mod tests {
         let a = VectorPoint::try_from_lonlat(&a_lonlat.view(), true).unwrap();
         let b = VectorPoint::try_from_lonlat(&b_lonlat.view(), true).unwrap();
 
-        assert!(
-            Zip::from(&lonlats.slice(s![0, ..]))
-                .and(&a_lonlat.view())
-                .all(|test, reference| (test - reference).abs() < tolerance)
-        );
-        assert!(
-            Zip::from(&lonlats.slice(s![-1, ..]))
-                .and(&b_lonlat.view())
-                .all(|test, reference| (test - reference).abs() < tolerance)
-        );
+        assert!(Zip::from(&lonlats.slice(s![0, ..]))
+            .and(&a_lonlat.view())
+            .all(|test, reference| (test - reference).abs() < tolerance));
+        assert!(Zip::from(&lonlats.slice(s![-1, ..]))
+            .and(&b_lonlat.view())
+            .all(|test, reference| (test - reference).abs() < tolerance));
 
         let xyzs = interpolate(&a.xyz.view(), &b.xyz.view(), 10).unwrap();
 
-        assert!(
-            Zip::from(&xyzs.slice(s![0, ..]))
-                .and(&a.xyz.view())
-                .all(|test, reference| (test - reference).abs() < tolerance)
-        );
-        assert!(
-            Zip::from(&xyzs.slice(s![-1, ..]))
-                .and(&b.xyz.view())
-                .all(|test, reference| (test - reference).abs() < tolerance)
-        );
+        assert!(Zip::from(&xyzs.slice(s![0, ..]))
+            .and(&a.xyz.view())
+            .all(|test, reference| (test - reference).abs() < tolerance));
+        assert!(Zip::from(&xyzs.slice(s![-1, ..]))
+            .and(&b.xyz.view())
+            .all(|test, reference| (test - reference).abs() < tolerance));
 
         let arc_from_lonlats = ArcString {
             points: MultiVectorPoint::try_from_lonlats(&lonlats.view(), true).unwrap(),
         };
         let arc_from_xyzs = ArcString {
-            points: MultiVectorPoint {
-                xyz: xyzs.to_owned(),
-            },
+            points: MultiVectorPoint::new(xyzs.to_owned()),
         };
 
         for xyz in xyzs.rows() {
-            let point = VectorPoint {
-                xyz: xyz.to_owned(),
-            };
-            assert!(arc_from_lonlats.contains(&point));
-            assert!(arc_from_xyzs.contains(&point));
+            let point = VectorPoint::new(xyz.to_owned());
+            assert!((&arc_from_lonlats).contains(&point));
+            assert!((&arc_from_xyzs).contains(&point));
         }
 
         let distances_from_lonlats = arc_from_lonlats.lengths();
         let distances_from_xyz = arc_from_xyzs.lengths();
 
-        assert!(
-            Zip::from(&distances_from_lonlats)
-                .and(&distances_from_xyz)
-                .all(|from_lonlats, from_xyz| (from_lonlats - from_xyz).abs() < tolerance)
-        );
+        assert!(Zip::from(&distances_from_lonlats)
+            .and(&distances_from_xyz)
+            .all(|from_lonlats, from_xyz| (from_lonlats - from_xyz).abs() < tolerance));
     }
 
     #[test]
@@ -439,15 +470,13 @@ mod tests {
 
         let reference_intersection = array![0.99912414, -0.02936109, -0.02981403];
 
-        let ab = ArcString { points: a + b };
-        let cd = ArcString { points: c + d };
-        assert!(ab.intersects(&cd));
-        let r = ab.intersection(&cd).unwrap();
+        let ab = ArcString { points: &a + &b };
+        let cd = ArcString { points: &c + &d };
+        assert!((&ab).intersects(&cd));
+        let r = (&ab).intersection(&cd).unwrap();
         assert!(r.len() == 3);
-        assert!(
-            Zip::from(r.xyz.rows())
-                .all(|point| (&point - &reference_intersection.view()).abs().sum() < tolerance)
-        );
+        assert!(Zip::from(r.xyz.rows())
+            .all(|point| (&point - &reference_intersection.view()).abs().sum() < tolerance));
 
         // assert not np.all(great_circle_arc.intersects([A, E], [B, F], [C], [D]))
         // r = great_circle_arc.intersection([A, E], [B, F], [C], [D])
@@ -456,38 +485,38 @@ mod tests {
         // assert np.all(np.isnan(r[1]))
 
         // Test parallel arcs
-        let r = ab.intersection(&ab).unwrap();
+        let r = (&ab).intersection(&ab).unwrap();
         assert!(r.xyz.is_all_nan());
     }
 
     #[test]
-    fn test_distance() {
+    fn test_length() {
         let tolerance = 1e-10;
 
         let a = VectorPoint::try_from_lonlat(&array![90.0, 0.0].view(), true).unwrap();
         let b = VectorPoint::try_from_lonlat(&array![-90.0, 0.0].view(), true).unwrap();
-        assert!(((&a).distance(&b) - std::f64::consts::PI).abs() < tolerance);
+        let ab = ArcString { points: &a + &b };
+        assert_eq!(ab.length(), (&a).distance(&b));
+        assert!((ab.length() - std::f64::consts::PI).abs() < tolerance);
 
         let a = VectorPoint::try_from_lonlat(&array![135.0, 0.0].view(), true).unwrap();
         let b = VectorPoint::try_from_lonlat(&array![-90.0, 0.0].view(), true).unwrap();
-        assert!(((&a).distance(&b) - (3.0 / 4.0) * std::f64::consts::PI).abs() < tolerance);
+        let ab = ArcString { points: &a + &b };
+        assert_eq!(ab.length(), (&a).distance(&b));
+        assert!((ab.length() - (3.0 / 4.0) * std::f64::consts::PI).abs() < tolerance);
 
         let a = VectorPoint::try_from_lonlat(&array![0.0, 0.0].view(), true).unwrap();
         let b = VectorPoint::try_from_lonlat(&array![0.0, 90.0].view(), true).unwrap();
-        assert!(((&a).distance(&b) - std::f64::consts::PI / 2.0).abs() < tolerance);
+        let ab = ArcString { points: &a + &b };
+        assert_eq!(ab.length(), (&a).distance(&b));
+        assert!((ab.length() - std::f64::consts::PI / 2.0).abs() < tolerance);
     }
 
     #[test]
     fn test_angle() {
-        let a = VectorPoint {
-            xyz: array![1.0, 0.0, 0.0],
-        };
-        let b = VectorPoint {
-            xyz: array![0.0, 1.0, 0.0],
-        };
-        let c = VectorPoint {
-            xyz: array![0.0, 0.0, 1.0],
-        };
+        let a = VectorPoint::new(array![1.0, 0.0, 0.0]);
+        let b = VectorPoint::new(array![0.0, 1.0, 0.0]);
+        let c = VectorPoint::new(array![0.0, 0.0, 1.0]);
         assert_eq!(b.angle(&a, &c, false), (3.0 / 2.0) * std::f64::consts::PI);
 
         // TODO: More angle tests
@@ -495,51 +524,37 @@ mod tests {
 
     #[test]
     fn test_angle_domain() {
-        let a = VectorPoint {
-            xyz: array![0.0, 0.0, 0.0],
-        };
-        let b = VectorPoint {
-            xyz: array![0.0, 0.0, 0.0],
-        };
-        let c = VectorPoint {
-            xyz: array![0.0, 0.0, 0.0],
-        };
+        let a = VectorPoint::new(array![0.0, 0.0, 0.0]);
+        let b = VectorPoint::new(array![0.0, 0.0, 0.0]);
+        let c = VectorPoint::new(array![0.0, 0.0, 0.0]);
         assert_eq!(b.angle(&a, &c, false), (3.0 / 2.0) * std::f64::consts::PI);
         assert!(!(b.angle(&a, &c, false)).is_infinite());
     }
 
     #[test]
     fn test_length_domain() {
-        let a = VectorPoint {
-            xyz: array![std::f64::NAN, 0.0, 0.0],
-        };
-        let b = VectorPoint {
-            xyz: array![0.0, 0.0, std::f64::INFINITY],
-        };
+        let a = VectorPoint::new(array![std::f64::NAN, 0.0, 0.0]);
+        let b = VectorPoint::new(array![0.0, 0.0, std::f64::INFINITY]);
         assert!((&a).distance(&b).is_nan());
     }
 
     #[test]
     fn test_angle_nearly_coplanar_vec() {
         // test from issue #222 + extra values
-        let a = MultiVectorPoint {
-            xyz: array![1.0, 1.0, 1.0].broadcast((5, 3)).unwrap().to_owned(),
-        };
-        let b = MultiVectorPoint {
-            xyz: array![1.0, 0.9999999, 1.0]
+        let a = MultiVectorPoint::new(array![1.0, 1.0, 1.0].broadcast((5, 3)).unwrap().to_owned());
+        let b = MultiVectorPoint::new(
+            array![1.0, 0.9999999, 1.0]
                 .broadcast((5, 3))
                 .unwrap()
                 .to_owned(),
-        };
-        let c = MultiVectorPoint {
-            xyz: array![
-                [1.0, 0.5, 1.0],
-                [1.0, 0.15, 1.0],
-                [1.0, 0.001, 1.0],
-                [1.0, 0.15, 1.0],
-                [-1.0, 0.1, -1.0],
-            ],
-        };
+        );
+        let c = MultiVectorPoint::new(array![
+            [1.0, 0.5, 1.0],
+            [1.0, 0.15, 1.0],
+            [1.0, 0.001, 1.0],
+            [1.0, 0.15, 1.0],
+            [-1.0, 0.1, -1.0],
+        ]);
         // vectors = np.stack([A, B, C], axis=0)
         let angles = b.angles(&a, &c, false);
 

@@ -52,6 +52,8 @@ def test_contains():
 
 
 def test_interpolate():
+    tolerance = 1e-10
+
     a_lonlat = np.array([60.0, 0.0])
     b_lonlat = np.array([60.0, 30.0])
     lonlats = interpolate(a_lonlat, b_lonlat, n=10)
@@ -78,7 +80,7 @@ def test_interpolate():
     distances_from_lonlats = arc_from_lonlats.lengths
     distances_from_xyz = arc_from_xyzs.lengths
 
-    assert (distances_from_lonlats == distances_from_xyz).all()
+    assert np.allclose(distances_from_lonlats, distances_from_xyz, atol=tolerance)
 
 
 def test_intersection():

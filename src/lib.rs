@@ -14,7 +14,7 @@ use pyo3::{exceptions::PyValueError, prelude::*, types::PyType};
 pub mod sphersgeo {
     use super::*;
     use crate::arcstring::{angle, angles, arc_length, interpolate};
-    use crate::geometry::{BoundingBox, Distance};
+    use crate::geometry::{GeometricOperations, Geometry, GeometryCollection, MultiGeometry};
 
     #[pymodule_export]
     use super::vectorpoint::VectorPoint;
@@ -92,12 +92,17 @@ pub mod sphersgeo {
             self.vector_rotate_around(other, theta, degrees)
         }
 
+        #[pyo3(name = "combine")]
+        fn py_combine(&self, other: &Self) -> MultiVectorPoint {
+            self + other
+        }
+
         fn __add__(&self, other: &Self) -> MultiVectorPoint {
             self + other
         }
 
         fn __eq__(&self, other: &Self) -> bool {
-            &self.xyz == &other.xyz
+            self.xyz == other.xyz
         }
 
         fn __str__(&self) -> String {
@@ -209,7 +214,7 @@ pub mod sphersgeo {
         #[getter]
         #[pyo3(name = "vector_points")]
         fn py_vector_points(&self) -> Vec<VectorPoint> {
-            self.to_owned().into()
+            self.into()
         }
 
         /// lengths of the underlying xyz vectors
@@ -227,6 +232,20 @@ pub mod sphersgeo {
             VectorPoint {
                 xyz: self.xyz.slice(s![index, ..]).to_owned(),
             }
+        }
+
+        #[pyo3(name = "append")]
+        fn py_append(&mut self, other: VectorPoint) {
+            self.push(other);
+        }
+
+        #[pyo3(name = "extend")]
+        fn py_extend(&mut self, other: Self) {
+            self.extend(other);
+        }
+
+        fn __iadd__(&mut self, other: &Self) {
+            *self += other;
         }
 
         fn __add__(&self, other: &Self) -> Self {
@@ -327,7 +346,7 @@ pub mod sphersgeo {
         #[getter]
         #[pyo3(name = "arcs")]
         fn py_arcs(&self) -> Vec<ArcString> {
-            self.to_owned().into()
+            self.into()
         }
 
         /// midpoints of each arc
@@ -359,10 +378,6 @@ pub mod sphersgeo {
         #[pyo3(name = "intersection", signature=(other))]
         fn py_intersection(&self, other: &Self) -> Option<MultiVectorPoint> {
             self.intersection(other)
-        }
-
-        fn __add__(&self, other: &Self) -> Self {
-            self + other
         }
 
         fn __eq__(&self, other: &Self) -> bool {
