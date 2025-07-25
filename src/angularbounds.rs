@@ -1,8 +1,5 @@
 use crate::geometry::{GeometricOperations, Geometry};
-use numpy::{
-    datetime::units::Seconds,
-    ndarray::{array, s, Array1},
-};
+use numpy::ndarray::{array, s, Array1};
 use pyo3::prelude::*;
 use rayon::iter::{IntoParallelRefIterator, ParallelIterator};
 
@@ -143,8 +140,8 @@ impl Geometry for &AngularBounds {
         .ok()
     }
 
-    fn points(&self) -> crate::vectorpoint::MultiVectorPoint {
-        crate::vectorpoint::MultiVectorPoint::try_from_lonlats(
+    fn points(&self) -> crate::sphericalpoint::MultiSphericalPoint {
+        crate::sphericalpoint::MultiSphericalPoint::try_from_lonlats(
             &array![
                 [self.min_x, self.min_y],
                 [self.min_x, self.max_y],
@@ -171,7 +168,7 @@ impl Geometry for AngularBounds {
         (&self).bounds(degrees)
     }
 
-    fn points(&self) -> crate::vectorpoint::MultiVectorPoint {
+    fn points(&self) -> crate::sphericalpoint::MultiSphericalPoint {
         (&self).points()
     }
 
@@ -180,43 +177,43 @@ impl Geometry for AngularBounds {
     }
 }
 
-impl GeometricOperations<&crate::vectorpoint::VectorPoint> for &AngularBounds {
-    fn distance(self, other: &crate::vectorpoint::VectorPoint) -> f64 {
+impl GeometricOperations<&crate::sphericalpoint::SphericalPoint> for &AngularBounds {
+    fn distance(self, other: &crate::sphericalpoint::SphericalPoint) -> f64 {
         match self.convex_hull() {
             Some(hull) => hull.distance(other),
             None => self.points().distance(other),
         }
     }
 
-    fn contains(self, other: &crate::vectorpoint::VectorPoint) -> bool {
+    fn contains(self, other: &crate::sphericalpoint::SphericalPoint) -> bool {
         let point = other.to_lonlat(self.degrees);
 
         self.contains_lonlat(point[0], point[1])
     }
 
-    fn within(self, _: &crate::vectorpoint::VectorPoint) -> bool {
+    fn within(self, _: &crate::sphericalpoint::SphericalPoint) -> bool {
         false
     }
 
-    fn intersects(self, other: &crate::vectorpoint::VectorPoint) -> bool {
+    fn intersects(self, other: &crate::sphericalpoint::SphericalPoint) -> bool {
         other.intersects(self)
     }
 
     #[allow(refining_impl_trait)]
     fn intersection(
         self,
-        other: &crate::vectorpoint::VectorPoint,
-    ) -> Option<crate::vectorpoint::VectorPoint> {
+        other: &crate::sphericalpoint::SphericalPoint,
+    ) -> Option<crate::sphericalpoint::SphericalPoint> {
         other.intersection(self)
     }
 }
 
-impl GeometricOperations<&crate::vectorpoint::MultiVectorPoint> for &AngularBounds {
-    fn distance(self, other: &crate::vectorpoint::MultiVectorPoint) -> f64 {
+impl GeometricOperations<&crate::sphericalpoint::MultiSphericalPoint> for &AngularBounds {
+    fn distance(self, other: &crate::sphericalpoint::MultiSphericalPoint) -> f64 {
         todo!()
     }
 
-    fn contains(self, other: &crate::vectorpoint::MultiVectorPoint) -> bool {
+    fn contains(self, other: &crate::sphericalpoint::MultiSphericalPoint) -> bool {
         other
             .to_lonlats(self.degrees)
             .rows()
@@ -229,11 +226,11 @@ impl GeometricOperations<&crate::vectorpoint::MultiVectorPoint> for &AngularBoun
             })
     }
 
-    fn within(self, _: &crate::vectorpoint::MultiVectorPoint) -> bool {
+    fn within(self, _: &crate::sphericalpoint::MultiSphericalPoint) -> bool {
         false
     }
 
-    fn intersects(self, other: &crate::vectorpoint::MultiVectorPoint) -> bool {
+    fn intersects(self, other: &crate::sphericalpoint::MultiSphericalPoint) -> bool {
         other
             .to_lonlats(self.degrees)
             .rows()
@@ -249,8 +246,8 @@ impl GeometricOperations<&crate::vectorpoint::MultiVectorPoint> for &AngularBoun
     #[allow(refining_impl_trait)]
     fn intersection(
         self,
-        other: &crate::vectorpoint::MultiVectorPoint,
-    ) -> Option<crate::vectorpoint::MultiVectorPoint> {
+        other: &crate::sphericalpoint::MultiSphericalPoint,
+    ) -> Option<crate::sphericalpoint::MultiSphericalPoint> {
         let points: Vec<Array1<f64>> = other
             .to_lonlats(self.degrees)
             .rows()
@@ -269,7 +266,7 @@ impl GeometricOperations<&crate::vectorpoint::MultiVectorPoint> for &AngularBoun
             .collect();
 
         if !points.is_empty() {
-            Some(crate::vectorpoint::MultiVectorPoint::try_from(points).unwrap())
+            Some(crate::sphericalpoint::MultiSphericalPoint::try_from(points).unwrap())
         } else {
             None
         }

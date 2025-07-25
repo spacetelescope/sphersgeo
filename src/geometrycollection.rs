@@ -51,14 +51,14 @@ impl Geometry for &GeometryCollection {
         self.points().convex_hull()
     }
 
-    fn points(&self) -> crate::vectorpoint::MultiVectorPoint {
+    fn points(&self) -> crate::sphericalpoint::MultiSphericalPoint {
         if self.len() > 0 {
             self.geometries
                 .iter()
                 .map(|geometry| geometry.points())
                 .sum()
         } else {
-            crate::vectorpoint::MultiVectorPoint::try_from(array![[
+            crate::sphericalpoint::MultiSphericalPoint::try_from(array![[
                 std::f64::NAN,
                 std::f64::NAN,
                 std::f64::NAN
@@ -81,7 +81,7 @@ impl Geometry for GeometryCollection {
         (&self).bounds(degrees)
     }
 
-    fn points(&self) -> crate::vectorpoint::MultiVectorPoint {
+    fn points(&self) -> crate::sphericalpoint::MultiSphericalPoint {
         (&self).points()
     }
 
@@ -106,23 +106,24 @@ impl ExtendMultiGeometry<AnyGeometry> for GeometryCollection {
     }
 }
 
-impl ExtendMultiGeometry<crate::vectorpoint::VectorPoint> for GeometryCollection {
+impl ExtendMultiGeometry<crate::sphericalpoint::SphericalPoint> for GeometryCollection {
     fn extend(&mut self, other: GeometryCollection) {
         self.geometries.extend(other.geometries);
     }
 
-    fn push(&mut self, other: crate::vectorpoint::VectorPoint) {
-        self.geometries.push(AnyGeometry::VectorPoint(other));
+    fn push(&mut self, other: crate::sphericalpoint::SphericalPoint) {
+        self.geometries.push(AnyGeometry::SphericalPoint(other));
     }
 }
 
-impl ExtendMultiGeometry<crate::vectorpoint::MultiVectorPoint> for GeometryCollection {
+impl ExtendMultiGeometry<crate::sphericalpoint::MultiSphericalPoint> for GeometryCollection {
     fn extend(&mut self, other: GeometryCollection) {
         self.geometries.extend(other.geometries);
     }
 
-    fn push(&mut self, other: crate::vectorpoint::MultiVectorPoint) {
-        self.geometries.push(AnyGeometry::MultiVectorPoint(other));
+    fn push(&mut self, other: crate::sphericalpoint::MultiSphericalPoint) {
+        self.geometries
+            .push(AnyGeometry::MultiSphericalPoint(other));
     }
 }
 
