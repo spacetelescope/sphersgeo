@@ -348,7 +348,7 @@ def test_convex_hull(repeat_pts):
     if repeat_pts:
         lonlats = lonlats + lonlats[::-1]
 
-    points = MultiSphericalPoint.from_lonlats(lonlats, degrees=True)
+    points = MultiSphericalPoint.from_lonlat(lonlats, degrees=True)
 
     # The method call
     poly = points.convex_hull

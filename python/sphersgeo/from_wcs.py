@@ -53,7 +53,7 @@ def polygon_from_wcs(
     Y[-1] = 1
 
     # Use wcslib to retrieve lonlats from pixels
-    points = MultiSphericalPoint.from_lonlats(
+    points = MultiSphericalPoint.from_lonlat(
         np.stack(wcs.all_pix2world(X, Y, 1), axis=1), degrees=True
     )
 

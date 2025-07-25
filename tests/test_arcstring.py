@@ -77,14 +77,14 @@ def test_midpoint():
 
 def test_contains():
     diagonal_arc = ArcString(
-        MultiSphericalPoint.from_lonlats(
+        MultiSphericalPoint.from_lonlat(
             [(-30.0, -30.0), (30.0, 30.0)], degrees=True
         ).xyz
     )
     assert diagonal_arc.contains(SphericalPoint.from_lonlat((0, 0), degrees=True))
 
     vertical_arc = ArcString(
-        MultiSphericalPoint.from_lonlats([(60.0, 0.0), (60.0, 30.0)], degrees=True).xyz,
+        MultiSphericalPoint.from_lonlat([(60.0, 0.0), (60.0, 30.0)], degrees=True).xyz,
     )
     for latitude in np.arange(1.0, 29.0, 1.0):
         assert vertical_arc.contains(
@@ -92,7 +92,7 @@ def test_contains():
         )
 
     horizontal_arc = ArcString(
-        MultiSphericalPoint.from_lonlats([(0.0, 60.0), (30.0, 60.0)], degrees=True).xyz,
+        MultiSphericalPoint.from_lonlat([(0.0, 60.0), (30.0, 60.0)], degrees=True).xyz,
     )
     for longitude in np.arange(1.0, 29.0, 1.0):
         assert not horizontal_arc.contains(
@@ -148,7 +148,7 @@ def test_intersection():
     assert AB.intersects(CD)
     assert not AB.intersects(EF)
     assert_allclose(
-        AB.intersection(CD).to_lonlats(degrees=True), [(358.316743, -1.708471)]
+        AB.intersection(CD).to_lonlat(degrees=True), [(358.316743, -1.708471)]
     )
 
     # intersection with later part
@@ -160,7 +160,7 @@ def test_intersection():
     AB_EF = MultiArcString([AB, EF])
     assert AB_EF.intersects(CD)
     assert_allclose(
-        AB_EF.intersection(CD).to_lonlats(degrees=True), [(358.316743, -1.708471)]
+        AB_EF.intersection(CD).to_lonlat(degrees=True), [(358.316743, -1.708471)]
     )
 
     # ensure non-intersection of non-parallel pre-terminated arcs
@@ -190,7 +190,7 @@ def test_crosses_self():
     ABCD = ArcString([A, B, C, D])
     assert ABCD.crosses_self
     assert_allclose(
-        ABCD.crossings_with_self.to_lonlats(degrees=True),
+        ABCD.crossings_with_self.to_lonlat(degrees=True),
         [(358.316743, -1.708471)],
     )
 
@@ -199,7 +199,7 @@ def test_crosses_self():
     assert ABCDFE.crosses_self
     len(ABCDFE.crossings_with_self) == 1
     assert_allclose(
-        ABCDFE.crossings_with_self.to_lonlats(degrees=True), [(358.316743, -1.708471)]
+        ABCDFE.crossings_with_self.to_lonlat(degrees=True), [(358.316743, -1.708471)]
     )
 
     # double self-crossing

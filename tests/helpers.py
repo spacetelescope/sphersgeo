@@ -12,7 +12,7 @@ ROOT_DIR = Path(__file__).parent / "data"
 
 
 def get_point_set(density: int = 25):
-    return MultiSphericalPoint.from_lonlats(
+    return MultiSphericalPoint.from_lonlat(
         [
             (j, i)
             for i in np.linspace(-85, 85, density, True)
