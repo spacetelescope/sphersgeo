@@ -378,6 +378,8 @@ impl SphericalPolygon {
             .par_map_collect(|spoke| xyz.vector_rotate_around(center, spoke, false).xyz)
             .to_vec();
 
+        println!("{vertices:?}");
+
         Self::new(
             ArcString::from(MultiSphericalPoint::try_from(&vertices).unwrap()),
             Some(center.to_owned()),

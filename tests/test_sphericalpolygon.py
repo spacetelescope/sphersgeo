@@ -129,11 +129,12 @@ def test_overlap():
 
 
 def test_from_wcs():
+    import sphersgeo
     from astropy.io import fits
 
     header = fits.getheader(DATA_DIRECTORY / "j8bt06nyq_flt.fits", ext=("SCI", 1))
 
-    poly = SphericalPolygon.from_wcs(header)
+    poly = sphersgeo.from_wcs.polygon_from_wcs(header)
     for lonlat in poly.to_lonlat(degrees=True):
         lon = lonlat[0]
         lat = lonlat[1]

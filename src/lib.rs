@@ -683,8 +683,8 @@ mod py_sphersgeo {
     #[pymethods]
     impl ArcString {
         #[new]
-        fn py_new(points: PyArcStringInputs) -> PyResult<Self> {
-            let points = match points {
+        fn py_new(arcstring: PyArcStringInputs) -> PyResult<Self> {
+            let points = match arcstring {
                 PyArcStringInputs::MultiPointInput(multipoint_input) => {
                     MultiSphericalPoint::py_new(multipoint_input)?
                 }
@@ -1372,7 +1372,7 @@ mod py_sphersgeo {
         }
 
         #[classmethod]
-        #[pyo3(signature=(center, radius, degrees=true, steps=16))]
+        #[pyo3(name="from_cone", signature=(center, radius, degrees=true, steps=16))]
         fn py_from_cone(
             _: &Bound<'_, PyType>,
             center: PySphericalPointInputs,
@@ -1570,7 +1570,8 @@ mod py_sphersgeo {
     use crate::sphericalpolygon::MultiSphericalPolygon;
 
     #[derive(FromPyObject)]
-    enum PyMultiSphericalPolygonInputs {
+    enum PyMultiSphericalPolygonInputs<'py> {
+        ListOfArcString(Vec<PyArcStringInputs<'py>>),
         ListOfPolygons(Vec<SphericalPolygon>),
         AnyGeometry(AnyGeometry),
     }
@@ -1578,8 +1579,18 @@ mod py_sphersgeo {
     #[pymethods]
     impl MultiSphericalPolygon {
         #[new]
-        fn py_new(polygons: PyMultiSphericalPolygonInputs) -> PyResult<Self> {
+        fn py_new<'py>(polygons: PyMultiSphericalPolygonInputs<'py>) -> PyResult<Self> {
             let polygons = match polygons {
+                PyMultiSphericalPolygonInputs::ListOfArcString(arcstrings) => {
+                    let mut polygons: Vec<SphericalPolygon> = vec![];
+                    for arcstring in arcstrings {
+                        polygons.push(
+                            SphericalPolygon::new(ArcString::py_new(arcstring)?, None, None)
+                                .map_err(|err| PyValueError::new_err(format!("{err}")))?,
+                        );
+                    }
+                    polygons
+                }
                 PyMultiSphericalPolygonInputs::ListOfPolygons(polygons) => polygons,
                 PyMultiSphericalPolygonInputs::AnyGeometry(geometry) => match geometry {
                     AnyGeometry::AngularBounds(bounds) => vec![bounds
