@@ -3,10 +3,8 @@ use numpy::ndarray::Axis;
 use pyo3::prelude::*;
 
 pub trait Geometry {
-    /// area of this geometry
     fn area(&self) -> f64;
 
-    /// length of this geometry
     fn length(&self) -> f64;
 
     fn centroid(&self) -> crate::vectorpoint::VectorPoint {
@@ -14,12 +12,10 @@ pub trait Geometry {
             .unwrap()
     }
 
-    /// bounding box [minX,minY,maxX,maxY]
     fn bounds(&self, degrees: bool) -> crate::angularbounds::AngularBounds {
         self.points().bounds(degrees)
     }
 
-    /// convex hull of this geometry
     fn convex_hull(&self) -> Option<crate::sphericalpolygon::SphericalPolygon> {
         self.points().convex_hull()
     }
@@ -51,19 +47,14 @@ pub trait ExtendMultiGeometry<T: Geometry> {
 }
 
 pub trait GeometricOperations<O: Geometry = Self> {
-    /// distance between this geometry and another
     fn distance(self, other: O) -> f64;
 
-    /// whether this geometry contains another
     fn contains(self, other: O) -> bool;
 
-    /// whether this geometry is within another
     fn within(self, other: O) -> bool;
 
-    /// whether this geometry and another given geometry intersect
     fn intersects(self, other: O) -> bool;
 
-    /// intersection between this geometry and another given geometry
     fn intersection(self, other: O) -> crate::geometrycollection::GeometryCollection;
 }
 
