@@ -1125,7 +1125,7 @@ impl MultiSphericalPoint {
         }
     }
 
-    pub fn nearest(&self, point: &SphericalPoint) -> SphericalPoint {
+    pub fn nearest(&self, point: &SphericalPoint) -> usize {
         // since the kdtree is over normalized vectors, the nearest vector in 3D space is also the nearest in angular distance
         let nearest = self.kdtree.nearest_one::<SquaredEuclidean>(&[
             point.xyz[0],
@@ -1133,9 +1133,7 @@ impl MultiSphericalPoint {
             point.xyz[2],
         ]);
 
-        SphericalPoint {
-            xyz: self.xyz.slice(s![nearest.item as usize, ..]).to_owned(),
-        }
+        nearest.item as usize
     }
 
     fn recreate_kdtree(&mut self) {
@@ -1502,7 +1500,10 @@ impl ExtendMultiGeometry<SphericalPoint> for MultiSphericalPoint {
 
 impl GeometricOperations<&SphericalPoint> for &MultiSphericalPoint {
     fn distance(self, other: &SphericalPoint, degrees: bool) -> f64 {
-        self.nearest(other).distance(other, degrees)
+        SphericalPoint {
+            xyz: self.xyz.slice(s![self.nearest(other), ..]).to_owned(),
+        }
+        .distance(other, degrees)
     }
 
     fn contains(self, other: &SphericalPoint) -> bool {

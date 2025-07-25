@@ -1,5 +1,5 @@
 use crate::{
-    arcstring::{vector_arc_crossings, ArcString, MultiArcString},
+    arcstring::{vector_arc_crossing, ArcString, MultiArcString},
     geometry::{ExtendMultiGeometry, GeometricOperations, Geometry, MultiGeometry},
     sphericalpoint::{
         angle_between_vectors, shift_rows, vector_arc_length, MultiSphericalPoint, SphericalPoint,
@@ -67,7 +67,7 @@ pub fn point_in_polygon_boundary(
     // record the number of times the ray intersects the exterior boundary arcstring
     let mut crossings = 0;
     for index in -1..polygon_boundary_xyzs.nrows() as i32 - 2 {
-        if vector_arc_crossings(
+        if vector_arc_crossing(
             point,
             polygon_interior_xyz,
             &polygon_boundary_xyzs.slice(s![index, ..]),
@@ -526,7 +526,16 @@ impl GeometricOperations<&ArcString> for &SphericalPolygon {
     }
 
     fn contains(self, other: &ArcString) -> bool {
-        self.contains(&other.points)
+        self.contains(
+            &MultiSphericalPoint::try_from(
+                other
+                    .points
+                    .xyz
+                    .slice(s![1..other.points.xyz.nrows() - 1, ..])
+                    .to_owned(),
+            )
+            .unwrap(),
+        )
     }
 
     fn within(self, _: &ArcString) -> bool {
@@ -542,7 +551,68 @@ impl GeometricOperations<&ArcString> for &SphericalPolygon {
     }
 
     fn intersection(self, other: &ArcString) -> Option<MultiArcString> {
-        todo!()
+        let mut arcs = vec![];
+
+        if other.within(self) {
+            arcs.push(other.to_owned());
+        } else if other.crosses(self) {
+            // split arcstring by the polygon boundary
+            let mut candidate_arcs: Vec<ArcString> = vec![];
+            let start_index = if other.closed { -1 } else { 0 };
+
+            let mut index = start_index;
+            let mut arc = ArcString::from(
+                MultiSphericalPoint::try_from(
+                    other.points.xyz.slice(s![index..index + 1, ..]).to_owned(),
+                )
+                .unwrap(),
+            );
+            loop {
+                index += 1;
+                if index == other.points.xyz.nrows() as isize - 1 {
+                    break;
+                }
+
+                // if the current arc crosses the boundary, split it and start a new one
+                if let Some(points) = arc.intersection(&self.boundary) {
+                    // the current arc can only cross the boundary once, due to the nature of this algorithm
+                    let split_xyz = points.xyz.slice(s![0, ..]);
+
+                    // add the completed arc to the list
+                    arc.points.xyz.push_row(split_xyz).unwrap();
+
+                    // start a new arc from the crossing point
+                    arc = ArcString::from(
+                        MultiSphericalPoint::try_from(
+                            stack(
+                                Axis(0),
+                                &[split_xyz, other.points.xyz.slice(s![index + 1, ..])],
+                            )
+                            .unwrap(),
+                        )
+                        .unwrap(),
+                    );
+                } else {
+                    // otherwise continue to add points to the current arc
+                    arc.points
+                        .xyz
+                        .push_row(other.points.xyz.slice(s![index, ..]))
+                        .unwrap();
+                }
+            }
+
+            for arc in candidate_arcs {
+                if self.contains(&arc) {
+                    arcs.push(arc);
+                }
+            }
+        }
+
+        if arcs.is_empty() {
+            None
+        } else {
+            Some(MultiArcString::from(arcs))
+        }
     }
 
     fn touches(self, other: &ArcString) -> bool {
