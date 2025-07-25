@@ -30,7 +30,7 @@ def test_contains():
     arc = ArcString(
         MultiVectorPoint.from_lonlats(np.array([[-30.0, -30.0], [30.0, 30.0]]))
     )
-    assert arc.contains(VectorPoint.from_lonlat(np.array([0.0, 0.0])))
+    assert arc.contains(VectorPoint.from_lonlat(np.array([349.10660535, -12.30998866])))
 
     vertical_arc = ArcString(
         MultiVectorPoint.from_lonlats(np.array([[60.0, 0.0], [60.0, 30.0]])),
@@ -50,15 +50,36 @@ def test_contains():
 
 
 def test_interpolate():
-    cvec = interpolate(np.array([60.0, 0.0]), np.array([60.0, 30.0]), n=10)
+    a_lonlat = np.array([60.0, 0.0])
+    b_lonlat = np.array([60.0, 30.0])
+    lonlats = interpolate(a_lonlat, b_lonlat, n=10)
 
-    first_length = arc_length(cvec[0], cvec[1])
-    for i in range(1, 9):
-        length = ArcString(MultiVectorPoint(cvec[i : i + 1])).length
-        assert abs(length - first_length) < 1.0e-10
+    a = VectorPoint.from_lonlat(a_lonlat)
+    b = VectorPoint.from_lonlat(b_lonlat)
+
+    assert assert_allclose(lonlats[0], a_lonlat)
+    assert assert_allclose(lonlats[-1], b_lonlat)
+
+    xyzs = interpolate(a.xyz, b.xyz, n=10)
+
+    assert assert_allclose(xyzs[0], a.xyz)
+    assert assert_allclose(xyzs[-1], b.xyz)
+
+    arc_from_lonlats = ArcString(MultiVectorPoint.from_lonlats(lonlats))
+    arc_from_xyzs = ArcString(MultiVectorPoint(xyzs))
+
+    for xyz in xyzs:
+        point = VectorPoint(xyz)
+        assert arc_from_lonlats.contains(point)
+        assert arc_from_xyzs.contains(point)
+        
+    distances_from_lonlats = arc_from_lonlats.lengths
+    distances_from_xyz = arc_from_xyzs.lengths
+
+    assert (distances_from_lonlats == distances_from_xyz).all()
 
 
-def test_great_circle_arc_intersection():
+def test_intersection():
     A = VectorPoint.from_lonlat(np.array([-10.0, -10.0]))
     B = VectorPoint.from_lonlat(np.array([10.0, 10.0]))
 
@@ -88,7 +109,7 @@ def test_great_circle_arc_intersection():
     assert np.all(np.isnan(r))
 
 
-def test_great_circle_arc_length():
+def test_distance():
     A = VectorPoint.from_lonlat(np.array([90.0, 0.0]))
     B = VectorPoint.from_lonlat(np.array([-90.0, 0.0]))
     assert_almost_equal(A.distance(B), np.pi)
