@@ -90,8 +90,8 @@ def test_intersection():
     C = VectorPoint.from_lonlat(np.array([-25.0, 10.0]))
     D = VectorPoint.from_lonlat(np.array([15.0, -10.0]))
 
-    E = VectorPoint.from_lonlat(np.array([-20.0, 40.0]))
-    F = VectorPoint.from_lonlat(np.array([20.0, 40.0]))
+    # E = VectorPoint.from_lonlat(np.array([-20.0, 40.0]))
+    # F = VectorPoint.from_lonlat(np.array([20.0, 40.0]))
 
     reference_intersection = [0.99912414, -0.02936109, -0.02981403]
 

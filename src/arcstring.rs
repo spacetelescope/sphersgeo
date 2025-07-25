@@ -1,4 +1,4 @@
-use crate::geometry::{GeometryCollection, MultiGeometry, SingleGeometry};
+use crate::geometry::SingleGeometry;
 use crate::vectorpoint::{cross_vectors, max_1darray, min_1darray, normalize_vector};
 use crate::{
     geometry::{GeometricOperations, Geometry},
@@ -6,7 +6,6 @@ use crate::{
 };
 use numpy::ndarray::{concatenate, s, stack, Array1, Array2, ArrayView1, ArrayView2, Axis, Zip};
 use pyo3::prelude::*;
-use std::ops::{Add, AddAssign};
 
 pub fn interpolate(
     a: &ArrayView1<f64>,
@@ -250,40 +249,39 @@ impl Geometry for ArcString {
 impl SingleGeometry for ArcString {}
 
 impl GeometricOperations<&ArcString> for &ArcString {
-    fn distance(&self, other: &ArcString) -> f64 {
+    fn distance(self, other: &ArcString) -> f64 {
         // TODO: implement
         -1.
     }
 
-    fn contains(&self, other: &ArcString) -> bool {
+    fn contains(self, other: &ArcString) -> bool {
         // TODO: implement
         false
     }
 
-    fn within(&self, other: &ArcString) -> bool {
-        // TODO: implement
-        false
+    fn within(self, other: &ArcString) -> bool {
+        other.contains(self)
     }
 
-    fn intersects(&self, other: &ArcString) -> bool {
+    fn intersects(self, other: &ArcString) -> bool {
         // TODO: write an intersects algorithm
         self.intersection(other).is_some()
     }
 
     #[allow(refining_impl_trait)]
-    fn intersection(&self, other: &ArcString) -> Option<MultiVectorPoint> {
+    fn intersection(self, other: &ArcString) -> Option<MultiVectorPoint> {
         // TODO: implement
         None
     }
 }
 
 impl GeometricOperations<&VectorPoint> for &ArcString {
-    fn distance(&self, other: &VectorPoint) -> f64 {
+    fn distance(self, other: &VectorPoint) -> f64 {
         // TODO: implement
         -1.
     }
 
-    fn contains(&self, point: &VectorPoint) -> bool {
+    fn contains(self, point: &VectorPoint) -> bool {
         // check if point is one of the vertices of this linestring
         if (&self.points).contains(point) {
             return true;
@@ -320,16 +318,16 @@ impl GeometricOperations<&VectorPoint> for &ArcString {
         return false;
     }
 
-    fn within(&self, other: &VectorPoint) -> bool {
+    fn within(self, other: &VectorPoint) -> bool {
         false
     }
 
-    fn intersects(&self, other: &VectorPoint) -> bool {
+    fn intersects(self, other: &VectorPoint) -> bool {
         self.intersection(other).is_some()
     }
 
     #[allow(refining_impl_trait)]
-    fn intersection(&self, other: &VectorPoint) -> Option<VectorPoint> {
+    fn intersection(self, other: &VectorPoint) -> Option<VectorPoint> {
         // TODO: implement
         None
     }
@@ -338,6 +336,7 @@ impl GeometricOperations<&VectorPoint> for &ArcString {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::geometry::MultiGeometry;
     use numpy::ndarray::{array, linspace, s};
 
     #[test]
