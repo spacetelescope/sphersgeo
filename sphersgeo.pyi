@@ -1,4 +1,5 @@
 from enum import Enum
+from typing import List, Tuple
 
 from numpy import float64
 from numpy.typing import NDArray
@@ -7,31 +8,27 @@ from numpy.typing import NDArray
 class SphericalPoint:
     def __init__(
         self,
-        point: tuple[float, float, float] | list[float] | NDArray[float],
+        xyz: tuple[float, float, float] | NDArray[float64] | list[float],
     ): ...
-
-    @classmethod
-    def normalize(
-        cls, point: NDArray[float64] | tuple[float, float, float] | list[float]
-    ) -> SphericalPoint: ...
 
     @classmethod
     def from_lonlat(
         cls,
-        coordinates: NDArray[float64] | tuple[float, float] | list[float],
+        lonlat: tuple[float, float] | NDArray[float64] | list[float],
     ) -> SphericalPoint: ...
 
     @property
-    def xyz(self) -> NDArray[float64]: ...
+    def xyz(self) -> Tuple[float, float, float]: ...
 
-    def to_lonlat(self) -> NDArray[float64]: ...
+    def to_lonlat(self) -> Tuple[float, float]: ...
 
-    @property
-    def normalized(self) -> SphericalPoint: ...
-
-    def angle_between(self, a: SphericalPoint, b: SphericalPoint) -> float: ...
+    def two_arc_angle(self, a: SphericalPoint, b: SphericalPoint) -> float: ...
 
     def collinear(self, a: SphericalPoint, b: SphericalPoint) -> bool: ...
+
+    def interpolate_between(
+        self, other: SphericalPoint, n: int
+    ) -> MultiSphericalPoint: ...
 
     @property
     def vector_length(self) -> float: ...
@@ -140,62 +137,44 @@ class SphericalPoint:
         | SphericalPolygon
         | MultiSphericalPolygon,
     ) -> AnyGeometry: ...
-    def __add__(self, other: SphericalPoint) -> MultiSphericalPoint: ...
+
+    def __add__(self, other: SphericalPoint) -> SphericalPoint: ...
+
+    def __sub__(self, other: SphericalPoint) -> SphericalPoint: ...
+
+    def __mul__(self, other: SphericalPoint) -> SphericalPoint: ...
+
+    def __div__(self, other: SphericalPoint) -> SphericalPoint: ...
+
+    def __eq__(self, other: SphericalPoint) -> bool: ...
+
+    def __str__(self) -> str: ...
+
+    def __repr__(self) -> str: ...
 
 
 class MultiSphericalPoint:
     def __init__(
         self,
-        points: list[tuple[float, float, float]]
-        | list[list[float]]
-        | list[float]
-        | NDArray[float],
+        xyzs: list[tuple[float, float, float]] | NDArray[float] | list[list[float]],
     ): ...
 
     @classmethod
-    def normalize(
-        cls,
-        points: NDArray[float64]
-        | list[tuple[float, float, float]]
-        | list[list[float]]
-        | list[float],
-    ) -> MultiSphericalPoint: ...
-
-    @classmethod
-    def from_lonlat(
-        cls,
-        coordinates: NDArray[float64]
-        | tuple[float, float]
-        | list[list[float]]
-        | list[float],
+    def from_lonlats(
+        cls, lonlats: tuple[float, float] | NDArray[float64] | list[list[float]]
     ) -> MultiSphericalPoint: ...
 
     @property
-    def xyz(self) -> NDArray[float64]: ...
+    def xyzs(self) -> List[Tuple[float, float, float]]: ...
 
-    def to_lonlat(self) -> NDArray[float64]: ...
-
-    @property
-    def normalized(self) -> MultiSphericalPoint: ...
-
-    def angles_between(
-        self, a: MultiSphericalPoint, b: MultiSphericalPoint
-    ) -> NDArray[float64]: ...
-
-    def collinear(
-        self, a: MultiSphericalPoint, b: MultiSphericalPoint
-    ) -> NDArray[bool]: ...
+    def to_lonlats(self) -> List[Tuple[float, float]]: ...
 
     @property
-    def vector_lengths(self) -> NDArray[float64]: ...
+    def vector_lengths(self) -> List[float]: ...
 
     def vector_rotate_around(
         self, other: MultiSphericalPoint, theta: float
     ) -> MultiSphericalPoint: ...
-
-    def extend(self, other: MultiSphericalPoint): ...
-
-    def append(self, other: SphericalPoint): ...
 
     @property
     def vertices(self) -> MultiSphericalPoint: ...
@@ -298,11 +277,28 @@ class MultiSphericalPoint:
         | MultiSphericalPolygon,
     ) -> AnyGeometry: ...
 
-    def __add__(
-        self, other: MultiSphericalPoint | NDArray[float64]
-    ) -> MultiSphericalPoint: ...
+    @property
+    def parts(self) -> List[SphericalPoint]: ...
 
-    def __iadd__(self, other: MultiSphericalPoint | NDArray[float64]): ...
+    def __concat__(self, other: MultiSphericalPoint) -> MultiSphericalPoint: ...
+
+    def __len__(self) -> int: ...
+
+    def __getitem__(self, index: int) -> SphericalPoint: ...
+
+    def append(self, other: SphericalPoint): ...
+
+    def extend(self, other: MultiSphericalPoint): ...
+
+    def __add__(self, other: MultiSphericalPoint) -> MultiSphericalPoint: ...
+
+    def __iadd__(self, other: MultiSphericalPoint): ...
+
+    def __eq__(self, other: MultiSphericalPoint) -> bool: ...
+
+    def __str__(self) -> str: ...
+
+    def __repr__(self) -> str: ...
 
 
 class ArcString:
@@ -311,8 +307,8 @@ class ArcString:
         points: MultiSphericalPoint
         | list[tuple[float, float, float]]
         | list[list[float]]
-        | list[float]
         | NDArray[float],
+        closed: bool = False,
     ): ...
 
     @property
@@ -435,6 +431,14 @@ class ArcString:
         | MultiSphericalPolygon,
     ) -> AnyGeometry: ...
 
+    def __eq__(self, other: SphericalPoint) -> bool: ...
+
+    def __str__(self) -> str: ...
+
+    def __repr__(self) -> str: ...
+
+    def __len__(self) -> int: ...
+
 
 class MultiArcString:
     def __init__(
@@ -547,6 +551,14 @@ class MultiArcString:
         | MultiSphericalPolygon,
     ) -> AnyGeometry: ...
 
+    def __eq__(self, other: SphericalPoint) -> bool: ...
+
+    def __str__(self) -> str: ...
+
+    def __repr__(self) -> str: ...
+
+    def __len__(self) -> int: ...
+
 
 class SphericalPolygon:
     def __init__(
@@ -554,20 +566,12 @@ class SphericalPolygon:
         exterior: ArcString
         | MultiSphericalPoint
         | list[tuple[float, float, float]]
-        | list[list[float]]
-        | list[float]
-        | NDArray[float],
+        | NDArray[float]
+        | list[list[float]],
         interior_point: None
         | SphericalPoint
         | tuple[float, float, float]
-        | list[float]
-        | NDArray[float],
-        holes: None
-        | MultiArcString
-        | list[MultiSphericalPoint]
-        | list[list[tuple[float, float, float]]]
-        | list[list[list[float]]]
-        | list[NDArray[float]],
+        | NDArray[float] = None,
     ): ...
 
     @classmethod
@@ -688,6 +692,12 @@ class SphericalPolygon:
         | MultiSphericalPolygon,
     ) -> AnyGeometry: ...
 
+    def __eq__(self, other: SphericalPoint) -> bool: ...
+
+    def __str__(self) -> str: ...
+
+    def __repr__(self) -> str: ...
+
 
 class MultiSphericalPolygon:
     def __init__(self, polygons: list[SphericalPolygon]): ...
@@ -792,6 +802,14 @@ class MultiSphericalPolygon:
         | SphericalPolygon
         | MultiSphericalPolygon,
     ) -> AnyGeometry: ...
+
+    def __eq__(self, other: SphericalPoint) -> bool: ...
+
+    def __str__(self) -> str: ...
+
+    def __repr__(self) -> str: ...
+
+    def __len__(self) -> int: ...
 
 
 class AnyGeometry(Enum):

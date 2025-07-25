@@ -1,44 +1,25 @@
+use std::collections::HashMap;
+
 use crate::arcstring::ArcString;
 use crate::geometry::{GeometricOperations, Geometry};
-use crate::sphericalpoint::{xyz_eq, MultiSphericalPoint};
+use crate::sphericalpoint::{xyz_eq, xyz_radians_over_sphere_between, MultiSphericalPoint};
 use crate::sphericalpolygon::SphericalPolygon;
-use ndarray::{s, Array1};
 
 pub trait ToGraph<S: Geometry> {
     fn to_graph(&self) -> EdgeGraph<S>;
 }
 
 #[derive(Clone, Debug)]
-pub struct Edge<'a, G: Geometry> {
-    pub a: &'a [f64; 3],
-    pub b: &'a [f64; 3],
-    /// parent geometrie(s) that this edge belongs to
-    pub parent_geometries: Vec<&'a G>,
+pub struct Node {
+    /// point in 3D Cartesian coordinates
+    pub xyz: [f64; 3],
+    /// indices of connected node indices, and geometry source(s) that that connection (edge) came from
+    pub edges: HashMap<usize, Vec<usize>>,
 }
 
-impl<'a, G> Edge<'a, G>
-where
-    G: Geometry,
-{
-    pub fn points(&self) -> Vec<&'a [f64; 3]> {
-        vec![self.a, self.b]
-    }
-
-    pub fn arc(&self) -> ArcString {
-        ArcString {
-            points: MultiSphericalPoint::try_from(vec![self.a.to_owned(), self.b.to_owned()])
-                .unwrap(),
-            closed: false,
-        }
-    }
-}
-
-impl<'a, G> PartialEq for Edge<'a, G>
-where
-    G: Geometry,
-{
+impl PartialEq for Node {
     fn eq(&self, other: &Self) -> bool {
-        self.arc() == other.arc()
+        xyz_eq(&self.xyz, &other.xyz)
     }
 }
 
@@ -46,14 +27,14 @@ where
 /// graph of edges for performing operations (union, overlap, split)
 /// on collections of higher-order geometries (arcstrings, polygons)
 pub struct EdgeGraph<'a, G: Geometry> {
-    pub edges: Vec<Edge<'a, G>>,
+    pub nodes: Vec<Node>,
     pub geometries: Vec<&'a G>,
 }
 
 impl<'a> Default for EdgeGraph<'a, SphericalPolygon> {
     fn default() -> Self {
         Self {
-            edges: vec![],
+            nodes: vec![],
             geometries: vec![],
         }
     }
@@ -62,7 +43,7 @@ impl<'a> Default for EdgeGraph<'a, SphericalPolygon> {
 impl<'a> Default for EdgeGraph<'a, ArcString> {
     fn default() -> Self {
         Self {
-            edges: vec![],
+            nodes: vec![],
             geometries: vec![],
         }
     }
@@ -88,356 +69,385 @@ impl<'a> From<Vec<&'a ArcString>> for EdgeGraph<'a, ArcString> {
     }
 }
 
+type Edge = ((usize, usize), Vec<usize>);
+
 impl<'a, G> EdgeGraph<'a, G>
 where
     G: Geometry + PartialEq,
 {
-    pub fn add_edge(&mut self, a: &'a [f64; 3], b: &'a [f64; 3], geometries: Vec<&'a G>) {
-        for geometry in &geometries {
-            if !self.geometries.contains(geometry) {
-                self.geometries.push(geometry);
+    pub fn new_node(&mut self, xyz: &'a [f64; 3]) -> usize {
+        // check if node already exists...
+        if let Some(existing_index) = self
+            .nodes
+            .iter()
+            .position(|existing_node| xyz_eq(&existing_node.xyz, xyz))
+        {
+            existing_index
+        } else {
+            self.push_node(Node {
+                xyz: xyz.to_owned(),
+                edges: HashMap::<usize, Vec<usize>>::new(),
+            });
+            self.nodes.len() - 1
+        }
+    }
+
+    pub fn push_edge(&mut self, a: usize, b: usize, sources: Vec<usize>) {
+        let node_a = self.nodes.get_mut(a).unwrap();
+        if let Some(entry) = node_a.edges.get_mut(&b) {
+            entry.extend(&sources);
+        } else {
+            node_a.edges.insert(b, sources.to_owned());
+        }
+
+        let node_b = self.nodes.get_mut(b).unwrap();
+        if let Some(entry) = node_b.edges.get_mut(&a) {
+            entry.extend(&sources);
+        } else {
+            node_b.edges.insert(a, sources.to_owned());
+        }
+    }
+
+    pub fn remove_edge(&mut self, a: usize, b: usize) -> Option<((usize, usize), Vec<usize>)> {
+        let mut sources = vec![];
+
+        let node_a = self.nodes.get_mut(a).unwrap();
+        if let Some(node_a_sources) = node_a.edges.remove(&b) {
+            sources.extend(node_a_sources);
+        }
+
+        let node_b = self.nodes.get_mut(b).unwrap();
+        node_b.edges.remove(&a);
+        if let Some(node_b_sources) = node_b.edges.remove(&a) {
+            sources.extend(node_b_sources);
+        }
+
+        if sources.is_empty() {
+            None
+        } else {
+            Some(((a, b), sources))
+        }
+    }
+
+    pub fn push_node(&mut self, node: Node) {
+        let num_nodes = self.nodes.len();
+        let num_geometries = self.geometries.len();
+
+        for (node_index, sources) in &node.edges {
+            for geometry_index in sources {
+                if geometry_index >= &num_geometries {
+                    panic!(
+                        "new node attempts to reference invalid index {geometry_index} (out of {num_geometries} geometries)"
+                    );
+                }
+            }
+
+            if node_index >= &num_nodes {
+                panic!("new node attempts to reference invalid index {node_index} (out of {num_nodes} nodes)");
+            }
+
+            self.nodes[*node_index]
+                .edges
+                .insert(num_nodes, sources.to_owned());
+        }
+
+        self.nodes.push(node);
+    }
+
+    pub fn get_node_from_xyz(&self, xyz: &[f64; 3]) -> Option<usize> {
+        for (index, node) in self.nodes.iter().enumerate() {
+            if xyz_eq(&node.xyz, xyz) {
+                return Some(index);
             }
         }
 
-        // check if edge already exists...
-        if let Some(existing_edge_index) = self.edges.iter().position(|edge| {
-            (xyz_eq(a, edge.a) && xyz_eq(b, edge.b)) || (xyz_eq(a, edge.b) && xyz_eq(b, edge.a))
-        }) {
-            if let Some(existing_edge) = self.edges.get_mut(existing_edge_index) {
-                for geometry in &geometries {
-                    if !existing_edge.parent_geometries.contains(geometry) {
-                        existing_edge.parent_geometries.push(geometry);
+        None
+    }
+
+    pub fn swap_remove_node(&mut self, index: usize) -> Node {
+        // first, remove all references to the node
+        for node in self.nodes.iter_mut() {
+            node.edges.remove(&index);
+        }
+
+        // then, remove the node, swapping it with the last node to minimize index shifting
+        let swapped_node_old_index = self.nodes.len() - 1;
+        let removed = self.nodes.swap_remove(index);
+
+        // then, replace all references to the last node with this new node index
+        for node in self.nodes.iter_mut() {
+            if let Some(sources) = node.edges.remove(&swapped_node_old_index) {
+                node.edges.insert(index, sources);
+            }
+        }
+
+        removed
+    }
+
+    /// remove edges sourced from more than one geometry
+    /// the result may be disjunct
+    pub fn remove_multisourced_edges(&mut self) -> Option<Vec<Edge>> {
+        let mut removed = vec![];
+        for (node_index, node) in self.nodes.iter_mut().enumerate() {
+            for edge_node_index in node.edges.to_owned().into_keys() {
+                if node.edges[&edge_node_index].len() > 1 {
+                    if let Some(sources) = node.edges.remove(&edge_node_index) {
+                        removed.push(((node_index, edge_node_index), sources))
                     }
                 }
             }
+        }
+
+        if removed.is_empty() {
+            None
         } else {
-            self.edges.push(Edge {
-                a,
-                b,
-                parent_geometries: geometries,
-            });
+            Some(removed)
         }
     }
 
-    /// remove edges belonging to more than one geometry
+    /// remove edges sourced from one or less geometry
     /// the result may be disjunct
-    pub fn prune_overlapping_edges(&mut self) -> bool {
-        let mut changed = false;
-        for edge_index in (0..self.edges.len()).rev() {
-            if self.edges[edge_index].parent_geometries.len() > 1 {
-                self.edges.remove(edge_index);
-                changed = true;
+    pub fn remove_unisourced_edges(&mut self) -> Vec<((usize, usize), Vec<usize>)> {
+        let mut removed = vec![];
+        for (node_index, node) in self.nodes.iter_mut().enumerate() {
+            for edge_node_index in node.edges.to_owned().into_keys() {
+                if node.edges[&edge_node_index].len() <= 1 {
+                    if let Some(sources) = node.edges.remove(&edge_node_index) {
+                        removed.push(((node_index, edge_node_index), sources))
+                    }
+                }
             }
         }
-        changed
-    }
 
-    /// remove edges NOT belonging to multiple parent geometries
-    /// the result may be disjunct
-    pub fn prune_nonoverlapping_edges(&mut self) -> bool {
-        let mut changed = false;
-        for edge_index in (0..self.edges.len()).rev() {
-            if self.edges[edge_index].parent_geometries.len() <= 1 {
-                self.edges.remove(edge_index);
-                changed = true;
-            }
-        }
-        changed
+        removed
     }
 
     /// remove edges of 0 length
-    pub fn prune_degenerate_edges(&mut self) -> bool {
-        let mut changed = false;
-        for edge_index in (0..self.edges.len()).rev() {
-            if self.edges[edge_index].arc().length() == 0.0 {
-                self.edges.remove(edge_index);
-                changed = true;
+    pub fn remove_degenerate_edges(&mut self) -> Vec<((usize, usize), Vec<usize>)> {
+        let tolerance = 2e-8;
+        let mut removed = vec![];
+        for (node_index, node) in self.nodes.to_owned().iter().enumerate() {
+            for edge_node_index in node.edges.keys() {
+                if xyz_radians_over_sphere_between(&node.xyz, &self.nodes[*edge_node_index].xyz)
+                    < tolerance
+                {
+                    if let Some(edge) = self.remove_edge(node_index, *edge_node_index) {
+                        removed.push(edge);
+                    }
+                }
             }
         }
+
+        removed
+    }
+
+    pub fn remove_orphaned_nodes(&mut self) -> Vec<Node> {
+        let mut removed = vec![];
+        // iterate over node list backwards to minimize index shuffling
+        for node_index in (0..self.nodes.len()).rev() {
+            if self.nodes[node_index].edges.is_empty() {
+                removed.push(self.swap_remove_node(node_index));
+            }
+        }
+
+        removed
+    }
+
+    // split all overlapping and intersecting edges
+    pub fn split_edges(&mut self) -> bool {
+        let mut changed = false;
+
+        let nodes = self.nodes.to_owned();
+
+        for _ in 0..self.nodes.len() {
+            let mut updated_edges = false;
+            let mut added_nodes = false;
+            for (start_node_index, start_node) in nodes.iter().enumerate() {
+                for (end_node_index, edge_sources) in start_node.edges.iter() {
+                    let end_node = &nodes[*end_node_index];
+                    // check if any other nodes lie on this edge...
+                    for (middle_node_index, middle_node) in self.nodes.iter().enumerate() {
+                        if crate::sphericalpoint::xyzs_collinear(
+                            &start_node.xyz,
+                            &middle_node.xyz,
+                            &end_node.xyz,
+                        ) {
+                            // replace this edge with references to the middle node
+                            self.remove_edge(start_node_index, *end_node_index);
+                            self.push_edge(
+                                start_node_index,
+                                middle_node_index,
+                                edge_sources.to_owned(),
+                            );
+                            self.push_edge(
+                                middle_node_index,
+                                *end_node_index,
+                                edge_sources.to_owned(),
+                            );
+                            updated_edges = true;
+                            break;
+                        }
+                    }
+
+                    if updated_edges {
+                        break;
+                    }
+
+                    // check if any other edges cross this edge...
+                    for (other_start_node_index, other_start_node) in nodes.iter().enumerate() {
+                        for (other_end_node_index, other_edge_sources) in
+                            other_start_node.edges.iter()
+                        {
+                            let other_end_node = &self.nodes[*other_end_node_index];
+                            if let Some(crossing) = crate::arcstring::xyz_two_arc_crossing(
+                                &start_node.xyz,
+                                &end_node.xyz,
+                                &other_start_node.xyz,
+                                &other_end_node.xyz,
+                            ) {
+                                // create a new node at the crossing with four edges
+                                let crossing_node = Node {
+                                    xyz: crossing,
+                                    edges: HashMap::from([
+                                        (start_node_index, edge_sources.to_owned()),
+                                        (*end_node_index, edge_sources.to_owned()),
+                                        (other_start_node_index, other_edge_sources.to_owned()),
+                                        (*other_end_node_index, other_edge_sources.to_owned()),
+                                    ]),
+                                };
+
+                                // send the new edges to the end of the edge list, to be analyzed again for further possible intersections
+                                self.push_node(crossing_node);
+                                added_nodes = true;
+                                break;
+                            }
+                        }
+                    }
+
+                    if added_nodes {
+                        break;
+                    }
+                }
+
+                if updated_edges || added_nodes {
+                    changed = true;
+                    break;
+                }
+            }
+        }
+
         changed
     }
 }
 
 impl<'a> EdgeGraph<'a, SphericalPolygon> {
-    pub fn split_edges(&'a mut self) -> bool {
-        let mut changed = false;
-        let mut edges: Vec<Edge<'a, SphericalPolygon>> = vec![];
-        while let Some(edge_a) = self.edges.pop() {
-            let mut crossed = false;
-            for edge_b in &edges {
-                // check if edge intersects any points...
-                let vertices = edge_b.arc().points;
-                if crate::sphericalpoint::xyzs_collinear(edge_a.a, edge_b.a, edge_a.b)
-                    || crate::sphericalpoint::xyzs_collinear(edge_a.a, edge_b.b, edge_a.b)
-                {
-                    let arcstrings = crate::arcstring::split_arc_at_points(
-                        vec![edge_a.a, edge_a.b],
-                        vec![edge_b.a, edge_b.b],
-                    );
+    /// assign each edge to intersecting polygon(s)
+    pub fn assign_polygons_to_edges(&mut self) {
+        let mut pending_source_updates: HashMap<usize, Vec<usize>> = HashMap::new();
+        for (node_index, node) in self.nodes.iter().enumerate() {
+            for (edge_node_index, sources) in &node.edges {
+                let arcstring = crate::arcstring::ArcString::try_from(
+                    crate::sphericalpoint::MultiSphericalPoint::try_from(vec![
+                        node.xyz,
+                        self.nodes[*edge_node_index].xyz,
+                    ])
+                    .unwrap(),
+                )
+                .unwrap();
 
-                    // send the new edges to the end of the edge list, to be analyzed again for further possible intersections
-                    for arc in arcstrings {
-                        self.add_edge(arc[0], arc[1], edge_a.parent_geometries.to_owned());
-                    }
-                    crossed = true;
-                    changed = true;
-                    break;
-                // check if edge intersects any other edges...
-                } else if let Some(intersection) = edge_a.arc().intersection(&edge_b.arc()) {
-                    // assume intersection between two arcs will always only have 1 row
-                    let crossing = intersection.xyzs[0];
-                    // create four new edges
-                    let mut edge_a1 = Edge {
-                        a: edge_a.a,
-                        b: &crossing,
-                        parent_geometries: edge_a.parent_geometries.to_owned(),
-                    };
-                    let mut edge_a2 = Edge {
-                        a: &crossing,
-                        b: edge_a.b,
-                        parent_geometries: edge_a.parent_geometries.to_owned(),
-                    };
-                    let mut edge_b1 = Edge {
-                        a: edge_b.a,
-                        b: &crossing,
-                        parent_geometries: edge_b.parent_geometries.to_owned(),
-                    };
-                    let mut edge_b2 = Edge {
-                        a: &crossing,
-                        b: edge_b.b,
-                        parent_geometries: edge_b.parent_geometries.to_owned(),
-                    };
+                for (geometry_index, geometry) in self.geometries.iter().enumerate() {
+                    if !sources.contains(&geometry_index) && geometry.intersects(&arcstring) {
+                        pending_source_updates
+                            .entry(node_index)
+                            .or_insert_with(|| sources.to_owned());
 
-                    // assign parent geometries that each new edge is now within
-                    for source in &edge_a.parent_geometries {
-                        if edge_a1.arc().within(*source) {
-                            edge_a1.parent_geometries.push(source);
-                        }
-                        if edge_a2.arc().within(*source) {
-                            edge_a2.parent_geometries.push(source);
-                        }
+                        pending_source_updates
+                            .get_mut(&node_index)
+                            .unwrap()
+                            .push(geometry_index);
                     }
-                    for source in &edge_b.parent_geometries {
-                        if edge_b1.arc().within(*source) {
-                            edge_b1.parent_geometries.push(source);
-                        }
-                        if edge_b2.arc().within(*source) {
-                            edge_b2.parent_geometries.push(source);
-                        }
-                    }
-
-                    // send the new edges to the end of the edge list, to be analyzed again for further possible intersections
-                    self.edges
-                        .extend_from_slice(&[edge_a1, edge_a2, edge_b1, edge_b2]);
-                    crossed = true;
-                    changed = true;
-                    break;
                 }
-            }
-
-            // if the edge did not intersect any other egdes or vertices, add it unchanched to the edge list
-            if !crossed {
-                edges.push(edge_a);
             }
         }
 
-        self.edges = edges;
-
-        changed
-    }
-}
-
-impl<'a> EdgeGraph<'a, ArcString> {
-    pub fn split_edges(&mut self) -> bool {
-        let tolerance = 2e-8;
-        let mut changed = false;
-        let mut counter = 0;
-        let mut edges: Vec<Edge<'a, ArcString>> = vec![];
-        while let Some(edge_a) = self.edges.pop() {
-            let mut crossed = false;
-            for edge_b in &edges {
-                // check if edge intersects any points...
-                let mut splitting_points = vec![];
-
-                for endpoint in [edge_b.a, edge_b.b] {
-                    // skip if the point is equal to one of the endpoints
-                    if xyz_eq(edge_a.a, endpoint)
-                        && xyz_eq(endpoint, edge_a.b)
-                        && crate::sphericalpoint::xyzs_collinear(edge_a.a, endpoint, edge_a.b)
-                    {
-                        splitting_points.push(endpoint);
-                    }
-                }
-
-                if !splitting_points.is_empty() {
-                    let arcstrings =
-                        crate::arcstring::split_arc_at_points(edge_a.points(), splitting_points);
-
-                    // send the new edges to the end of the edge list, to be analyzed again for further possible intersections
-                    for arc in arcstrings {
-                        self.add_edge(arc[0], arc[1], edge_a.parent_geometries.to_owned());
-                    }
-                    crossed = true;
-                    changed = true;
-                    break;
-                // check if edge intersects any other edges...
-                } else if let Some(intersection) = edge_a.arc().intersection(&edge_b.arc()) {
-                    // assume intersection between two arcs will always only have 1 row
-                    let crossing: Array1<f64> = intersection.xyz.slice(s![0, ..]).to_owned();
-
-                    // create four new edges
-                    let mut edge_a1 = Edge {
-                        a: edge_a.a,
-                        b: crossing,
-                        parent_geometries: edge_a.parent_geometries.to_owned(),
-                    };
-                    let mut edge_a2 = Edge {
-                        a: crossing,
-                        b: edge_a.b,
-                        parent_geometries: edge_a.parent_geometries.to_owned(),
-                    };
-                    let mut edge_b1 = Edge {
-                        a: edge_b.a,
-                        b: crossing,
-                        parent_geometries: edge_b.parent_geometries.to_owned(),
-                    };
-                    let mut edge_b2 = Edge {
-                        a: crossing,
-                        b: edge_b.b,
-                        parent_geometries: edge_b.parent_geometries.to_owned(),
-                    };
-
-                    // assign parent geometries that each new edge is now within
-                    for source in &edge_a.parent_geometries {
-                        if edge_a1.arc().within(*source) {
-                            edge_a1.parent_geometries.push(source);
-                        }
-                        if edge_a2.arc().within(*source) {
-                            edge_a2.parent_geometries.push(source);
-                        }
-                    }
-                    for source in &edge_b.parent_geometries {
-                        if edge_b1.arc().within(*source) {
-                            edge_b1.parent_geometries.push(source);
-                        }
-                        if edge_b2.arc().within(*source) {
-                            edge_b2.parent_geometries.push(source);
-                        }
-                    }
-
-                    // send the new edges to the end of the edge list, to be analyzed again for further possible intersections
-                    self.add_edge(edge_a1.a, edge_a1.b, edge_a1.parent_geometries);
-                    self.add_edge(edge_a2.a, edge_a2.b, edge_a2.parent_geometries);
-                    self.add_edge(edge_b1.a, edge_b1.b, edge_b1.parent_geometries);
-                    self.add_edge(edge_b2.a, edge_b2.b, edge_b2.parent_geometries);
-
-                    crossed = true;
-                    changed = true;
-                    break;
-                }
-            }
-
-            // if the edge did not intersect any other edges or vertices, add it unchanched to the edge list
-            if !crossed {
-                edges.push(edge_a);
-            }
-
-            counter += 1;
-            if counter > 10 {
-                break;
-            }
-        }
-
-        self.edges = edges;
-
-        changed
+        for source_update in pending_source_updates {}
     }
 }
 
 pub trait GeometryGraph<'a, G: Geometry> {
     /// add a geometry's edges to the edge graph
     fn push(&mut self, geometry: &'a G);
-
-    /// trace edges to build disjoint geometries
-    /// NOTE: this will erase geometry overlap
-    fn find_disjoint_geometries(&self) -> Vec<G>;
 }
 
 impl<'a> GeometryGraph<'a, SphericalPolygon> for EdgeGraph<'a, SphericalPolygon> {
     fn push(&mut self, polygon: &'a SphericalPolygon) {
-        for arc in Vec::<ArcString>::from(&polygon.boundary) {
-            let xyz = arc.points.xyz;
-            self.add_edge(
-                xyz.slice(s![0, ..]).to_owned(),
-                xyz.slice(s![1, ..]).to_owned(),
-                vec![polygon],
-            );
+        let node_indices = polygon
+            .boundary
+            .points
+            .xyzs
+            .iter()
+            .map(|xyz| self.new_node(xyz))
+            .collect::<Vec<usize>>();
+
+        let geometry_index = if let Some(index) = self
+            .geometries
+            .iter()
+            .position(|existing_polygon| existing_polygon == &polygon)
+        {
+            index
+        } else {
+            self.geometries.push(polygon);
+            self.geometries.len() - 1
+        };
+
+        for xyz_index in 0..node_indices.len() {
+            let node = self.nodes.get_mut(node_indices[xyz_index]).unwrap();
+
+            let prev_node_index = node_indices[if xyz_index > 0 {
+                xyz_index - 1
+            } else {
+                node_indices.len() - 1
+            }];
+            if let Some(edge) = node.edges.get_mut(&prev_node_index) {
+                if !edge.contains(&geometry_index) {
+                    edge.push(geometry_index);
+                }
+            } else {
+                node.edges.insert(prev_node_index, vec![geometry_index]);
+            }
+
+            let next_node_index = node_indices[if xyz_index < node_indices.len() {
+                xyz_index + 1
+            } else {
+                0
+            }];
+            if let Some(edge) = node.edges.get_mut(&next_node_index) {
+                if !edge.contains(&geometry_index) {
+                    edge.push(geometry_index);
+                }
+            } else {
+                node.edges.insert(next_node_index, vec![geometry_index]);
+            }
         }
     }
+}
 
-    fn find_disjoint_geometries(&self) -> Vec<SphericalPolygon> {
+impl<'a> From<EdgeGraph<'a, SphericalPolygon>> for Vec<SphericalPolygon> {
+    fn from(graph: EdgeGraph<'a, SphericalPolygon>) -> Self {
         let mut polygons = vec![];
-        let mut edges = self.edges.to_owned();
-
-        let tolerance = 2e-8;
+        let mut claimed_nodes = vec![];
 
         // depth-first search over edges
-        while let Some(starting_edge) = edges.pop() {
-            // start a list of points that may potentially form a closed polygon boundary
-            let mut points = starting_edge.points();
-
-            // the preferred parent should be the last of the list of parent geometries of the starting edge
-            let preferred_parent =
-                starting_edge.parent_geometries[starting_edge.parent_geometries.len() - 1];
-
-            // track the working end of the points
-            let mut working_end = points.slice(s![points.nrows() - 1, ..]).to_owned();
-
-            // go backwards to ease arbitrary removal of edges
-            for other_edge_index in (0..edges.len()).rev() {
-                let other_edge = &edges[other_edge_index];
-
-                if (&working_end - &other_edge.a).abs().sum() < tolerance
-                    || (&working_end - &other_edge.b).abs().sum() < tolerance
-                {
-                    // in order to prevent crosses, only add edges that satisfy the following criteria:
-                    // 1. belongs to the preferred geometry of the current edge, and
-                    // 2. either
-                    //   a. only has ONE parent geometry, or
-                    //   b. the preferred geometry of the working edge is NOT the ORIGINAL geometry (first parent) of the other edge
-                    if other_edge.parent_geometries.contains(&preferred_parent)
-                        && (other_edge.parent_geometries.len() == 1
-                            || other_edge.parent_geometries[0] != preferred_parent)
-                    {
-                        // retrieve the correct end of the edge
-                        working_end = if (&working_end - &other_edge.b).abs().sum() < 2e-8 {
-                            &other_edge.a
-                        } else {
-                            &other_edge.b
-                        }
-                        .to_owned();
-
-                        // remove the edge from consideration in future polygons
-                        edges.remove(other_edge_index);
-
-                        // check if the boundary loops back to the starting point
-                        if (&working_end - &points.slice(s![0, ..])).abs().sum() < tolerance {
-                            polygons.push(
-                                SphericalPolygon::new(
-                                    ArcString::new(
-                                        MultiSphericalPoint::try_from(points).unwrap(),
-                                        true,
-                                    )
-                                    .unwrap(),
-                                    None,
-                                )
-                                .unwrap(),
-                            );
-                            break;
-                        } else {
-                            points.push_row(working_end.view()).unwrap();
-                        }
-                    }
+        for (node_index, node) in graph.nodes.iter().enumerate() {
+            if !claimed_nodes.contains(&node_index) {
+                // start a list of points that may potentially form a closed polygon boundary
+                for (edge_node_index, edge_sources) in &node.edges {
+                    polygons.extend(trace_polygons(
+                        &graph.nodes,
+                        &mut claimed_nodes,
+                        &vec![node_index, *edge_node_index],
+                        edge_sources,
+                    ));
                 }
             }
         }
@@ -448,78 +458,161 @@ impl<'a> GeometryGraph<'a, SphericalPolygon> for EdgeGraph<'a, SphericalPolygon>
 
 impl<'a> GeometryGraph<'a, ArcString> for EdgeGraph<'a, ArcString> {
     fn push(&mut self, arcstring: &'a ArcString) {
-        for arc in Vec::<ArcString>::from(arcstring) {
-            let xyz = arc.points.xyz;
-            self.add_edge(
-                xyz.slice(s![0, ..]).to_owned(),
-                xyz.slice(s![1, ..]).to_owned(),
-                vec![arcstring],
-            );
-        }
-    }
+        let node_indices = arcstring
+            .points
+            .xyzs
+            .iter()
+            .map(|xyz| self.new_node(xyz))
+            .collect::<Vec<usize>>();
 
-    fn find_disjoint_geometries(&self) -> Vec<ArcString> {
-        let mut arcstrings = vec![];
-        let mut edges = self.edges.to_owned();
+        let geometry_index = if let Some(index) = self
+            .geometries
+            .iter()
+            .position(|existing_arcstring| existing_arcstring == &arcstring)
+        {
+            index
+        } else {
+            self.geometries.push(arcstring);
+            self.geometries.len() - 1
+        };
 
-        let tolerance = 2e-8;
+        for xyz_index in 0..node_indices.len() - if arcstring.closed { 0 } else { 1 } {
+            let node = self.nodes.get_mut(node_indices[xyz_index]).unwrap();
 
-        // depth-first search over edges
-        while let Some(starting_edge) = edges.pop() {
-            // start a list of points that may potentially form a closed polygon boundary
-            let mut points = starting_edge.points();
-
-            // the preferred parent should be the last of the list of parent geometries of the starting edge
-            let preferred_parent =
-                starting_edge.parent_geometries[starting_edge.parent_geometries.len() - 1];
-            let preferred_parent_a = preferred_parent.points.xyz.slice(s![0, ..]).to_owned();
-            let preferred_parent_b = preferred_parent
-                .points
-                .xyz
-                .slice(s![preferred_parent.points.xyz.nrows() - 1, ..])
-                .to_owned();
-
-            // track the working end of the points
-            let mut working_end = points.slice(s![points.nrows() - 1, ..]).to_owned();
-
-            // go backwards to ease arbitrary removal of edges
-            for other_edge_index in (0..edges.len()).rev() {
-                let other_edge = &edges[other_edge_index];
-
-                if (&working_end - &other_edge.a).abs().sum() < tolerance
-                    || (&working_end - &other_edge.b).abs().sum() < tolerance
-                {
-                    // retrieve the correct end of the edge
-                    let point_to_add = if (&working_end - &other_edge.b).abs().sum() < 2e-8 {
-                        &other_edge.a
-                    } else {
-                        &other_edge.b
-                    }
-                    .to_owned();
-
-                    // avoid adding the same edge twice
-                    if (&points.slice(s![points.nrows() - 2, ..]) - &point_to_add.view())
-                        .abs()
-                        .sum()
-                        > 2e-8
-                    {
-                        // remove the edge from consideration in future polygons
-                        edges.remove(other_edge_index);
-
-                        points.push_row(point_to_add.view()).unwrap();
-                        working_end = point_to_add;
-                    }
+            let prev_node_index = node_indices[if !arcstring.closed || xyz_index > 0 {
+                xyz_index - 1
+            } else {
+                node_indices.len() - 1
+            }];
+            if let Some(edge) = node.edges.get_mut(&prev_node_index) {
+                if !edge.contains(&geometry_index) {
+                    edge.push(geometry_index);
                 }
+            } else {
+                node.edges.insert(prev_node_index, vec![geometry_index]);
             }
 
-            // check if the arcstring loops back to the starting point
-            let closed = (&working_end - &points.slice(s![0, ..])).abs().sum() < tolerance;
-            arcstrings.push(ArcString {
-                points: MultiSphericalPoint::try_from(points).unwrap(),
-                closed,
-            });
+            let next_node_index = node_indices[if xyz_index < node_indices.len() {
+                xyz_index + 1
+            } else {
+                0
+            }];
+            if let Some(edge) = node.edges.get_mut(&next_node_index) {
+                if !edge.contains(&geometry_index) {
+                    edge.push(geometry_index);
+                }
+            } else {
+                node.edges.insert(next_node_index, vec![geometry_index]);
+            }
+        }
+    }
+}
+
+impl<'a> From<EdgeGraph<'a, ArcString>> for Vec<ArcString> {
+    fn from(value: EdgeGraph<'a, ArcString>) -> Self {
+        todo!()
+    }
+}
+
+fn trace_polygons(
+    nodes: &Vec<Node>,
+    claimed_node_indices: &mut Vec<usize>,
+    polygon_node_indices: &Vec<usize>,
+    edge_sources: &Vec<usize>,
+) -> Vec<SphericalPolygon> {
+    if nodes.is_empty() {
+        vec![]
+    } else {
+        if polygon_node_indices.len() < 2 {
+            panic!("must have at least 2 nodes populated in polygon node indices");
         }
 
-        arcstrings
+        let mut polygon_node_indices = polygon_node_indices.to_owned();
+
+        let working_node_index = polygon_node_indices[polygon_node_indices.len() - 1];
+        let working_node = &nodes[working_node_index];
+
+        let previous_node_index = polygon_node_indices[polygon_node_indices.len() - 2];
+        let previous_node = &nodes[previous_node_index];
+
+        polygon_node_indices.push(working_node_index);
+
+        // to prevent crosses, compare the angles between this edge and the next candidate edges,
+        // and choose between one of the two extremes (smallest and largest angles)
+        let edge_angles = working_node
+            .edges
+            .iter()
+            .filter_map(|(edge_node_index, edge_sources)| {
+                if !claimed_node_indices.contains(edge_node_index) {
+                    Some((
+                        (edge_node_index, edge_sources),
+                        crate::sphericalpoint::xyz_two_arc_angle_radians(
+                            &previous_node.xyz,
+                            &working_node.xyz,
+                            &nodes[*edge_node_index].xyz,
+                        ),
+                    ))
+                } else {
+                    None
+                }
+            })
+            .collect::<Vec<((&usize, &Vec<usize>), f64)>>();
+
+        if edge_angles.len() > 1 {
+            let left_node = edge_angles
+                .iter()
+                .min_by(|(edge_a, edge_angle_a), (edge_b, edge_angle_b)| {
+                    edge_angle_a.partial_cmp(edge_angle_b).unwrap()
+                })
+                .unwrap()
+                .0;
+            let right_node = edge_angles
+                .iter()
+                .min_by(|(edge_a, edge_angle_a), (edge_b, edge_angle_b)| {
+                    edge_angle_a.partial_cmp(edge_angle_b).unwrap()
+                })
+                .unwrap()
+                .0;
+
+            polygon_node_indices.push(
+                *if left_node
+                    .1
+                    .iter()
+                    .any(|source| edge_sources.contains(source))
+                {
+                    left_node
+                } else {
+                    right_node
+                }
+                .0,
+            );
+
+            trace_polygons(
+                nodes,
+                claimed_node_indices,
+                &polygon_node_indices,
+                edge_sources,
+            )
+        } else {
+            // if the traced polygon is closed...
+            if polygon_node_indices[0] == polygon_node_indices[polygon_node_indices.len() - 1] {
+                vec![SphericalPolygon::try_new(
+                    ArcString::try_from(
+                        MultiSphericalPoint::try_from(
+                            polygon_node_indices
+                                .iter()
+                                .map(|node_index| nodes[*node_index].xyz)
+                                .collect::<Vec<[f64; 3]>>(),
+                        )
+                        .unwrap(),
+                    )
+                    .unwrap(),
+                    None,
+                )
+                .unwrap()]
+            } else {
+                vec![]
+            }
+        }
     }
 }

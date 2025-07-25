@@ -14,8 +14,8 @@ mod py_sphersgeo {
     use super::*;
     use crate::geometry::{AnyGeometry, GeometricOperations, Geometry, MultiGeometry};
     use numpy::{
-        ndarray::{array, s, Array, Array2, Axis},
-        IntoPyArray, PyArray1, PyArray2, PyReadonlyArray1, PyReadonlyArray2, ToPyArray,
+        ndarray::{Array1, Array2},
+        IntoPyArray, PyArray1, PyArray2, PyReadonlyArray1, PyReadonlyArray2,
     };
     use pyo3::{exceptions::PyValueError, types::PyType};
 
@@ -27,47 +27,40 @@ mod py_sphersgeo {
     enum PySphericalPointInputs<'py> {
         // NOTE: AnyGeometry MUST be the first option in this enum, otherwise it will attempt to match another pattern
         AnyGeometry(AnyGeometry),
-        NumpyArray(PyReadonlyArray1<'py, f64>),
+        Array([f64; 3]),
         Tuple((f64, f64, f64)),
+        NumpyArray(PyReadonlyArray1<'py, f64>),
         List(Vec<f64>),
     }
 
     #[derive(FromPyObject)]
     enum PySphericalPointLonLatInputs<'py> {
-        NumpyArray(PyReadonlyArray1<'py, f64>),
+        Array([f64; 2]),
         Tuple((f64, f64)),
+        NumpyArray(PyReadonlyArray1<'py, f64>),
         List(Vec<f64>),
     }
 
     #[pymethods]
     impl SphericalPoint {
         #[new]
-        fn py_new(point: PySphericalPointInputs) -> PyResult<Self> {
-            let xyz = match point {
-                PySphericalPointInputs::NumpyArray(xyz) => xyz.as_array().to_owned(),
-                PySphericalPointInputs::Tuple((x, y, z)) => array![x, y, z],
-                PySphericalPointInputs::List(list) => Array::from_vec(list),
-                PySphericalPointInputs::AnyGeometry(geometry) => {
-                    return match geometry {
-                        AnyGeometry::SphericalPoint(point) => Ok(point),
-                        _ => Err(PyValueError::new_err(format!(
-                            "cannot derive vector point from {geometry:?}",
-                        ))),
-                    };
+        fn py_new(xyz: PySphericalPointInputs) -> PyResult<Self> {
+            Ok(match xyz {
+                PySphericalPointInputs::AnyGeometry(geometry) => match geometry {
+                    AnyGeometry::SphericalPoint(point) => Ok(point),
+                    _ => Err(PyValueError::new_err(format!(
+                        "cannot derive vector point from {geometry:?}",
+                    ))),
+                }?,
+                PySphericalPointInputs::Array(xyz) => Self::from(xyz),
+                PySphericalPointInputs::Tuple(xyz) => Self::from(&xyz),
+                PySphericalPointInputs::NumpyArray(xyz) => {
+                    Self::try_from(&xyz.as_array()).map_err(PyValueError::new_err)?
                 }
-            };
-
-            Self::try_from(xyz).map_err(|err| PyValueError::new_err(err.to_string()))
-        }
-
-        #[classmethod]
-        #[pyo3(name = "normalize")]
-        fn py_normalize<'py>(
-            cls: &Bound<'py, PyType>,
-            point: PySphericalPointInputs,
-        ) -> PyResult<Self> {
-            // TODO: normalize vector before passing to constructor
-            Ok(Self::py_new(point)?.is_unit())
+                PySphericalPointInputs::List(xyz) => {
+                    Self::try_from(&xyz).map_err(PyValueError::new_err)?
+                }
+            })
         }
 
         /// from the given coordinates, build an xyz vector representing a point on the sphere
@@ -75,44 +68,43 @@ mod py_sphersgeo {
         #[pyo3(name = "from_lonlat")]
         fn py_from_lonlat<'py>(
             cls: &Bound<'py, PyType>,
-            coordinates: PySphericalPointLonLatInputs,
-        ) -> PyResult<Self> {
-            let coordinates = match coordinates {
-                PySphericalPointLonLatInputs::NumpyArray(coordinates) => {
-                    coordinates.as_array().to_owned()
+            lonlat: PySphericalPointLonLatInputs,
+        ) -> Self {
+            let lonlat = match lonlat {
+                PySphericalPointLonLatInputs::Array(lonlat) => lonlat,
+                PySphericalPointLonLatInputs::NumpyArray(lonlat) => {
+                    let lonlat = lonlat.as_array();
+                    [lonlat[0], lonlat[1]]
                 }
-                PySphericalPointLonLatInputs::Tuple((lon, lat)) => array![lon, lat],
-                PySphericalPointLonLatInputs::List(list) => Array::from_vec(list),
+                PySphericalPointLonLatInputs::Tuple((lon, lat)) => [lon, lat],
+                PySphericalPointLonLatInputs::List(list) => [list[0], list[1]],
             };
 
-            match Self::try_from_lonlat(&coordinates.view()) {
-                Ok(result) => Ok(result),
-                Err(err) => Err(PyValueError::new_err(err)),
-            }
+            Self::from_lonlat(&lonlat)
         }
 
         /// xyz vector as a 1-dimensional array of 3 floats
         #[getter]
-        fn get_xyz<'py>(&self, py: Python<'py>) -> Bound<'py, PyArray1<f64>> {
-            self.xyz.to_pyarray(py)
+        fn get_xyz(&self) -> [f64; 3] {
+            self.xyz
         }
 
         /// convert this point on the sphere to angular coordinates
         #[pyo3(name = "to_lonlat")]
-        fn py_to_lonlat<'py>(&self, py: Python<'py>) -> Bound<'py, PyArray1<f64>> {
-            self.to_lonlat().into_pyarray(py)
-        }
-
-        /// normalize this vector to length 1 (the unit sphere) while preserving direction
-        #[getter]
-        fn get_normalized(&self) -> Self {
-            self.is_unit()
+        fn py_to_lonlat(&self) -> [f64; 2] {
+            self.to_lonlat()
         }
 
         /// angle on the sphere between this point and two other points
-        #[pyo3(name = "angle_between")]
-        fn py_angle_between(&self, a: &SphericalPoint, b: &SphericalPoint) -> f64 {
+        #[pyo3(name = "two_arc_angle")]
+        fn py_two_arc_angle(&self, a: &SphericalPoint, b: &SphericalPoint) -> f64 {
             self.two_arc_angle(a, b)
+        }
+
+        /// whether this point shares a line with two other points
+        #[pyo3(name = "collinear")]
+        fn py_collinear(&self, a: &SphericalPoint, b: &SphericalPoint) -> bool {
+            self.collinear(a, b)
         }
 
         /// create n number of points equally spaced on an arc between this point and another point
@@ -124,12 +116,6 @@ mod py_sphersgeo {
         ) -> PyResult<MultiSphericalPoint> {
             self.interpolate_between(other, n)
                 .map_err(|err| PyValueError::new_err(err.to_string()))
-        }
-
-        /// whether this point shares a line with two other points
-        #[pyo3(name = "collinear")]
-        fn py_collinear(&self, a: &SphericalPoint, b: &SphericalPoint) -> bool {
-            self.collinear(a, b)
         }
 
         /// length of the underlying xyz vector
@@ -299,8 +285,20 @@ mod py_sphersgeo {
             }
         }
 
-        fn __add__(&self, other: &Self) -> MultiSphericalPoint {
+        fn __add__(&self, other: &Self) -> SphericalPoint {
             self + other
+        }
+
+        fn __sub__(&self, other: &Self) -> SphericalPoint {
+            self - other
+        }
+
+        fn __mul__(&self, other: &Self) -> SphericalPoint {
+            self * other
+        }
+
+        fn __div__(&self, other: &Self) -> SphericalPoint {
+            self / other
         }
 
         fn __eq__(&self, other: &Self) -> bool {
@@ -324,38 +322,26 @@ mod py_sphersgeo {
     enum PyMultiSphericalPointInputs<'py> {
         // NOTE: AnyGeometry MUST be the first option in this enum, otherwise it will attempt to match another pattern
         AnyGeometry(AnyGeometry),
-        NumpyArray(PyReadonlyArray2<'py, f64>),
+        ListOfPoints(Vec<SphericalPoint>),
+        ListOfArrays(Vec<[f64; 3]>),
         ListOfTuples(Vec<(f64, f64, f64)>),
+        NumpyArray(PyReadonlyArray2<'py, f64>),
         NestedList(Vec<Vec<f64>>),
-        FlatList(Vec<f64>),
-        PointList(Vec<SphericalPoint>),
     }
 
     #[derive(FromPyObject)]
     enum PyMultiSphericalPointLonLatInputs<'py> {
-        NumpyArray(PyReadonlyArray2<'py, f64>),
+        ListOfArrays(Vec<[f64; 2]>),
         ListOfTuples(Vec<(f64, f64)>),
+        NumpyArray(PyReadonlyArray2<'py, f64>),
         NestedList(Vec<Vec<f64>>),
-        FlatList(Vec<f64>),
     }
 
     #[pymethods]
     impl MultiSphericalPoint {
         #[new]
-        fn py_new(points: PyMultiSphericalPointInputs) -> PyResult<Self> {
-            match points {
-                PyMultiSphericalPointInputs::NumpyArray(xyz) => {
-                    Self::try_from(xyz.as_array().to_owned())
-                        .map_err(|err| PyValueError::new_err(err.to_string()))
-                }
-                PyMultiSphericalPointInputs::ListOfTuples(list) => Ok(Self::from(&list)),
-                PyMultiSphericalPointInputs::NestedList(list) => {
-                    Self::try_from(&list).map_err(|err| PyValueError::new_err(err.to_string()))
-                }
-                PyMultiSphericalPointInputs::FlatList(list) => {
-                    Self::try_from(list).map_err(|err| PyValueError::new_err(err.to_string()))
-                }
-                PyMultiSphericalPointInputs::PointList(list) => Ok(Self::from(&list)),
+        fn py_new(xyzs: PyMultiSphericalPointInputs) -> PyResult<Self> {
+            match xyzs {
                 PyMultiSphericalPointInputs::AnyGeometry(geometry) => match geometry {
                     AnyGeometry::SphericalPoint(point) => Ok(point.vertices()),
                     AnyGeometry::MultiSphericalPoint(multipoint) => Ok(multipoint),
@@ -364,54 +350,50 @@ mod py_sphersgeo {
                     AnyGeometry::SphericalPolygon(polygon) => Ok(polygon.vertices()),
                     AnyGeometry::MultiSphericalPolygon(multipolygon) => Ok(multipolygon.vertices()),
                 },
+                PyMultiSphericalPointInputs::ListOfPoints(points) => {
+                    Self::try_from(points).map_err(|err| PyValueError::new_err(err.to_string()))
+                }
+                PyMultiSphericalPointInputs::ListOfArrays(xyzs) => {
+                    Self::try_from(xyzs).map_err(|err| PyValueError::new_err(err.to_string()))
+                }
+                PyMultiSphericalPointInputs::ListOfTuples(xyzs) => {
+                    Self::try_from(&xyzs).map_err(|err| PyValueError::new_err(err.to_string()))
+                }
+                PyMultiSphericalPointInputs::NumpyArray(xyzs) => {
+                    Self::try_from(xyzs.as_array().to_owned())
+                        .map_err(|err| PyValueError::new_err(err.to_string()))
+                }
+                PyMultiSphericalPointInputs::NestedList(xyzs) => {
+                    Self::try_from(&xyzs).map_err(|err| PyValueError::new_err(err.to_string()))
+                }
             }
-        }
-
-        #[classmethod]
-        #[pyo3(name = "normalize")]
-        fn py_normalize<'py>(
-            cls: &Bound<'py, PyType>,
-            points: PyMultiSphericalPointInputs,
-        ) -> PyResult<Self> {
-            // TODO: normalize vectors before passing to constructor
-            Ok(Self::py_new(points)?.normalized())
         }
 
         /// from the given coordinates, build xyz vectors representing points on the sphere
         #[classmethod]
-        #[pyo3(name = "from_lonlat")]
-        fn py_from_lonlat<'py>(
+        #[pyo3(name = "from_lonlats")]
+        fn py_from_lonlats<'py>(
             cls: &Bound<'py, PyType>,
-            coordinates: PyMultiSphericalPointLonLatInputs,
+            lonlats: PyMultiSphericalPointLonLatInputs,
         ) -> PyResult<Self> {
-            let coordinates = match coordinates {
-                PyMultiSphericalPointLonLatInputs::NumpyArray(coordinates) => {
-                    coordinates.as_array().to_owned()
+            let lonlats = match lonlats {
+                PyMultiSphericalPointLonLatInputs::ListOfArrays(lonlats) => lonlats,
+                PyMultiSphericalPointLonLatInputs::ListOfTuples(lonlats) => {
+                    lonlats.iter().map(|lonlat| [lonlat.0, lonlat.1]).collect()
                 }
-                PyMultiSphericalPointLonLatInputs::ListOfTuples(list) => {
-                    let mut xyz = Array2::uninit((list.len(), 2));
-                    for (index, tuple) in list.iter().enumerate() {
-                        array![tuple.0, tuple.1].assign_to(xyz.index_axis_mut(Axis(0), index));
-                    }
-                    unsafe { xyz.assume_init() }
-                }
-                PyMultiSphericalPointLonLatInputs::NestedList(list) => {
-                    let mut xyz = Array2::<f64>::default((list.len(), 3));
-                    for (i, mut point) in xyz.axis_iter_mut(Axis(0)).enumerate() {
-                        for (j, value) in point.iter_mut().enumerate() {
-                            *value = list[i][j];
-                        }
-                    }
-
-                    xyz
-                }
-                PyMultiSphericalPointLonLatInputs::FlatList(list) => {
-                    Array2::from_shape_vec((list.len(), 3), list)
-                        .map_err(|err| PyValueError::new_err(format!("{err}")))?
-                }
+                PyMultiSphericalPointLonLatInputs::NumpyArray(lonlats) => lonlats
+                    .as_array()
+                    .rows()
+                    .into_iter()
+                    .map(|lonlat| [lonlat[0], lonlat[1]])
+                    .collect(),
+                PyMultiSphericalPointLonLatInputs::NestedList(lonlats) => lonlats
+                    .iter()
+                    .map(|lonlat| [lonlat[0], lonlat[1]])
+                    .collect(),
             };
 
-            match Self::try_from_lonlat(&coordinates.view()) {
+            match Self::try_from_lonlats(&lonlats) {
                 Ok(result) => Ok(result),
                 Err(err) => Err(PyValueError::new_err(err)),
             }
@@ -419,20 +401,14 @@ mod py_sphersgeo {
 
         /// xyz vectors as a 2-dimensional array of Nx3 floats
         #[getter]
-        fn get_xyz<'py>(&self, py: Python<'py>) -> Bound<'py, PyArray2<f64>> {
-            self.xyz.to_pyarray(py)
+        fn get_xyzs<'py>(&self, py: Python<'py>) -> Bound<'py, PyArray2<f64>> {
+            Array2::<f64>::from(self).into_pyarray(py)
         }
 
         /// convert to angle coordinates along the sphere
-        #[pyo3(name = "to_lonlat")]
-        fn py_to_lonlat<'py>(&self, py: Python<'py>) -> Bound<'py, PyArray2<f64>> {
-            self.to_lonlat().into_pyarray(py)
-        }
-
-        /// normalize the underlying vectors to length 1 (the unit sphere) while preserving direction
-        #[getter]
-        fn get_normalized(&self) -> Self {
-            self.normalized()
+        #[pyo3(name = "to_lonlats")]
+        fn py_to_lonlats<'py>(&self, py: Python<'py>) -> Bound<'py, PyArray2<f64>> {
+            Array2::<f64>::from(self.to_lonlats()).into_pyarray(py)
         }
 
         /// rotate the underlying vector by theta angle around other vectors
@@ -444,29 +420,7 @@ mod py_sphersgeo {
         /// lengths of the underlying xyz vectors
         #[getter]
         fn get_vector_lengths<'py>(&self, py: Python<'py>) -> Bound<'py, PyArray1<f64>> {
-            self.vector_lengths().into_pyarray(py)
-        }
-
-        /// angles on the sphere between these points and other sets of points
-        #[pyo3(name = "angles_between")]
-        fn py_angles_between<'py>(
-            &self,
-            py: Python<'py>,
-            a: &MultiSphericalPoint,
-            b: &MultiSphericalPoint,
-        ) -> Bound<'py, PyArray1<f64>> {
-            self.two_arc_angles(a, b).into_pyarray(py)
-        }
-
-        /// whether these points share a line with the given points
-        #[pyo3(name = "collinear")]
-        fn py_collinear<'py>(
-            &self,
-            py: Python<'py>,
-            a: &SphericalPoint,
-            b: &SphericalPoint,
-        ) -> Bound<'py, PyArray1<bool>> {
-            self.collinear(a, b).into_pyarray(py)
+            Array1::<f64>::from(self.vector_lengths()).into_pyarray(py)
         }
 
         #[getter]
@@ -626,7 +580,7 @@ mod py_sphersgeo {
 
         #[getter]
         fn get_parts(&self) -> Vec<SphericalPoint> {
-            self.into()
+            self.to_owned().into()
         }
 
         fn __concat__(&self, other: &Self) -> Self {
@@ -640,7 +594,7 @@ mod py_sphersgeo {
 
         fn __getitem__(&self, index: usize) -> SphericalPoint {
             SphericalPoint {
-                xyz: self.xyz.slice(s![index, ..]).to_owned(),
+                xyz: self.xyzs[index],
             }
         }
 
@@ -728,7 +682,7 @@ mod py_sphersgeo {
         /// radians subtended by each arc on the sphere
         #[getter]
         fn get_lengths<'py>(&self, py: Python<'py>) -> Bound<'py, PyArray1<f64>> {
-            self.lengths().into_pyarray(py)
+            Array1::<f64>::from(self.lengths()).into_pyarray(py)
         }
 
         /// midpoints of each arc
@@ -986,7 +940,7 @@ mod py_sphersgeo {
         /// radians subtended by each arcstring on the sphere
         #[getter]
         fn get_lengths<'py>(&self, py: Python<'py>) -> Bound<'py, PyArray1<f64>> {
-            self.lengths().into_pyarray(py)
+            Array1::<f64>::from(self.lengths()).into_pyarray(py)
         }
 
         /// midpoints of each arc
@@ -1190,7 +1144,7 @@ mod py_sphersgeo {
             } else {
                 None
             };
-            Self::new(boundary, interior_point)
+            Self::try_new(boundary, interior_point)
                 .map_err(|err| PyValueError::new_err(err.to_string()))
         }
 
@@ -1207,16 +1161,6 @@ mod py_sphersgeo {
                 &radius,
                 steps,
             ))
-        }
-
-        #[getter]
-        fn get_antipode(&self) -> SphericalPoint {
-            self.antipode()
-        }
-
-        #[getter]
-        fn get_inverse(&self) -> Self {
-            self.inverse()
         }
 
         #[getter]
@@ -1413,7 +1357,7 @@ mod py_sphersgeo {
                     let mut polygons: Vec<SphericalPolygon> = vec![];
                     for arcstring in arcstrings {
                         polygons.push(
-                            SphericalPolygon::new(ArcString::py_new(arcstring, true)?, None)
+                            SphericalPolygon::try_new(ArcString::py_new(arcstring, true)?, None)
                                 .map_err(|err| PyValueError::new_err(err.to_string()))?,
                         );
                     }
@@ -1617,89 +1561,31 @@ mod py_sphersgeo {
         use super::*;
 
         #[pyfunction]
-        #[pyo3(name = "normalize_vector")]
-        fn py_normalize_vector<'py>(
-            py: Python<'py>,
-            xyz: PyReadonlyArray1<f64>,
-        ) -> Bound<'py, PyArray1<f64>> {
-            crate::sphericalpoint::normalize_vector(&xyz.as_array()).into_pyarray(py)
+        #[pyo3(name = "xyz_radians_over_sphere_between")]
+        fn py_xyz_radians_over_sphere_between(a: [f64; 3], b: [f64; 3]) -> f64 {
+            crate::sphericalpoint::xyz_radians_over_sphere_between(&a, &b)
         }
 
         #[pyfunction]
-        #[pyo3(name = "normalize_vectors")]
-        fn py_normalize_vectors<'py>(
-            py: Python<'py>,
-            xyz: PyReadonlyArray2<f64>,
-        ) -> Bound<'py, PyArray2<f64>> {
-            crate::sphericalpoint::normalize_vectors(&xyz.as_array()).into_pyarray(py)
-        }
-
-        #[pyfunction]
-        #[pyo3(name = "vector_arc_radians", signature=(a, b, normalized=false))]
-        fn py_vector_arc_radians(
-            a: PyReadonlyArray1<f64>,
-            b: PyReadonlyArray1<f64>,
-            normalized: bool,
-        ) -> f64 {
-            crate::sphericalpoint::vector_arc_radians(&a.as_array(), &b.as_array(), normalized)
-        }
-
-        #[pyfunction]
-        #[pyo3(name="interpolate_points_along_vector_arc", signature=(a, b, n=50))]
-        fn py_interpolate_points_along_vector_arc<'py>(
-            py: Python<'py>,
-            a: PyReadonlyArray1<f64>,
-            b: PyReadonlyArray1<f64>,
+        #[pyo3(name="xyz_interpolate_between", signature=(a, b, n=50))]
+        fn py_xyz_interpolate_between(
+            a: [f64; 3],
+            b: [f64; 3],
             n: usize,
-        ) -> PyResult<Bound<'py, PyArray2<f64>>> {
-            match crate::arcstring::xyz_interpolate_between(&a.as_array(), &b.as_array(), n) {
-                Ok(result) => Ok(result.into_pyarray(py)),
-                Err(err) => Err(PyValueError::new_err(err)),
-            }
+        ) -> PyResult<Vec<[f64; 3]>> {
+            crate::arcstring::xyz_interpolate_between(&a, &b, n).map_err(PyValueError::new_err)
         }
 
         #[pyfunction]
-        #[pyo3(name = "angle_between_vectors_radians")]
-        fn py_angle_between_vectors_radians(
-            a: PyReadonlyArray1<f64>,
-            b: PyReadonlyArray1<f64>,
-            c: PyReadonlyArray1<f64>,
-        ) -> f64 {
-            crate::sphericalpoint::angle_between_vectors_radians(
-                &a.as_array(),
-                &b.as_array(),
-                &c.as_array(),
-            )
-        }
-
-        #[pyfunction]
-        #[pyo3(name = "angles_between_vectors_radians")]
-        fn py_angles_between_vectors_radians<'py>(
-            py: Python<'py>,
-            a: PyReadonlyArray2<f64>,
-            b: PyReadonlyArray2<f64>,
-            c: PyReadonlyArray2<f64>,
-        ) -> Bound<'py, PyArray1<f64>> {
-            crate::sphericalpoint::angles_between_vectors_radians(
-                &a.as_array(),
-                &b.as_array(),
-                &c.as_array(),
-            )
-            .into_pyarray(py)
+        #[pyo3(name = "xyz_two_arc_angle_radians")]
+        fn py_xyz_two_arc_angle_radians(a: [f64; 3], b: [f64; 3], c: [f64; 3]) -> f64 {
+            crate::sphericalpoint::xyz_two_arc_angle_radians(&a, &b, &c)
         }
 
         #[pyfunction]
         #[pyo3(name = "spherical_triangle_area")]
-        fn py_spherical_triangle_area(
-            a: PyReadonlyArray1<f64>,
-            b: PyReadonlyArray1<f64>,
-            c: PyReadonlyArray1<f64>,
-        ) -> f64 {
-            crate::sphericalpolygon::spherical_triangle_area(
-                &a.as_array(),
-                &b.as_array(),
-                &c.as_array(),
-            )
+        fn py_spherical_triangle_area(a: [f64; 3], b: [f64; 3], c: [f64; 3]) -> f64 {
+            crate::sphericalpolygon::spherical_triangle_area(&a, &b, &c)
         }
     }
 }

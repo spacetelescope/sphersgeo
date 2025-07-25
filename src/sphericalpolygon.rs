@@ -48,7 +48,7 @@ pub fn spherical_triangle_area(a: &[f64; 3], b: &[f64; 3], c: &[f64; 3]) -> f64 
 pub fn point_in_polygon_boundary(
     point: &[f64; 3],
     polygon_interior_xyz: &[f64; 3],
-    polygon_boundary_xyzs: &Vec<[f64; 3]>,
+    polygon_boundary_xyzs: &[[f64; 3]],
 ) -> bool {
     // record the number of times the ray intersects the exterior boundary arcstring
     let mut crossings = 0;
@@ -69,7 +69,7 @@ pub fn point_in_polygon_boundary(
     crossings % 2 == 0
 }
 
-fn polygon_boundary_is_convex(xyzs: &Vec<[f64; 3]>) -> bool {
+fn polygon_boundary_is_convex(xyzs: &[[f64; 3]]) -> bool {
     // if all orientations are positive, the polygon is convex
     let orient = orientation(xyzs);
 
@@ -89,7 +89,7 @@ fn polygon_boundary_is_convex(xyzs: &Vec<[f64; 3]>) -> bool {
 /// with the vertex tells you this. The polygon is ordered clockwise if
 /// the vertices are predominantly clockwise and counter-clockwise if
 /// the reverse.
-fn orientation(xyzs: &Vec<[f64; 3]>) -> Vec<f64> {
+fn orientation(xyzs: &[[f64; 3]]) -> Vec<f64> {
     (0..xyzs.len() - 2)
         .map(|index| {
             let a = xyzs[index];
@@ -105,7 +105,7 @@ fn orientation(xyzs: &Vec<[f64; 3]>) -> Vec<f64> {
 }
 
 fn centroid_from_polygon_boundary(xyzs: &Vec<[f64; 3]>) -> SphericalPoint {
-    let mut orient = orientation(&xyzs);
+    let mut orient = orientation(xyzs);
 
     // make positive orientation the dominant
     if orient.iter().sum::<f64>() < 0.0 {
@@ -210,7 +210,7 @@ impl Display for SphericalPolygon {
 
 impl SphericalPolygon {
     /// interior point is required because a sphere is a finite space
-    pub fn new(
+    pub fn try_new(
         boundary: ArcString,
         interior_point: Option<SphericalPoint>,
     ) -> Result<Self, String> {
@@ -281,7 +281,7 @@ impl SphericalPolygon {
             .par_map_collect(|spoke| xyz.vector_rotate_around(center, spoke).xyz)
             .to_vec();
 
-        Self::new(
+        Self::try_new(
             ArcString::try_from(MultiSphericalPoint::try_from(vertices).unwrap()).unwrap(),
             Some(center.to_owned()),
         )
@@ -290,7 +290,7 @@ impl SphericalPolygon {
 
     /// invert this polygon on the sphere
     pub fn inverse(&self) -> SphericalPolygon {
-        Self::new(self.boundary.to_owned(), Some(&self.centroid() * &-1.0)).unwrap()
+        Self::try_new(self.boundary.to_owned(), Some(&self.centroid() * &-1.0)).unwrap()
     }
 
     /// whether all interior angles are clockwise
@@ -304,7 +304,7 @@ impl SphericalPolygon {
     }
 }
 
-impl Geometry for &SphericalPolygon {
+impl Geometry for SphericalPolygon {
     fn vertices(&self) -> crate::sphericalpoint::MultiSphericalPoint {
         self.boundary.vertices()
     }
@@ -368,7 +368,7 @@ impl Geometry for &SphericalPolygon {
     }
 
     fn centroid(&self) -> crate::sphericalpoint::SphericalPoint {
-        (*self).centroid()
+        centroid_from_polygon_boundary(&self.boundary.points.xyzs)
     }
 
     fn boundary(&self) -> Option<ArcString> {
@@ -377,36 +377,6 @@ impl Geometry for &SphericalPolygon {
 
     fn convex_hull(&self) -> Option<SphericalPolygon> {
         self.boundary.convex_hull()
-    }
-}
-
-impl Geometry for SphericalPolygon {
-    fn vertices(&self) -> crate::sphericalpoint::MultiSphericalPoint {
-        self.boundary.vertices()
-    }
-
-    fn area(&self) -> f64 {
-        (&self).area()
-    }
-
-    fn length(&self) -> f64 {
-        (&self).length()
-    }
-
-    fn representative(&self) -> crate::sphericalpoint::SphericalPoint {
-        (&self).representative()
-    }
-
-    fn centroid(&self) -> crate::sphericalpoint::SphericalPoint {
-        centroid_from_polygon_boundary(&self.boundary.points.xyzs)
-    }
-
-    fn boundary(&self) -> Option<ArcString> {
-        (&self).boundary()
-    }
-
-    fn convex_hull(&self) -> Option<SphericalPolygon> {
-        (&self).convex_hull()
     }
 }
 
@@ -538,11 +508,15 @@ impl GeometricOperations<ArcString> for SphericalPolygon {
     }
 
     fn contains(&self, other: &ArcString) -> bool {
-        // endpoints of an arcstring are not part of the set
-        self.contains(
-            &MultiSphericalPoint::try_from(other.points.xyzs[1..other.points.len() - 1].to_owned())
+        self.touches(other)
+            || self.crosses(other)
+            || self.contains(
+                &MultiSphericalPoint::try_from(
+                    // endpoints of an arcstring are not part of the set
+                    other.points.xyzs[1..other.points.len() - 1].to_owned(),
+                )
                 .unwrap(),
-        )
+            )
     }
 
     fn within(&self, _: &ArcString) -> bool {
@@ -650,7 +624,8 @@ impl GeometricOperations<ArcString> for SphericalPolygon {
                                 }
 
                                 for piece in pieces {
-                                    new_polygons.push(SphericalPolygon::new(piece, None).unwrap());
+                                    new_polygons
+                                        .push(SphericalPolygon::try_new(piece, None).unwrap());
                                 }
                             }
                         }
@@ -780,7 +755,7 @@ impl GeometricOperations<SphericalPolygon> for SphericalPolygon {
                         if segment_index != other_segment_index && segment.adjoins(other_segment) {
                             let joined = segment.join(other_segment).unwrap();
                             if joined.closed {
-                                polygons.push(SphericalPolygon::new(joined, None).unwrap());
+                                polygons.push(SphericalPolygon::try_new(joined, None).unwrap());
                             } else {
                                 joined_segments.push(joined);
                                 segment_removal_indices.push(segment_index);
@@ -927,7 +902,7 @@ impl PartialEq<Vec<SphericalPolygon>> for MultiSphericalPolygon {
     }
 }
 
-impl Geometry for &MultiSphericalPolygon {
+impl Geometry for MultiSphericalPolygon {
     fn vertices(&self) -> crate::sphericalpoint::MultiSphericalPoint {
         self.polygons
             .par_iter()
@@ -969,36 +944,6 @@ impl Geometry for &MultiSphericalPolygon {
 
     fn convex_hull(&self) -> Option<SphericalPolygon> {
         self.vertices().convex_hull()
-    }
-}
-
-impl Geometry for MultiSphericalPolygon {
-    fn vertices(&self) -> crate::sphericalpoint::MultiSphericalPoint {
-        (&self).vertices()
-    }
-
-    fn area(&self) -> f64 {
-        (&self).area()
-    }
-
-    fn length(&self) -> f64 {
-        (&self).length()
-    }
-
-    fn representative(&self) -> crate::sphericalpoint::SphericalPoint {
-        (&self).representative()
-    }
-
-    fn centroid(&self) -> crate::sphericalpoint::SphericalPoint {
-        (&self).centroid()
-    }
-
-    fn boundary(&self) -> Option<MultiArcString> {
-        (&self).boundary()
-    }
-
-    fn convex_hull(&self) -> Option<SphericalPolygon> {
-        (&self).convex_hull()
     }
 }
 
@@ -1335,32 +1280,36 @@ impl GeometryCollection<SphericalPolygon> for MultiSphericalPolygon {
     fn join(&self) -> Self {
         let mut graph = self.to_graph();
         graph.split_edges();
-        graph.prune_overlapping_edges();
-        graph.prune_degenerate_edges();
+        graph.assign_polygons_to_edges();
+        graph.remove_multisourced_edges();
+        graph.remove_degenerate_edges();
 
-        MultiSphericalPolygon::try_from(graph.find_disjoint_geometries()).unwrap()
+        MultiSphericalPolygon::try_from(Vec::<SphericalPolygon>::from(graph)).unwrap()
     }
 
     fn overlap(&self) -> Option<Self> {
         let mut graph = self.to_graph();
         graph.split_edges();
-        graph.prune_nonoverlapping_edges();
-        graph.prune_degenerate_edges();
+        graph.assign_polygons_to_edges();
+        graph.remove_unisourced_edges();
+        graph.remove_degenerate_edges();
 
-        MultiSphericalPolygon::try_from(graph.find_disjoint_geometries()).ok()
+        MultiSphericalPolygon::try_from(Vec::<SphericalPolygon>::from(graph)).ok()
     }
 
     fn symmetric_split(&self) -> Self {
         let mut split_graph = self.to_graph();
         split_graph.split_edges();
+        split_graph.assign_polygons_to_edges();
 
         let mut overlap_graph = self.to_graph();
         overlap_graph.split_edges();
-        overlap_graph.prune_nonoverlapping_edges();
-        overlap_graph.prune_degenerate_edges();
+        overlap_graph.assign_polygons_to_edges();
+        overlap_graph.remove_unisourced_edges();
+        overlap_graph.remove_degenerate_edges();
 
-        let mut polygons = split_graph.find_disjoint_geometries();
-        polygons.extend(overlap_graph.find_disjoint_geometries());
+        let mut polygons = Vec::<SphericalPolygon>::from(split_graph);
+        polygons.extend(Vec::<SphericalPolygon>::from(overlap_graph));
 
         MultiSphericalPolygon::try_from(polygons).unwrap()
     }

@@ -79,7 +79,7 @@ pub fn xyz_eq(a: &[f64; 3], b: &[f64; 3]) -> bool {
 pub fn xyzs_sum(xyzs: &Vec<[f64; 3]>) -> [f64; 3] {
     let mut sum = [0.0, 0.0, 0.0];
     for xyz in xyzs {
-        sum = xyz_add_xyz(&sum, &xyz);
+        sum = xyz_add_xyz(&sum, xyz);
     }
     sum
 }
@@ -300,12 +300,6 @@ pub struct SphericalPoint {
     pub xyz: [f64; 3],
 }
 
-impl From<&[f64; 3]> for SphericalPoint {
-    fn from(xyz: &[f64; 3]) -> Self {
-        Self::from(*xyz)
-    }
-}
-
 impl From<[f64; 3]> for SphericalPoint {
     fn from(xyz: [f64; 3]) -> Self {
         let length = xyz_length(&xyz);
@@ -366,6 +360,12 @@ impl<'a> TryFrom<&ArrayView1<'a, f64>> for SphericalPoint {
 impl From<SphericalPoint> for [f64; 3] {
     fn from(point: SphericalPoint) -> Self {
         point.xyz
+    }
+}
+
+impl<'a> From<&'a SphericalPoint> for &'a [f64; 3] {
+    fn from(point: &'a SphericalPoint) -> Self {
+        &point.xyz
     }
 }
 
@@ -449,7 +449,7 @@ impl Add<&f64> for &SphericalPoint {
     type Output = SphericalPoint;
 
     fn add(self, rhs: &f64) -> Self::Output {
-        Self::Output::from(&xyz_add_f64(&self.xyz, rhs))
+        Self::Output::from(xyz_add_f64(&self.xyz, rhs))
     }
 }
 
@@ -457,7 +457,7 @@ impl Sub<&f64> for &SphericalPoint {
     type Output = SphericalPoint;
 
     fn sub(self, rhs: &f64) -> Self::Output {
-        Self::Output::from(&xyz_sub_f64(&self.xyz, rhs))
+        Self::Output::from(xyz_sub_f64(&self.xyz, rhs))
     }
 }
 
@@ -465,7 +465,7 @@ impl Mul<&f64> for &SphericalPoint {
     type Output = SphericalPoint;
 
     fn mul(self, rhs: &f64) -> Self::Output {
-        Self::Output::from(&xyz_mul_f64(&self.xyz, rhs))
+        Self::Output::from(xyz_mul_f64(&self.xyz, rhs))
     }
 }
 
@@ -473,7 +473,7 @@ impl Div<&f64> for &SphericalPoint {
     type Output = SphericalPoint;
 
     fn div(self, rhs: &f64) -> Self::Output {
-        Self::Output::from(&xyz_div_f64(&self.xyz, rhs))
+        Self::Output::from(xyz_div_f64(&self.xyz, rhs))
     }
 }
 
@@ -509,7 +509,7 @@ impl DivAssign<&f64> for SphericalPoint {
     }
 }
 
-impl Neg for SphericalPoint {
+impl Neg for &SphericalPoint {
     type Output = SphericalPoint;
 
     fn neg(self) -> Self::Output {
@@ -584,51 +584,21 @@ impl PartialEq for SphericalPoint {
     }
 }
 
-impl Geometry for &SphericalPoint {
-    fn vertices(&self) -> MultiSphericalPoint {
-        (*self).to_owned().into()
-    }
-
-    fn area(&self) -> f64 {
-        0.
-    }
-
-    fn length(&self) -> f64 {
-        0.
-    }
-
-    fn representative(&self) -> SphericalPoint {
-        (*self).to_owned()
-    }
-
-    fn centroid(&self) -> crate::sphericalpoint::SphericalPoint {
-        (*self).to_owned()
-    }
-
-    fn boundary(&self) -> Option<SphericalPoint> {
-        None
-    }
-
-    fn convex_hull(&self) -> Option<crate::sphericalpolygon::SphericalPolygon> {
-        None
-    }
-}
-
 impl Geometry for SphericalPoint {
     fn vertices(&self) -> MultiSphericalPoint {
         self.to_owned().into()
     }
 
     fn area(&self) -> f64 {
-        (&self).area()
+        0.
     }
 
     fn length(&self) -> f64 {
-        (&self).length()
+        0.
     }
 
     fn representative(&self) -> SphericalPoint {
-        (&self).representative()
+        self.to_owned()
     }
 
     fn centroid(&self) -> crate::sphericalpoint::SphericalPoint {
@@ -636,11 +606,11 @@ impl Geometry for SphericalPoint {
     }
 
     fn boundary(&self) -> Option<SphericalPoint> {
-        (&self).boundary()
+        None
     }
 
     fn convex_hull(&self) -> Option<crate::sphericalpolygon::SphericalPolygon> {
-        (&self).convex_hull()
+        None
     }
 }
 
@@ -913,9 +883,9 @@ impl TryFrom<Vec<[f64; 3]>> for MultiSphericalPoint {
 impl From<&Vec<MultiSphericalPoint>> for MultiSphericalPoint {
     fn from(multipoints: &Vec<MultiSphericalPoint>) -> Self {
         let mut points = multipoints[0].xyzs.to_owned();
-        for index in 1..multipoints.len() {
-            for point in &multipoints[index].xyzs {
-                if !points.contains(&point) {
+        for multipoint in multipoints.iter().skip(1) {
+            for point in &multipoint.xyzs {
+                if !points.contains(point) {
                     points.push(point.to_owned());
                 }
             }
@@ -965,42 +935,15 @@ impl TryFrom<Array2<f64>> for MultiSphericalPoint {
     }
 }
 
-impl From<MultiSphericalPoint> for Vec<SphericalPoint> {
-    fn from(points: MultiSphericalPoint) -> Self {
-        points
-            .xyzs
-            .into_iter()
-            .map(|xyz| SphericalPoint { xyz })
-            .collect()
-    }
-}
+impl TryFrom<&Vec<(f64, f64, f64)>> for MultiSphericalPoint {
+    type Error = String;
 
-impl From<&MultiSphericalPoint> for Array2<f64> {
-    fn from(points: &MultiSphericalPoint) -> Self {
-        let mut xyzs = Array2::uninit((points.len(), 3));
-        for (index, row) in xyzs.axis_iter_mut(Axis(0)).enumerate() {
-            let xyz = points.xyzs[index];
-            array![xyz[0], xyz[1], xyz[2]].assign_to(row);
-        }
-
-        unsafe { xyzs.assume_init() }
-    }
-}
-
-impl From<MultiSphericalPoint> for Vec<[f64; 3]> {
-    fn from(points: MultiSphericalPoint) -> Self {
-        points.xyzs
-    }
-}
-
-impl From<&Vec<(f64, f64, f64)>> for MultiSphericalPoint {
-    fn from(points: &Vec<(f64, f64, f64)>) -> Self {
-        let mut xyzs = Array2::<f64>::uninit((points.len(), 3));
-        for (index, row) in xyzs.axis_iter_mut(Axis(0)).enumerate() {
-            let xyz = points[index];
-            array![xyz.0, xyz.1, xyz.2].assign_to(row);
-        }
-        Self::try_from(unsafe { xyzs.assume_init() }).unwrap()
+    fn try_from(xyzs: &Vec<(f64, f64, f64)>) -> Result<Self, String> {
+        Self::try_from(
+            xyzs.iter()
+                .map(|xyz| [xyz.0, xyz.1, xyz.2])
+                .collect::<Vec<[f64; 3]>>(),
+        )
     }
 }
 
@@ -1008,17 +951,16 @@ impl TryFrom<&Vec<Vec<f64>>> for MultiSphericalPoint {
     type Error = String;
 
     fn try_from(list: &Vec<Vec<f64>>) -> Result<Self, Self::Error> {
-        let mut xyz = Array2::<f64>::uninit((list.len(), 3));
-        for (index, row) in xyz.axis_iter_mut(Axis(0)).enumerate() {
-            let point = &list[index];
+        let mut xyzs = vec![];
+        for point in list {
             let length = point.len();
             if length != 3 {
                 return Err(format!("3D vector should have length 3, not {length}",));
             } else {
-                Array1::<f64>::from_vec(point.to_owned()).assign_to(row)
+                xyzs.push([point[0], point[1], point[2]]);
             }
         }
-        Self::try_from(unsafe { xyz.assume_init() })
+        Self::try_from(xyzs)
     }
 }
 
@@ -1026,17 +968,16 @@ impl<'a> TryFrom<&Vec<ArrayView1<'a, f64>>> for MultiSphericalPoint {
     type Error = String;
 
     fn try_from(list: &Vec<ArrayView1<'a, f64>>) -> Result<Self, Self::Error> {
-        let mut xyz = Array2::<f64>::uninit((list.len(), 3));
-        for (index, row) in xyz.axis_iter_mut(Axis(0)).enumerate() {
-            let point = &list[index];
+        let mut xyzs = vec![];
+        for point in list {
             let length = point.len();
             if length != 3 {
                 return Err(format!("3D vector should have length 3, not {length}",));
             } else {
-                point.assign_to(row);
+                xyzs.push([point[0], point[1], point[2]]);
             }
         }
-        Self::try_from(unsafe { xyz.assume_init() })
+        Self::try_from(xyzs)
     }
 }
 
@@ -1062,6 +1003,33 @@ impl<'a> TryFrom<&ArrayView1<'a, f64>> for MultiSphericalPoint {
     }
 }
 
+impl From<MultiSphericalPoint> for Vec<SphericalPoint> {
+    fn from(points: MultiSphericalPoint) -> Self {
+        points
+            .xyzs
+            .into_iter()
+            .map(|xyz| SphericalPoint { xyz })
+            .collect()
+    }
+}
+
+impl From<&MultiSphericalPoint> for Array2<f64> {
+    fn from(points: &MultiSphericalPoint) -> Self {
+        let mut xyzs = Array2::uninit((points.len(), 3));
+        for (index, row) in xyzs.axis_iter_mut(Axis(0)).enumerate() {
+            let xyz = points.xyzs[index];
+            array![xyz[0], xyz[1], xyz[2]].assign_to(row);
+        }
+        unsafe { xyzs.assume_init() }
+    }
+}
+
+impl From<MultiSphericalPoint> for Vec<[f64; 3]> {
+    fn from(points: MultiSphericalPoint) -> Self {
+        points.xyzs
+    }
+}
+
 impl MultiSphericalPoint {
     /// from the given coordinates, build xyz vectors representing points on the sphere
     ///
@@ -1074,13 +1042,8 @@ impl MultiSphericalPoint {
     /// References
     /// ----------
     /// - Miller, Robert D. Computing the area of a spherical polygon. Graphics Gems IV. 1994. Academic Press. doi:10.5555/180895.180907
-    pub fn try_from_lonlat(lonlats: &Vec<[f64; 2]>) -> Result<Self, String> {
-        Self::try_from(
-            lonlats
-                .iter()
-                .map(|lonlat| lonlat_to_xyz(lonlat))
-                .collect::<Vec<[f64; 3]>>(),
-        )
+    pub fn try_from_lonlats(lonlats: &[[f64; 2]]) -> Result<Self, String> {
+        Self::try_from(lonlats.iter().map(lonlat_to_xyz).collect::<Vec<[f64; 3]>>())
     }
 
     pub fn nearest(&self, point: &SphericalPoint) -> usize {
@@ -1109,15 +1072,15 @@ impl MultiSphericalPoint {
     /// References
     /// ----------
     /// - Miller, Robert D. Computing the area of a spherical polygon. Graphics Gems IV. 1994. Academic Press. doi:10.5555/180895.180907
-    pub fn to_lonlat(&self) -> Vec<[f64; 2]> {
-        self.xyzs.iter().map(|xyz| xyz_to_lonlat(xyz)).collect()
+    pub fn to_lonlats(&self) -> Vec<[f64; 2]> {
+        self.xyzs.iter().map(xyz_to_lonlat).collect()
     }
 
     /// lengths of the underlying xyz vectors
     ///
     ///     r = sqrt(x^2 + y^2 + z^2)
     pub fn vector_lengths(&self) -> Vec<f64> {
-        self.xyzs.iter().map(|xyz| xyz_length(xyz)).collect()
+        self.xyzs.iter().map(xyz_length).collect()
     }
 
     pub fn vector_cross(&self, other: &Self) -> Self {
@@ -1213,9 +1176,9 @@ impl AddAssign<&SphericalPoint> for MultiSphericalPoint {
     }
 }
 
-impl Geometry for &MultiSphericalPoint {
+impl Geometry for MultiSphericalPoint {
     fn vertices(&self) -> MultiSphericalPoint {
-        (*self).to_owned()
+        self.to_owned()
     }
 
     fn area(&self) -> f64 {
@@ -1231,7 +1194,7 @@ impl Geometry for &MultiSphericalPoint {
     }
 
     fn centroid(&self) -> crate::sphericalpoint::SphericalPoint {
-        let mean = Array2::<f64>::from(*self).mean_axis(Axis(0)).unwrap();
+        let mean = Array2::<f64>::from(self).mean_axis(Axis(0)).unwrap();
         SphericalPoint::from([mean[0], mean[1], mean[2]])
     }
 
@@ -1320,7 +1283,7 @@ impl Geometry for &MultiSphericalPoint {
             }
         }
 
-        crate::sphericalpolygon::SphericalPolygon::new(
+        crate::sphericalpolygon::SphericalPolygon::try_new(
             crate::arcstring::ArcString::try_from(
                 MultiSphericalPoint::try_from(
                     convex_hull_point_indices
@@ -1334,36 +1297,6 @@ impl Geometry for &MultiSphericalPoint {
             Some(centroid),
         )
         .ok()
-    }
-}
-
-impl Geometry for MultiSphericalPoint {
-    fn vertices(&self) -> MultiSphericalPoint {
-        self.to_owned()
-    }
-
-    fn area(&self) -> f64 {
-        (&self).area()
-    }
-
-    fn length(&self) -> f64 {
-        (&self).length()
-    }
-
-    fn representative(&self) -> crate::sphericalpoint::SphericalPoint {
-        (&self).representative()
-    }
-
-    fn centroid(&self) -> crate::sphericalpoint::SphericalPoint {
-        (&self).centroid()
-    }
-
-    fn boundary(&self) -> Option<MultiSphericalPoint> {
-        (&self).boundary()
-    }
-
-    fn convex_hull(&self) -> Option<crate::sphericalpolygon::SphericalPolygon> {
-        (&self).convex_hull()
     }
 }
 
@@ -1446,7 +1379,7 @@ impl GeometricOperations<MultiSphericalPoint, SphericalPoint> for MultiSpherical
         if self.len() < other.len() {
             self.xyzs
                 .iter()
-                .all(|xyz| point_within_kdtree(&xyz, &other.kdtree))
+                .all(|xyz| point_within_kdtree(xyz, &other.kdtree))
         } else {
             false
         }
@@ -1461,7 +1394,7 @@ impl GeometricOperations<MultiSphericalPoint, SphericalPoint> for MultiSpherical
 
         less.xyzs
             .iter()
-            .any(|xyz| point_within_kdtree(&xyz, &more.kdtree))
+            .any(|xyz| point_within_kdtree(xyz, &more.kdtree))
     }
 
     fn crosses(&self, _: &MultiSphericalPoint) -> bool {
@@ -1515,7 +1448,7 @@ impl GeometricOperations<crate::arcstring::ArcString, SphericalPoint> for MultiS
     fn touches(&self, other: &crate::arcstring::ArcString) -> bool {
         self.xyzs
             .iter()
-            .any(|xyz| crate::arcstring::arcstring_contains_point(other, &xyz))
+            .any(|xyz| crate::arcstring::arcstring_contains_point(other, xyz))
     }
 
     fn crosses(&self, _: &crate::arcstring::ArcString) -> bool {
@@ -1639,7 +1572,7 @@ impl GeometricOperations<crate::sphericalpolygon::MultiSphericalPolygon, Spheric
         self.xyzs.iter().all(|xyz| {
             other.polygons.par_iter().any(|polygon| {
                 crate::sphericalpolygon::point_in_polygon_boundary(
-                    &xyz,
+                    xyz,
                     &polygon.interior_point.xyz,
                     &polygon.boundary.points.xyzs,
                 )
