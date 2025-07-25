@@ -1,6 +1,6 @@
 use crate::{
     arcstring::{vector_arc_crossing, ArcString, MultiArcString},
-    edgegraph::GeometricEdgeGraph,
+    edgegraph::{EdgeGraph, GeometryGraph, Graphed},
     geometry::{GeometricOperations, Geometry, GeometryCollection, MultiGeometry},
     sphericalpoint::{
         angle_between_vectors_radians, vector_arc_radians, MultiSphericalPoint, SphericalPoint,
@@ -458,7 +458,9 @@ impl GeometricOperations<SphericalPoint> for SphericalPolygon {
     }
 
     fn split(&self, other: &SphericalPoint) -> MultiSphericalPolygon {
-        MultiSphericalPolygon::from(vec![self.to_owned()])
+        MultiSphericalPolygon {
+            polygons: vec![self.to_owned()],
+        }
     }
 }
 
@@ -531,7 +533,9 @@ impl GeometricOperations<MultiSphericalPoint> for SphericalPolygon {
     }
 
     fn split(&self, other: &MultiSphericalPoint) -> MultiSphericalPolygon {
-        MultiSphericalPolygon::from(vec![self.to_owned()])
+        MultiSphericalPolygon {
+            polygons: vec![self.to_owned()],
+        }
     }
 }
 
@@ -595,7 +599,9 @@ impl GeometricOperations<ArcString> for SphericalPolygon {
         let tolerance = 3e-11;
 
         // split this polygon into several pieces
-        let mut polygons = MultiSphericalPolygon::from(vec![self.to_owned()]);
+        let mut polygons = MultiSphericalPolygon {
+            polygons: vec![self.to_owned()],
+        };
         if let Some(arcstrings) = self.intersection(other) {
             for arcstring in arcstrings.arcstrings {
                 // each of these arcstrings splits each polygon in two
@@ -727,7 +733,7 @@ impl GeometricOperations<MultiArcString> for SphericalPolygon {
             polygons.extend(self.split(arcstring).polygons);
         }
 
-        MultiSphericalPolygon::from(polygons)
+        MultiSphericalPolygon { polygons }
     }
 }
 
@@ -770,11 +776,7 @@ impl GeometricOperations<SphericalPolygon> for SphericalPolygon {
             }
         }
 
-        if polygons.is_empty() {
-            None
-        } else {
-            Some(MultiSphericalPolygon::from(polygons))
-        }
+        MultiSphericalPolygon::try_from(polygons).ok()
     }
 
     fn split(&self, other: &SphericalPolygon) -> MultiSphericalPolygon {
@@ -826,7 +828,7 @@ impl GeometricOperations<SphericalPolygon> for SphericalPolygon {
             polygons.push(self.to_owned());
         }
 
-        MultiSphericalPolygon::from(polygons)
+        MultiSphericalPolygon { polygons }
     }
 }
 
@@ -882,17 +884,23 @@ pub struct MultiSphericalPolygon {
     pub polygons: Vec<SphericalPolygon>,
 }
 
-impl From<Vec<SphericalPolygon>> for MultiSphericalPolygon {
-    fn from(polygons: Vec<SphericalPolygon>) -> Self {
-        Self { polygons }
+impl TryFrom<Vec<SphericalPolygon>> for MultiSphericalPolygon {
+    type Error = String;
+
+    fn try_from(polygons: Vec<SphericalPolygon>) -> Result<Self, Self::Error> {
+        if !polygons.is_empty() {
+            Ok(Self { polygons })
+        } else {
+            Err(String::from("no polygons provided"))
+        }
     }
 }
 
-impl MultiSphericalPolygon {
-    fn graph(&self) -> GeometricEdgeGraph<SphericalPolygon> {
-        let mut graph = GeometricEdgeGraph::<SphericalPolygon>::default();
+impl Graphed<SphericalPolygon> for MultiSphericalPolygon {
+    fn graph(&self) -> EdgeGraph<SphericalPolygon> {
+        let mut graph = EdgeGraph::<SphericalPolygon>::default();
         for polygon in self.polygons.iter() {
-            graph.add_polygon(polygon);
+            graph.push(polygon);
         }
         graph
     }
@@ -1037,7 +1045,7 @@ impl Sum for MultiSphericalPolygon {
         for multipolygon in iter {
             polygons.extend(multipolygon.polygons);
         }
-        Self::from(polygons)
+        Self { polygons }
     }
 }
 
@@ -1338,20 +1346,31 @@ impl GeometricOperations<MultiSphericalPolygon, SphericalPolygon> for MultiSpher
     }
 }
 
-impl GeometryCollection<SphericalPolygon, MultiSphericalPolygon> for MultiSphericalPolygon {
-    fn join(&self) -> Result<SphericalPolygon, String> {
+impl GeometryCollection<SphericalPolygon> for MultiSphericalPolygon {
+    fn join(&self) -> Self {
         let mut graph = self.graph();
-        graph.join_self()
+        graph.join_edges();
+
+        MultiSphericalPolygon::try_from(graph.extract_disjoint_geometries()).unwrap()
     }
 
-    fn overlap(&self) -> Option<SphericalPolygon> {
+    fn overlap(&self) -> Option<Self> {
         let mut graph = self.graph();
-        graph.overlap_self()
+        graph.overlap_edges();
+
+        MultiSphericalPolygon::try_from(graph.extract_disjoint_geometries()).ok()
     }
 
-    fn split(&self) -> MultiSphericalPolygon {
-        let mut graph = self.graph();
-        graph.split_self();
-        graph.extract_polygons()
+    fn symmetric_split(&self) -> Self {
+        let mut split_graph = self.graph();
+        split_graph.split_edges();
+
+        let mut overlap_graph = self.graph();
+        overlap_graph.overlap_edges();
+
+        let mut polygons = split_graph.extract_disjoint_geometries();
+        polygons.extend(overlap_graph.extract_disjoint_geometries());
+
+        MultiSphericalPolygon::try_from(polygons).unwrap()
     }
 }

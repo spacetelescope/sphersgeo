@@ -698,7 +698,7 @@ mod py_sphersgeo {
                 PyArcStringInputs::AnyGeometry(geometry) => {
                     return match geometry {
                         AnyGeometry::MultiSphericalPoint(multipoint) => {
-                            Ok(multipoint.try_into().unwrap())
+                            ArcString::try_from(multipoint).map_err(PyValueError::new_err)
                         }
                         AnyGeometry::ArcString(arcstring) => Ok(if closed != arcstring.closed {
                             let mut arcstring = arcstring.to_owned();
@@ -1152,7 +1152,7 @@ mod py_sphersgeo {
 
         #[getter]
         fn get_parts(&self) -> Vec<ArcString> {
-            self.arcstrings.to_owned().into()
+            self.arcstrings.to_owned()
         }
 
         fn __len__(&self) -> usize {
@@ -1433,7 +1433,7 @@ mod py_sphersgeo {
                 },
             };
 
-            Ok(Self::from(polygons))
+            MultiSphericalPolygon::try_from(polygons).map_err(PyValueError::new_err)
         }
 
         #[getter]
@@ -1592,7 +1592,7 @@ mod py_sphersgeo {
 
         #[getter]
         fn get_parts(&self) -> Vec<SphericalPolygon> {
-            self.polygons.to_owned().into()
+            self.polygons.to_owned()
         }
 
         fn __len__(&self) -> usize {

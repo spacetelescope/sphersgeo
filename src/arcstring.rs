@@ -1,5 +1,6 @@
 use crate::{
-    geometry::{GeometricOperations, Geometry, MultiGeometry},
+    edgegraph::{EdgeGraph, GeometryGraph, Graphed},
+    geometry::{GeometricOperations, Geometry, GeometryCollection, MultiGeometry},
     sphericalpoint::{
         cross_vector, min_1darray, normalize_vector, point_within_kdtree, vector_arc_radians,
         MultiSphericalPoint, SphericalPoint,
@@ -628,7 +629,7 @@ impl GeometricOperations<SphericalPoint> for ArcString {
     }
 
     fn contains(&self, other: &SphericalPoint) -> bool {
-        arcstring_contains_point(&self, &other.xyz.view())
+        arcstring_contains_point(self, &other.xyz.view())
     }
 
     fn within(&self, _: &SphericalPoint) -> bool {
@@ -656,7 +657,7 @@ impl GeometricOperations<SphericalPoint> for ArcString {
     }
 
     fn split(&self, other: &SphericalPoint) -> MultiArcString {
-        split_arcstring_at_points(&self, &other.xyz.to_shape((1, 3)).unwrap().view())
+        split_arcstring_at_points(self, &other.xyz.to_shape((1, 3)).unwrap().view())
     }
 }
 
@@ -1010,7 +1011,7 @@ impl From<MultiArcString> for Vec<MultiSphericalPoint> {
 
 impl From<MultiArcString> for Vec<ArcString> {
     fn from(arcstrings: MultiArcString) -> Self {
-        arcstrings.arcstrings.into()
+        arcstrings.arcstrings
     }
 }
 
@@ -1528,5 +1529,52 @@ impl GeometricOperations<crate::sphericalpolygon::MultiSphericalPolygon, ArcStri
         }
 
         MultiArcString::try_from(arcstrings).unwrap()
+    }
+}
+
+impl Graphed<ArcString> for MultiArcString {
+    fn graph(&self) -> EdgeGraph<ArcString> {
+        let mut graph = EdgeGraph::<ArcString>::default();
+        for arcstring in self.arcstrings.iter() {
+            graph.push(arcstring);
+        }
+        graph
+    }
+}
+
+impl GeometryCollection<ArcString> for MultiArcString {
+    fn join(&self) -> Self {
+        let mut graph = self.graph();
+        graph.join_edges();
+
+        let edges: Vec<ArrayView2<f64>> = graph
+            .edges
+            .iter()
+            .map(|edge| edge.arc.points.xyz.view())
+            .collect();
+
+        // // this will return an error if there are any disjoint arcstrings (multiple boundaries)
+        // ArcString::try_from(edges)
+        todo!()
+    }
+
+    fn overlap(&self) -> Option<Self> {
+        let mut graph = self.graph();
+        graph.overlap_edges();
+
+        let arcstrings = graph.extract_disjoint_geometries();
+        if !arcstrings.is_empty() {
+            Some(MultiArcString { arcstrings })
+        } else {
+            None
+        }
+    }
+
+    fn symmetric_split(&self) -> Self {
+        let mut graph = self.graph();
+        graph.split_edges();
+        MultiArcString {
+            arcstrings: graph.extract_disjoint_geometries(),
+        }
     }
 }

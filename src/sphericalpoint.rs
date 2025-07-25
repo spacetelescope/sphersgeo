@@ -423,7 +423,7 @@ impl From<(f64, f64, f64)> for SphericalPoint {
 
 impl From<SphericalPoint> for [f64; 3] {
     fn from(point: SphericalPoint) -> Self {
-        point.xyz.to_vec().try_into().unwrap()
+        Self::try_from(point.xyz.to_vec()).unwrap()
     }
 }
 
@@ -517,7 +517,7 @@ impl SphericalPoint {
 
     pub fn vector_cross(&self, other: &Self) -> Self {
         let crossed = cross_vector(&self.into(), &other.into());
-        crossed.try_into().unwrap()
+        Self::try_from(crossed).unwrap()
     }
 
     /// rotate this xyz vector by theta angle around another xyz vector
@@ -1039,8 +1039,7 @@ impl TryFrom<Vec<f64>> for MultiSphericalPoint {
 
     fn try_from(list: Vec<f64>) -> Result<Self, Self::Error> {
         Self::try_from(
-            Array2::from_shape_vec((list.len() / 3, 3), list)
-                .map_err(|err| format!("{:?}", err))?,
+            Array2::from_shape_vec((list.len() / 3, 3), list).map_err(|err| format!("{err:?}"))?,
         )
     }
 }
@@ -1051,7 +1050,7 @@ impl<'a> TryFrom<&ArrayView1<'a, f64>> for MultiSphericalPoint {
     fn try_from(xyz: &ArrayView1<'a, f64>) -> Result<Self, Self::Error> {
         Self::try_from(
             xyz.to_shape((xyz.len() / 3, 3))
-                .map_err(|err| format!("{:?}", err))?
+                .map_err(|err| format!("{err:?}"))?
                 .to_owned(),
         )
     }
@@ -1167,7 +1166,7 @@ impl MultiSphericalPoint {
 
     pub fn vector_cross(&self, other: &Self) -> Self {
         let crossed = cross_vectors(&self.into(), &other.into());
-        crossed.try_into().unwrap()
+        Self::try_from(crossed).unwrap()
     }
 
     /// rotate the underlying vector by theta angle around other vectors
@@ -1247,7 +1246,7 @@ impl Display for MultiSphericalPoint {
 
 impl PartialEq for MultiSphericalPoint {
     fn eq(&self, other: &MultiSphericalPoint) -> bool {
-        let tolerance = 1e-11;
+        let tolerance = 2e-8;
         if self.len() == other.len() && self.xyz.sum() == other.xyz.sum() {
             let mut rows: Vec<ArrayView1<f64>> = Zip::from(self.xyz.rows())
                 .par_map_collect(|xyz| xyz)

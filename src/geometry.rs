@@ -74,15 +74,15 @@ pub trait GeometricOperations<O: Geometry = Self, S: Geometry = Self> {
     fn split(&self, other: &O) -> impl MultiGeometry<S>;
 }
 
-pub trait GeometryCollection<G: Geometry, M: MultiGeometry<G>> {
+pub trait GeometryCollection<G: Geometry, M: MultiGeometry<G> = Self> {
     /// join geometries into one; errors if any of the geometries are disjoint
-    fn join(&self) -> Result<G, String>;
+    fn join(&self) -> M;
 
     /// find overlapping regions between geometries, if any
-    fn overlap(&self) -> Option<G>;
+    fn overlap(&self) -> Option<M>;
 
-    /// split geometries so none are overlapping
-    fn split(&self) -> M;
+    /// split all geometries so none are overlapping
+    fn symmetric_split(&self) -> M;
 }
 
 #[derive(FromPyObject, IntoPyObject, Debug, Clone, PartialEq)]
