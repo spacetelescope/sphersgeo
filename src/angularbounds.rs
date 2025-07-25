@@ -2,7 +2,6 @@ use crate::geometry::{GeometricOperations, Geometry};
 use ndarray::Array2;
 use numpy::ndarray::{array, s, Array1, Axis};
 use pyo3::prelude::*;
-use rayon::iter::{IntoParallelRefIterator, ParallelIterator};
 
 /// an ortholinear rectangle aligned with the angular axes of the sphere
 #[pyclass]
@@ -216,8 +215,12 @@ impl GeometricOperations<&crate::sphericalpoint::SphericalPoint> for &AngularBou
         false
     }
 
+    fn crosses(self, _: &crate::sphericalpoint::SphericalPoint) -> bool {
+        false
+    }
+
     fn intersects(self, other: &crate::sphericalpoint::SphericalPoint) -> bool {
-        other.intersects(self)
+        self.contains(other)
     }
 
     fn intersection(
@@ -228,13 +231,17 @@ impl GeometricOperations<&crate::sphericalpoint::SphericalPoint> for &AngularBou
     }
 
     fn touches(self, other: &crate::sphericalpoint::SphericalPoint) -> bool {
-        self.intersects(other) || self.boundary().unwrap().intersects(other)
+        let lonlat = other.to_lonlat(self.degrees);
+        let tolerance = 3e-11;
+        ((lonlat[0] - self.min_x).abs() < tolerance || (lonlat[0] - self.max_x).abs() < tolerance)
+            && ((lonlat[1] - self.min_y).abs() < tolerance
+                || (lonlat[1] - self.max_y).abs() < tolerance)
     }
 }
 
 impl GeometricOperations<&crate::sphericalpoint::MultiSphericalPoint> for &AngularBounds {
     fn distance(self, other: &crate::sphericalpoint::MultiSphericalPoint) -> f64 {
-        todo!()
+        self.boundary().unwrap().distance(other)
     }
 
     fn contains(self, other: &crate::sphericalpoint::MultiSphericalPoint) -> bool {
@@ -242,15 +249,19 @@ impl GeometricOperations<&crate::sphericalpoint::MultiSphericalPoint> for &Angul
             .to_lonlats(self.degrees)
             .rows()
             .into_iter()
-            .all(|point| {
-                point[0] > self.min_x
-                    && point[1] > self.min_y
-                    && point[0] < self.max_x
-                    && point[1] < self.max_y
+            .all(|lonlat| {
+                lonlat[0] > self.min_x
+                    && lonlat[1] > self.min_y
+                    && lonlat[0] < self.max_x
+                    && lonlat[1] < self.max_y
             })
     }
 
     fn within(self, _: &crate::sphericalpoint::MultiSphericalPoint) -> bool {
+        false
+    }
+
+    fn crosses(self, _: &crate::sphericalpoint::MultiSphericalPoint) -> bool {
         false
     }
 
@@ -259,11 +270,11 @@ impl GeometricOperations<&crate::sphericalpoint::MultiSphericalPoint> for &Angul
             .to_lonlats(self.degrees)
             .rows()
             .into_iter()
-            .any(|point| {
-                point[0] > self.min_x
-                    && point[1] > self.min_y
-                    && point[0] < self.max_x
-                    && point[1] < self.max_y
+            .any(|lonlat| {
+                lonlat[0] > self.min_x
+                    && lonlat[1] > self.min_y
+                    && lonlat[0] < self.max_x
+                    && lonlat[1] < self.max_y
             })
     }
 
@@ -275,13 +286,13 @@ impl GeometricOperations<&crate::sphericalpoint::MultiSphericalPoint> for &Angul
             .to_lonlats(self.degrees)
             .rows()
             .into_iter()
-            .filter_map(|point| {
-                if point[0] > self.min_x
-                    && point[1] > self.min_y
-                    && point[0] < self.max_x
-                    && point[1] < self.max_y
+            .filter_map(|lonlat| {
+                if lonlat[0] > self.min_x
+                    && lonlat[1] > self.min_y
+                    && lonlat[0] < self.max_x
+                    && lonlat[1] < self.max_y
                 {
-                    Some(point.to_owned())
+                    Some(lonlat.to_owned())
                 } else {
                     None
                 }
@@ -307,13 +318,13 @@ impl GeometricOperations<&crate::sphericalpoint::MultiSphericalPoint> for &Angul
     }
 
     fn touches(self, other: &crate::sphericalpoint::MultiSphericalPoint) -> bool {
-        self.intersects(other) || self.boundary().unwrap().intersects(other)
+        self.boundary().unwrap().touches(other)
     }
 }
 
 impl GeometricOperations<&crate::arcstring::ArcString> for &AngularBounds {
     fn distance(self, other: &crate::arcstring::ArcString) -> f64 {
-        todo!()
+        self.boundary().unwrap().distance(other)
     }
 
     fn contains(self, other: &crate::arcstring::ArcString) -> bool {
@@ -324,25 +335,34 @@ impl GeometricOperations<&crate::arcstring::ArcString> for &AngularBounds {
         false
     }
 
+    fn crosses(self, other: &crate::arcstring::ArcString) -> bool {
+        other.crosses(self)
+    }
+
     fn intersects(self, other: &crate::arcstring::ArcString) -> bool {
-        other.intersects(self)
+        self.touches(other) || self.crosses(other)
     }
 
     fn intersection(
         self,
         other: &crate::arcstring::ArcString,
     ) -> Option<crate::arcstring::MultiArcString> {
-        other.intersection(self)
+        // TODO: this could probably just be a clip by bounds
+        if let Some(convex_hull) = self.convex_hull() {
+            convex_hull.intersection(other)
+        } else {
+            None
+        }
     }
 
     fn touches(self, other: &crate::arcstring::ArcString) -> bool {
-        self.boundary().unwrap().intersects(other)
+        other.touches(self)
     }
 }
 
 impl GeometricOperations<&crate::arcstring::MultiArcString> for &AngularBounds {
     fn distance(self, other: &crate::arcstring::MultiArcString) -> f64 {
-        todo!()
+        self.boundary().unwrap().distance(other)
     }
 
     fn contains(self, other: &crate::arcstring::MultiArcString) -> bool {
@@ -353,8 +373,12 @@ impl GeometricOperations<&crate::arcstring::MultiArcString> for &AngularBounds {
         false
     }
 
+    fn crosses(self, other: &crate::arcstring::MultiArcString) -> bool {
+        self.boundary().unwrap().crosses(other)
+    }
+
     fn intersects(self, other: &crate::arcstring::MultiArcString) -> bool {
-        other.intersects(self)
+        self.touches(other) || self.crosses(other)
     }
 
     fn intersection(
@@ -365,7 +389,7 @@ impl GeometricOperations<&crate::arcstring::MultiArcString> for &AngularBounds {
     }
 
     fn touches(self, other: &crate::arcstring::MultiArcString) -> bool {
-        self.boundary().unwrap().intersects(other)
+        self.boundary().unwrap().touches(other)
     }
 }
 
@@ -379,13 +403,21 @@ impl GeometricOperations<&AngularBounds> for &AngularBounds {
     }
 
     fn within(self, other: &AngularBounds) -> bool {
+        let other = if self.degrees == other.degrees {
+            other
+        } else if other.degrees {
+            &other.to_radians()
+        } else {
+            &other.to_degrees()
+        };
+
         other.min_x > self.min_x
             && other.min_y > self.min_y
             && other.max_x < self.max_x
             && other.max_y < self.max_y
     }
 
-    fn intersects(self, other: &AngularBounds) -> bool {
+    fn crosses(self, other: &AngularBounds) -> bool {
         let other = if self.degrees == other.degrees {
             other
         } else if other.degrees {
@@ -398,6 +430,10 @@ impl GeometricOperations<&AngularBounds> for &AngularBounds {
             || other.max_x > self.min_x
             || other.min_y < self.max_y
             || other.max_y > self.min_y
+    }
+
+    fn intersects(self, other: &AngularBounds) -> bool {
+        self.touches(other) || self.crosses(other)
     }
 
     fn intersection(self, other: &AngularBounds) -> Option<AngularBounds> {
@@ -444,13 +480,13 @@ impl GeometricOperations<&AngularBounds> for &AngularBounds {
     }
 
     fn touches(self, other: &AngularBounds) -> bool {
-        self.boundary().unwrap().intersects(other)
+        self.boundary().unwrap().touches(other)
     }
 }
 
 impl GeometricOperations<&crate::sphericalpolygon::SphericalPolygon> for &AngularBounds {
     fn distance(self, other: &crate::sphericalpolygon::SphericalPolygon) -> f64 {
-        todo!()
+        self.boundary().unwrap().distance(other)
     }
 
     fn contains(self, other: &crate::sphericalpolygon::SphericalPolygon) -> bool {
@@ -461,9 +497,13 @@ impl GeometricOperations<&crate::sphericalpolygon::SphericalPolygon> for &Angula
         self.coords().within(other)
     }
 
-    fn intersects(self, other: &crate::sphericalpolygon::SphericalPolygon) -> bool {
+    fn crosses(self, other: &crate::sphericalpolygon::SphericalPolygon) -> bool {
         self.convex_hull()
-            .map_or(false, |convex_hull| convex_hull.intersects(other))
+            .map_or(false, |convex_hull| convex_hull.crosses(other))
+    }
+
+    fn intersects(self, other: &crate::sphericalpolygon::SphericalPolygon) -> bool {
+        self.touches(other) || self.crosses(other)
     }
 
     fn intersection(
@@ -478,48 +518,39 @@ impl GeometricOperations<&crate::sphericalpolygon::SphericalPolygon> for &Angula
     }
 
     fn touches(self, other: &crate::sphericalpolygon::SphericalPolygon) -> bool {
-        self.boundary().unwrap().intersects(other)
+        self.boundary().unwrap().touches(other)
     }
 }
 
 impl GeometricOperations<&crate::sphericalpolygon::MultiSphericalPolygon> for &AngularBounds {
     fn distance(self, other: &crate::sphericalpolygon::MultiSphericalPolygon) -> f64 {
-        todo!()
+        self.boundary().unwrap().distance(other)
     }
 
     fn contains(self, other: &crate::sphericalpolygon::MultiSphericalPolygon) -> bool {
-        other
-            .polygons
-            .par_iter()
-            .all(|polygon| self.contains(polygon))
+        other.within(self)
     }
 
     fn within(self, other: &crate::sphericalpolygon::MultiSphericalPolygon) -> bool {
-        other
-            .polygons
-            .par_iter()
-            .any(|polygon| self.within(polygon))
+        other.contains(self)
+    }
+
+    fn crosses(self, other: &crate::sphericalpolygon::MultiSphericalPolygon) -> bool {
+        other.crosses(self)
     }
 
     fn intersects(self, other: &crate::sphericalpolygon::MultiSphericalPolygon) -> bool {
-        other
-            .polygons
-            .par_iter()
-            .any(|polygon| self.intersects(polygon))
+        self.touches(other) || self.crosses(other)
     }
 
     fn intersection(
         self,
         other: &crate::sphericalpolygon::MultiSphericalPolygon,
     ) -> Option<crate::sphericalpolygon::MultiSphericalPolygon> {
-        other
-            .polygons
-            .par_iter()
-            .map(|polygon| self.intersection(polygon))
-            .sum()
+        other.intersection(self)
     }
 
     fn touches(self, other: &crate::sphericalpolygon::MultiSphericalPolygon) -> bool {
-        self.boundary().unwrap().intersects(other)
+        other.touches(self)
     }
 }

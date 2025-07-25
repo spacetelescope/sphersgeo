@@ -49,23 +49,36 @@ pub trait GeometricOperations<O: Geometry = Self> {
     /// shortest great-circle distance over the sphere from any part of this geometry to another
     fn distance(self, other: O) -> f64;
 
-    /// if this geometry completely envelops another
+    /// One geometry contains another if the other geometry is a subset of it and their interiors have at least one point in common.
+    /// Contains is the inverse of Within.
+    /// https://esri.github.io/geometry-api-java/doc/Contains.html
     fn contains(self, other: O) -> bool;
 
-    /// if this entire geometry is completely within another
+    /// One geometry is within another if it is a subset of the other geometry and their interiors have at least one point in common. Within is the inverse of Contains.
+    /// https://esri.github.io/geometry-api-java/doc/Within.html
     fn within(self, other: O) -> bool;
 
-    /// if any part of this geometry is within another
+    /// the geometries have some, but not all interior points in common
+    ///
+    /// Two polylines cross if they meet at (a) point/s only, and at least one of the shared points is internal to both polylines.
+    /// A polyline and polygon cross if a connected part of the polyline is partly inside and partly outside the polygon.
+    /// https://esri.github.io/geometry-api-java/doc/Crosses.html
+    fn crosses(self, other: O) -> bool;
+
+    /// Two geometries intersect if they share at least one point in common.
+    /// https://esri.github.io/geometry-api-java/doc/Intersects.html
     fn intersects(self, other: O) -> bool;
 
     /// any part of this geometry that is within another
     ///
     /// NOTE: this function is NOT rigorous;
-    /// it will only return the lower order of geometry being compared
-    /// and will NOT handle degenerate cases or cases of touching vertices
+    /// it will ONLY return the lower order of geometry being compared
+    /// and will NOT handle touching, collinear overlap, or degenerate cases
     fn intersection(self, other: O) -> Option<impl Geometry>;
 
-    /// if any part of this geometry (including the boundary) overlaps another
+    /// An object is said to touch other if it has at least one point in common with other and its interior does not intersect with any part of the other.
+    /// Overlapping features therefore do not touch.
+    /// https://esri.github.io/geometry-api-java/doc/Touches.html
     fn touches(self, other: O) -> bool;
 }
 
