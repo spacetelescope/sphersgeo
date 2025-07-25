@@ -1,3 +1,4 @@
+#![allow(unused_variables)]
 mod angularbounds;
 mod arcstring;
 mod geometry;
@@ -13,11 +14,8 @@ use pyo3::prelude::*;
 #[pymodule(name = "sphersgeo")]
 mod py_sphersgeo {
     use super::*;
-    use crate::{
-        geometry::{
-            AnyGeometry, ExtendMultiGeometry, GeometricOperations, Geometry, MultiGeometry,
-        },
-        geometrycollection::GeometryCollection,
+    use crate::geometry::{
+        AnyGeometry, ExtendMultiGeometry, GeometricOperations, Geometry, MultiGeometry,
     };
     use numpy::{
         ndarray::{array, s, Array, Array2, Axis},
@@ -63,7 +61,7 @@ mod py_sphersgeo {
 
         /// from the given coordinates, build an xyz vector representing a point on the sphere
         #[classmethod]
-        #[pyo3(name = "from_lonlat")]
+        #[pyo3(name = "from_lonlat", signature=(coordinates, degrees=true))]
         fn py_from_lonlat<'py>(
             _: &Bound<'_, PyType>,
             coordinates: PyVectorPointLonLatInputs,
@@ -91,7 +89,7 @@ mod py_sphersgeo {
         }
 
         /// convert this point on the sphere to angular coordinates
-        #[pyo3(name = "to_lonlat")]
+        #[pyo3(name = "to_lonlat", signature=(degrees=true))]
         fn py_to_lonlat<'py>(&self, py: Python<'py>, degrees: bool) -> Bound<'py, PyArray1<f64>> {
             self.to_lonlat(degrees).into_pyarray(py)
         }
@@ -104,7 +102,7 @@ mod py_sphersgeo {
         }
 
         /// angle on the sphere between this point and two other points
-        #[pyo3(name = "angle")]
+        #[pyo3(name = "angle", signature=(a, b, degrees=true))]
         fn py_angle(&self, a: &VectorPoint, b: &VectorPoint, degrees: bool) -> f64 {
             self.angle(a, b, degrees)
         }
@@ -123,7 +121,7 @@ mod py_sphersgeo {
         }
 
         /// rotate this xyz vector by theta angle around another xyz vector
-        #[pyo3(name = "vector_rotate_around")]
+        #[pyo3(name = "vector_rotate_around", signature=(other, theta, degrees=true))]
         fn py_vector_rotate_around(&self, other: &Self, theta: f64, degrees: bool) -> Self {
             self.vector_rotate_around(other, theta, degrees)
         }
@@ -145,7 +143,7 @@ mod py_sphersgeo {
             self.length()
         }
 
-        #[pyo3(name = "bounds")]
+        #[pyo3(name = "bounds", signature=(degrees=true))]
         fn py_bounds(&self, degrees: bool) -> AngularBounds {
             self.bounds(degrees)
         }
@@ -215,17 +213,29 @@ mod py_sphersgeo {
         }
 
         #[pyo3(name = "intersection")]
-        fn py_intersection(&self, other: AnyGeometry) -> GeometryCollection {
+        fn py_intersection(&self, other: AnyGeometry) -> Option<AnyGeometry> {
             match other {
-                AnyGeometry::VectorPoint(point) => self.intersection(&point),
-                AnyGeometry::MultiVectorPoint(multipoint) => self.intersection(&multipoint),
-                AnyGeometry::ArcString(arcstring) => self.intersection(&arcstring),
-                AnyGeometry::MultiArcString(multiarcstring) => self.intersection(&multiarcstring),
-                AnyGeometry::AngularBounds(bounds) => self.intersection(&bounds),
-                AnyGeometry::SphericalPolygon(polygon) => self.intersection(&polygon),
-                AnyGeometry::MultiSphericalPolygon(multipolygon) => {
-                    self.intersection(&multipolygon)
-                }
+                AnyGeometry::VectorPoint(point) => self
+                    .intersection(&point)
+                    .map(|geometry| AnyGeometry::VectorPoint(geometry)),
+                AnyGeometry::MultiVectorPoint(multipoint) => self
+                    .intersection(&multipoint)
+                    .map(|geometry| AnyGeometry::VectorPoint(geometry)),
+                AnyGeometry::ArcString(arcstring) => self
+                    .intersection(&arcstring)
+                    .map(|geometry| AnyGeometry::VectorPoint(geometry)),
+                AnyGeometry::MultiArcString(multiarcstring) => self
+                    .intersection(&multiarcstring)
+                    .map(|geometry| AnyGeometry::VectorPoint(geometry)),
+                AnyGeometry::AngularBounds(bounds) => self
+                    .intersection(&bounds)
+                    .map(|geometry| AnyGeometry::VectorPoint(geometry)),
+                AnyGeometry::SphericalPolygon(polygon) => self
+                    .intersection(&polygon)
+                    .map(|geometry| AnyGeometry::VectorPoint(geometry)),
+                AnyGeometry::MultiSphericalPolygon(multipolygon) => self
+                    .intersection(&multipolygon)
+                    .map(|geometry| AnyGeometry::VectorPoint(geometry)),
             }
         }
 
@@ -337,7 +347,7 @@ mod py_sphersgeo {
         }
 
         /// convert to angle coordinates along the sphere
-        #[pyo3(name = "to_lonlats")]
+        #[pyo3(name = "to_lonlats", signature=(degrees=true))]
         fn py_to_lonlats<'py>(&self, py: Python<'py>, degrees: bool) -> Bound<'py, PyArray2<f64>> {
             self.to_lonlats(degrees).into_pyarray(py)
         }
@@ -350,7 +360,7 @@ mod py_sphersgeo {
         }
 
         /// rotate the underlying vector by theta angle around other vectors
-        #[pyo3(name = "vector_rotate_around")]
+        #[pyo3(name = "vector_rotate_around", signature=(other, theta, degrees=true))]
         fn py_vector_rotate_around(&self, other: &Self, theta: f64, degrees: bool) -> Self {
             self.vector_rotate_around(other, theta, degrees)
         }
@@ -363,7 +373,7 @@ mod py_sphersgeo {
         }
 
         /// angles on the sphere between these points and other sets of points
-        #[pyo3(name="angles",signature=(a,b,degrees))]
+        #[pyo3(name="angles", signature=(a, b, degrees=true))]
         fn py_angles<'py>(
             &self,
             py: Python<'py>,
@@ -397,7 +407,7 @@ mod py_sphersgeo {
             self.length()
         }
 
-        #[pyo3(name = "bounds")]
+        #[pyo3(name = "bounds", signature=(degrees=true))]
         fn py_bounds(&self, degrees: bool) -> AngularBounds {
             self.bounds(degrees)
         }
@@ -468,17 +478,29 @@ mod py_sphersgeo {
         }
 
         #[pyo3(name = "intersection")]
-        fn py_intersection(&self, other: AnyGeometry) -> GeometryCollection {
+        fn py_intersection(&self, other: AnyGeometry) -> Option<AnyGeometry> {
             match other {
-                AnyGeometry::VectorPoint(point) => self.intersection(&point),
-                AnyGeometry::MultiVectorPoint(multipoint) => self.intersection(&multipoint),
-                AnyGeometry::ArcString(arcstring) => self.intersection(&arcstring),
-                AnyGeometry::MultiArcString(multiarcstring) => self.intersection(&multiarcstring),
-                AnyGeometry::AngularBounds(bounds) => self.intersection(&bounds),
-                AnyGeometry::SphericalPolygon(polygon) => self.intersection(&polygon),
-                AnyGeometry::MultiSphericalPolygon(multipolygon) => {
-                    self.intersection(&multipolygon)
-                }
+                AnyGeometry::VectorPoint(point) => self
+                    .intersection(&point)
+                    .map(|geometry| AnyGeometry::VectorPoint(geometry)),
+                AnyGeometry::MultiVectorPoint(multipoint) => self
+                    .intersection(&multipoint)
+                    .map(|geometry| AnyGeometry::MultiVectorPoint(geometry)),
+                AnyGeometry::ArcString(arcstring) => self
+                    .intersection(&arcstring)
+                    .map(|geometry| AnyGeometry::MultiVectorPoint(geometry)),
+                AnyGeometry::MultiArcString(multiarcstring) => self
+                    .intersection(&multiarcstring)
+                    .map(|geometry| AnyGeometry::MultiVectorPoint(geometry)),
+                AnyGeometry::AngularBounds(bounds) => self
+                    .intersection(&bounds)
+                    .map(|geometry| AnyGeometry::MultiVectorPoint(geometry)),
+                AnyGeometry::SphericalPolygon(polygon) => self
+                    .intersection(&polygon)
+                    .map(|geometry| AnyGeometry::MultiVectorPoint(geometry)),
+                AnyGeometry::MultiSphericalPolygon(multipolygon) => self
+                    .intersection(&multipolygon)
+                    .map(|geometry| AnyGeometry::MultiVectorPoint(geometry)),
             }
         }
 
@@ -596,7 +618,7 @@ mod py_sphersgeo {
             self.length()
         }
 
-        #[pyo3(name = "bounds")]
+        #[pyo3(name = "bounds", signature=(degrees=true))]
         fn py_bounds(&self, degrees: bool) -> AngularBounds {
             self.bounds(degrees)
         }
@@ -667,17 +689,29 @@ mod py_sphersgeo {
         }
 
         #[pyo3(name = "intersection")]
-        fn py_intersection(&self, other: AnyGeometry) -> GeometryCollection {
+        fn py_intersection(&self, other: AnyGeometry) -> Option<AnyGeometry> {
             match other {
-                AnyGeometry::VectorPoint(point) => self.intersection(&point),
-                AnyGeometry::MultiVectorPoint(multipoint) => self.intersection(&multipoint),
-                AnyGeometry::ArcString(arcstring) => self.intersection(&arcstring),
-                AnyGeometry::MultiArcString(multiarcstring) => self.intersection(&multiarcstring),
-                AnyGeometry::AngularBounds(bounds) => self.intersection(&bounds),
-                AnyGeometry::SphericalPolygon(polygon) => self.intersection(&polygon),
-                AnyGeometry::MultiSphericalPolygon(multipolygon) => {
-                    self.intersection(&multipolygon)
-                }
+                AnyGeometry::VectorPoint(point) => self
+                    .intersection(&point)
+                    .map(|geometry| AnyGeometry::VectorPoint(geometry)),
+                AnyGeometry::MultiVectorPoint(multipoint) => self
+                    .intersection(&multipoint)
+                    .map(|geometry| AnyGeometry::MultiVectorPoint(geometry)),
+                AnyGeometry::ArcString(arcstring) => self
+                    .intersection(&arcstring)
+                    .map(|geometry| AnyGeometry::MultiVectorPoint(geometry)),
+                AnyGeometry::MultiArcString(multiarcstring) => self
+                    .intersection(&multiarcstring)
+                    .map(|geometry| AnyGeometry::MultiVectorPoint(geometry)),
+                AnyGeometry::AngularBounds(bounds) => self
+                    .intersection(&bounds)
+                    .map(|geometry| AnyGeometry::MultiArcString(geometry)),
+                AnyGeometry::SphericalPolygon(polygon) => self
+                    .intersection(&polygon)
+                    .map(|geometry| AnyGeometry::MultiArcString(geometry)),
+                AnyGeometry::MultiSphericalPolygon(multipolygon) => self
+                    .intersection(&multipolygon)
+                    .map(|geometry| AnyGeometry::MultiArcString(geometry)),
             }
         }
 
@@ -766,7 +800,7 @@ mod py_sphersgeo {
             self.length()
         }
 
-        #[pyo3(name = "bounds")]
+        #[pyo3(name = "bounds", signature=(degrees=true))]
         fn py_bounds(&self, degrees: bool) -> AngularBounds {
             self.bounds(degrees)
         }
@@ -837,17 +871,29 @@ mod py_sphersgeo {
         }
 
         #[pyo3(name = "intersection")]
-        fn py_intersection(&self, other: AnyGeometry) -> GeometryCollection {
+        fn py_intersection(&self, other: AnyGeometry) -> Option<AnyGeometry> {
             match other {
-                AnyGeometry::VectorPoint(point) => self.intersection(&point),
-                AnyGeometry::MultiVectorPoint(multipoint) => self.intersection(&multipoint),
-                AnyGeometry::ArcString(arcstring) => self.intersection(&arcstring),
-                AnyGeometry::MultiArcString(multiarcstring) => self.intersection(&multiarcstring),
-                AnyGeometry::AngularBounds(bounds) => self.intersection(&bounds),
-                AnyGeometry::SphericalPolygon(polygon) => self.intersection(&polygon),
-                AnyGeometry::MultiSphericalPolygon(multipolygon) => {
-                    self.intersection(&multipolygon)
-                }
+                AnyGeometry::VectorPoint(point) => self
+                    .intersection(&point)
+                    .map(|geometry| AnyGeometry::VectorPoint(geometry)),
+                AnyGeometry::MultiVectorPoint(multipoint) => self
+                    .intersection(&multipoint)
+                    .map(|geometry| AnyGeometry::MultiVectorPoint(geometry)),
+                AnyGeometry::ArcString(arcstring) => self
+                    .intersection(&arcstring)
+                    .map(|geometry| AnyGeometry::MultiVectorPoint(geometry)),
+                AnyGeometry::MultiArcString(multiarcstring) => self
+                    .intersection(&multiarcstring)
+                    .map(|geometry| AnyGeometry::MultiVectorPoint(geometry)),
+                AnyGeometry::AngularBounds(bounds) => self
+                    .intersection(&bounds)
+                    .map(|geometry| AnyGeometry::MultiArcString(geometry)),
+                AnyGeometry::SphericalPolygon(polygon) => self
+                    .intersection(&polygon)
+                    .map(|geometry| AnyGeometry::MultiArcString(geometry)),
+                AnyGeometry::MultiSphericalPolygon(multipolygon) => self
+                    .intersection(&multipolygon)
+                    .map(|geometry| AnyGeometry::MultiArcString(geometry)),
             }
         }
 
@@ -907,7 +953,7 @@ mod py_sphersgeo {
             self.length()
         }
 
-        #[pyo3(name = "bounds")]
+        #[pyo3(name = "bounds", signature=(degrees=true))]
         fn py_bounds(&self, degrees: bool) -> AngularBounds {
             self.bounds(degrees)
         }
@@ -972,17 +1018,29 @@ mod py_sphersgeo {
         }
 
         #[pyo3(name = "intersection")]
-        fn py_intersection(&self, other: AnyGeometry) -> GeometryCollection {
+        fn py_intersection(&self, other: AnyGeometry) -> Option<AnyGeometry> {
             match other {
-                AnyGeometry::VectorPoint(point) => self.intersection(&point),
-                AnyGeometry::MultiVectorPoint(multipoint) => self.intersection(&multipoint),
-                AnyGeometry::ArcString(arcstring) => self.intersection(&arcstring),
-                AnyGeometry::MultiArcString(multiarcstring) => self.intersection(&multiarcstring),
-                AnyGeometry::AngularBounds(bounds) => self.intersection(&bounds),
-                AnyGeometry::SphericalPolygon(polygon) => self.intersection(&polygon),
-                AnyGeometry::MultiSphericalPolygon(multipolygon) => {
-                    self.intersection(&multipolygon)
-                }
+                AnyGeometry::VectorPoint(point) => self
+                    .intersection(&point)
+                    .map(|geometry| AnyGeometry::VectorPoint(geometry)),
+                AnyGeometry::MultiVectorPoint(multipoint) => self
+                    .intersection(&multipoint)
+                    .map(|geometry| AnyGeometry::MultiVectorPoint(geometry)),
+                AnyGeometry::ArcString(arcstring) => self
+                    .intersection(&arcstring)
+                    .map(|geometry| AnyGeometry::MultiArcString(geometry)),
+                AnyGeometry::MultiArcString(multiarcstring) => self
+                    .intersection(&multiarcstring)
+                    .map(|geometry| AnyGeometry::MultiArcString(geometry)),
+                AnyGeometry::AngularBounds(bounds) => self
+                    .intersection(&bounds)
+                    .map(|geometry| AnyGeometry::AngularBounds(geometry)),
+                AnyGeometry::SphericalPolygon(polygon) => self
+                    .intersection(&polygon)
+                    .map(|geometry| AnyGeometry::MultiSphericalPolygon(geometry)),
+                AnyGeometry::MultiSphericalPolygon(multipolygon) => self
+                    .intersection(&multipolygon)
+                    .map(|geometry| AnyGeometry::MultiSphericalPolygon(geometry)),
             }
         }
 
@@ -1028,7 +1086,7 @@ mod py_sphersgeo {
             self.length()
         }
 
-        #[pyo3(name = "bounds")]
+        #[pyo3(name = "bounds", signature=(degrees=true))]
         fn py_bounds(&self, degrees: bool) -> AngularBounds {
             self.bounds(degrees)
         }
@@ -1099,17 +1157,29 @@ mod py_sphersgeo {
         }
 
         #[pyo3(name = "intersection")]
-        fn py_intersection(&self, other: AnyGeometry) -> GeometryCollection {
+        fn py_intersection(&self, other: AnyGeometry) -> Option<AnyGeometry> {
             match other {
-                AnyGeometry::VectorPoint(point) => self.intersection(&point),
-                AnyGeometry::MultiVectorPoint(multipoint) => self.intersection(&multipoint),
-                AnyGeometry::ArcString(arcstring) => self.intersection(&arcstring),
-                AnyGeometry::MultiArcString(multiarcstring) => self.intersection(&multiarcstring),
-                AnyGeometry::AngularBounds(bounds) => self.intersection(&bounds),
-                AnyGeometry::SphericalPolygon(polygon) => self.intersection(&polygon),
-                AnyGeometry::MultiSphericalPolygon(multipolygon) => {
-                    self.intersection(&multipolygon)
-                }
+                AnyGeometry::VectorPoint(point) => self
+                    .intersection(&point)
+                    .map(|geometry| AnyGeometry::VectorPoint(geometry)),
+                AnyGeometry::MultiVectorPoint(multipoint) => self
+                    .intersection(&multipoint)
+                    .map(|geometry| AnyGeometry::MultiVectorPoint(geometry)),
+                AnyGeometry::ArcString(arcstring) => self
+                    .intersection(&arcstring)
+                    .map(|geometry| AnyGeometry::MultiArcString(geometry)),
+                AnyGeometry::MultiArcString(multiarcstring) => self
+                    .intersection(&multiarcstring)
+                    .map(|geometry| AnyGeometry::MultiArcString(geometry)),
+                AnyGeometry::AngularBounds(bounds) => self
+                    .intersection(&bounds)
+                    .map(|geometry| AnyGeometry::SphericalPolygon(geometry)),
+                AnyGeometry::SphericalPolygon(polygon) => self
+                    .intersection(&polygon)
+                    .map(|geometry| AnyGeometry::MultiSphericalPolygon(geometry)),
+                AnyGeometry::MultiSphericalPolygon(multipolygon) => self
+                    .intersection(&multipolygon)
+                    .map(|geometry| AnyGeometry::MultiSphericalPolygon(geometry)),
             }
         }
 
@@ -1156,7 +1226,7 @@ mod py_sphersgeo {
             self.length()
         }
 
-        #[pyo3(name = "bounds")]
+        #[pyo3(name = "bounds", signature=(degrees=true))]
         fn py_bounds(&self, degrees: bool) -> AngularBounds {
             self.bounds(degrees)
         }
@@ -1226,17 +1296,29 @@ mod py_sphersgeo {
         }
 
         #[pyo3(name = "intersection")]
-        fn py_intersection(&self, other: AnyGeometry) -> GeometryCollection {
+        fn py_intersection(&self, other: AnyGeometry) -> Option<AnyGeometry> {
             match other {
-                AnyGeometry::VectorPoint(point) => self.intersection(&point),
-                AnyGeometry::MultiVectorPoint(multipoint) => self.intersection(&multipoint),
-                AnyGeometry::ArcString(arcstring) => self.intersection(&arcstring),
-                AnyGeometry::MultiArcString(multiarcstring) => self.intersection(&multiarcstring),
-                AnyGeometry::AngularBounds(bounds) => self.intersection(&bounds),
-                AnyGeometry::SphericalPolygon(polygon) => self.intersection(&polygon),
-                AnyGeometry::MultiSphericalPolygon(multipolygon) => {
-                    self.intersection(&multipolygon)
-                }
+                AnyGeometry::VectorPoint(point) => self
+                    .intersection(&point)
+                    .map(|geometry| AnyGeometry::VectorPoint(geometry)),
+                AnyGeometry::MultiVectorPoint(multipoint) => self
+                    .intersection(&multipoint)
+                    .map(|geometry| AnyGeometry::MultiVectorPoint(geometry)),
+                AnyGeometry::ArcString(arcstring) => self
+                    .intersection(&arcstring)
+                    .map(|geometry| AnyGeometry::MultiArcString(geometry)),
+                AnyGeometry::MultiArcString(multiarcstring) => self
+                    .intersection(&multiarcstring)
+                    .map(|geometry| AnyGeometry::MultiArcString(geometry)),
+                AnyGeometry::AngularBounds(bounds) => self
+                    .intersection(&bounds)
+                    .map(|geometry| AnyGeometry::MultiSphericalPolygon(geometry)),
+                AnyGeometry::SphericalPolygon(polygon) => self
+                    .intersection(&polygon)
+                    .map(|geometry| AnyGeometry::MultiSphericalPolygon(geometry)),
+                AnyGeometry::MultiSphericalPolygon(multipolygon) => self
+                    .intersection(&multipolygon)
+                    .map(|geometry| AnyGeometry::MultiSphericalPolygon(geometry)),
             }
         }
 
@@ -1275,7 +1357,7 @@ mod py_sphersgeo {
         #[pyfunction]
         #[pyo3(name = "arc_length_from_vectors")]
         fn py_arc_length_from_vectors(a: PyReadonlyArray1<f64>, b: PyReadonlyArray1<f64>) -> f64 {
-            crate::arcstring::arc_length_from_vectors(&a.as_array(), &b.as_array())
+            crate::arcstring::vector_arc_length(&a.as_array(), &b.as_array())
         }
 
         #[pyfunction]
@@ -1286,25 +1368,29 @@ mod py_sphersgeo {
             b: PyReadonlyArray1<f64>,
             n: usize,
         ) -> PyResult<Bound<'py, PyArray2<f64>>> {
-            match crate::arcstring::arc_interpolate_points(&a.as_array(), &b.as_array(), n) {
+            match crate::arcstring::interpolate_points_along_vector_arc(
+                &a.as_array(),
+                &b.as_array(),
+                n,
+            ) {
                 Ok(result) => Ok(result.to_pyarray(py)),
                 Err(err) => Err(PyValueError::new_err(err)),
             }
         }
 
         #[pyfunction]
-        #[pyo3(name = "arc_angle")]
+        #[pyo3(name = "arc_angle", signature=(a, b, c, degrees=true))]
         fn py_arc_angle(
             a: PyReadonlyArray1<f64>,
             b: PyReadonlyArray1<f64>,
             c: PyReadonlyArray1<f64>,
             degrees: bool,
         ) -> f64 {
-            crate::arcstring::arc_angle(&a.as_array(), &b.as_array(), &c.as_array(), degrees)
+            crate::arcstring::vector_arc_angle(&a.as_array(), &b.as_array(), &c.as_array(), degrees)
         }
 
         #[pyfunction]
-        #[pyo3(name = "arc_angles")]
+        #[pyo3(name = "arc_angles", signature=(a, b, c, degrees=true))]
         fn py_arc_angles<'py>(
             py: Python<'py>,
             a: PyReadonlyArray2<f64>,
@@ -1312,8 +1398,13 @@ mod py_sphersgeo {
             c: PyReadonlyArray2<f64>,
             degrees: bool,
         ) -> Bound<'py, PyArray1<f64>> {
-            crate::arcstring::arc_angles(&a.as_array(), &b.as_array(), &c.as_array(), degrees)
-                .to_pyarray(py)
+            crate::arcstring::vector_arc_angles(
+                &a.as_array(),
+                &b.as_array(),
+                &c.as_array(),
+                degrees,
+            )
+            .to_pyarray(py)
         }
 
         #[pyfunction]

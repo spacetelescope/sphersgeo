@@ -192,9 +192,9 @@ impl Add<&GeometryCollection> for &GeometryCollection {
     type Output = GeometryCollection;
 
     fn add(self, rhs: &GeometryCollection) -> Self::Output {
-        let mut local = self.to_owned();
-        local += rhs;
-        local
+        let mut owned = self.to_owned();
+        owned += rhs;
+        owned
     }
 }
 

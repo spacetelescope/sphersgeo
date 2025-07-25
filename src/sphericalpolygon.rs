@@ -1,16 +1,22 @@
 use crate::{
     angularbounds::AngularBounds,
-    arcstring::{arc_angle, arc_angles, ArcString, MultiArcString},
+    arcstring::{
+        vector_arc_angle, vector_arc_angles, vector_arcs_intersection, ArcString, MultiArcString,
+    },
     geometry::{
         ExtendMultiGeometry, GeometricOperations, Geometry, MultiGeometry,
         MultiGeometryIntoIterator, MultiGeometryIterator,
     },
-    geometrycollection::GeometryCollection,
-    vectorpoint::{MultiVectorPoint, VectorPoint},
+    vectorpoint::{min_1darray, shift_rows, MultiVectorPoint, VectorPoint},
 };
-use ndarray::{s, Array1, Array2, ArrayView1, ArrayView2};
+use ndarray::{
+    concatenate,
+    parallel::prelude::{IntoParallelRefIterator, ParallelIterator},
+    s, stack, Array1, ArrayView1, ArrayView2, Axis, Zip,
+};
 use pyo3::prelude::*;
-use std::collections::VecDeque;
+use rayon::iter::IntoParallelIterator;
+use std::{collections::VecDeque, iter::Sum};
 
 /// surface area of a spherical triangle via Girard's theorum
 pub fn spherical_triangle_area(
@@ -18,23 +24,15 @@ pub fn spherical_triangle_area(
     b: &ArrayView1<f64>,
     c: &ArrayView1<f64>,
 ) -> f64 {
-    arc_angle(c, a, b, false) + arc_angle(a, b, c, false) + arc_angle(b, c, a, false)
+    vector_arc_angle(c, a, b, false)
+        + vector_arc_angle(a, b, c, false)
+        + vector_arc_angle(b, c, a, false)
         - std::f64::consts::PI
-}
-
-fn shift_rows(from: &ArrayView2<f64>, by: i32) -> Array2<f64> {
-    let mut to = Array2::uninit(from.dim());
-    from.slice(s![-by.., ..])
-        .assign_to(to.slice_mut(s![..by, ..]));
-    from.slice(s![..-by, ..])
-        .assign_to(to.slice_mut(s![by.., ..]));
-
-    unsafe { to.assume_init() }
 }
 
 // calculate the interior angles of the polygon comprised of the given points
 pub fn spherical_polygon_interior_angles(points: &ArrayView2<f64>, degrees: bool) -> Array1<f64> {
-    arc_angles(
+    vector_arc_angles(
         &points.slice(s![-2..-2, ..]),
         &shift_rows(points, -2).view(),
         &shift_rows(points, -1).view(),
@@ -49,12 +47,50 @@ pub fn spherical_polygon_area(points: &ArrayView2<f64>) -> f64 {
         - ((points.nrows() - 1) as f64 * std::f64::consts::PI)
 }
 
+// use the classical even-crossings ray algorithm for point-in-polygon
+fn point_in_polygon_exterior(
+    point: &ArrayView1<f64>,
+    polygon_interior_point: &ArrayView1<f64>,
+    polygon_exterior_points: &ArrayView2<f64>,
+) -> bool {
+    // include the final connection back to the first point
+    let exterior_arcstring_points = concatenate(
+        Axis(0),
+        &[
+            polygon_exterior_points.view(),
+            polygon_exterior_points
+                .slice(s![0, ..])
+                .broadcast((1, 3))
+                .unwrap(),
+        ],
+    )
+    .unwrap();
+
+    // record the number of times the ray intersects the exterior arcstring
+    let mut crossings = 0;
+    for arc_index in 0..exterior_arcstring_points.nrows() - 1 {
+        let arc_0 = exterior_arcstring_points.slice(s![arc_index, ..]);
+        let arc_1 = exterior_arcstring_points.slice(s![arc_index + 1, ..]);
+
+        if vector_arcs_intersection(&point, &polygon_interior_point, &arc_0, &arc_1).is_some() {
+            crossings += 1;
+        }
+    }
+
+    // if the number of crossings is even, the point is within the polygon's exterior
+    crossings % 2 == 0
+}
+
+/// polygon on the sphere, comprising:
+/// 1. a non-intersecting collection of connected arcs (arcstring) that connects back to its first point (closed)
+/// 2. an interior point to specify which region of the sphere the polygon represents; this is required for non-Euclidian geometry
+/// 3. a series of closed arcstrings representing holes inside the exterior polygon
 #[pyclass]
 #[derive(Clone, Debug, PartialEq)]
 pub struct SphericalPolygon {
     pub exterior: ArcString,
-    pub interior: VectorPoint,
-    pub holes: Option<MultiArcString>,
+    pub interior_point: VectorPoint,
+    pub holes: Option<MultiSphericalPolygon>,
 }
 
 impl ToString for SphericalPolygon {
@@ -70,12 +106,39 @@ impl SphericalPolygon {
         interior: VectorPoint,
         holes: Option<MultiArcString>,
     ) -> Result<Self, String> {
-        // TODO: check for self-intersections
-        Ok(Self {
-            exterior,
-            interior,
-            holes,
-        })
+        if let Some(intersections) = exterior.intersection_with_self() {
+            Err(format!(
+                "arcstring intersects itself: {}",
+                intersections.xyz
+            ))
+        } else {
+            if let Some(holes) = &holes {
+                for hole in &holes.arcstrings {
+                    if let Some(intersections) = hole.intersection_with_self() {
+                        return Err(format!(
+                            "arcstring intersects itself: {}",
+                            intersections.xyz
+                        ));
+                    }
+                }
+            }
+
+            Ok(Self {
+                exterior: exterior.closed(),
+                interior_point: interior,
+                holes: holes.map(|multiarcstring| {
+                    let points: Vec<SphericalPolygon> = multiarcstring
+                        .arcstrings
+                        .into_par_iter()
+                        .map(|arcstring| {
+                            let centroid = arcstring.centroid();
+                            SphericalPolygon::new(arcstring, centroid, None).unwrap()
+                        })
+                        .collect();
+                    MultiSphericalPolygon::from(points)
+                }),
+            })
+        }
     }
     fn interior_angles(&self, degrees: bool) -> Array1<f64> {
         spherical_polygon_interior_angles(&self.exterior.points.xyz.view(), degrees)
@@ -92,7 +155,7 @@ impl Geometry for &SphericalPolygon {
 
     /// length of this polygon
     fn length(&self) -> f64 {
-        todo!();
+        todo!()
     }
 
     fn convex_hull(&self) -> Option<SphericalPolygon> {
@@ -124,11 +187,38 @@ impl Geometry for SphericalPolygon {
 
 impl GeometricOperations<&VectorPoint> for &SphericalPolygon {
     fn distance(self, other: &VectorPoint) -> f64 {
-        self.exterior.distance(other)
+        if self.contains(other) {
+            0.0
+        } else {
+            self.exterior.distance(other)
+        }
     }
 
     fn contains(self, other: &VectorPoint) -> bool {
-        todo!()
+        if point_in_polygon_exterior(
+            &other.xyz.view(),
+            &self.interior_point.xyz.view(),
+            &self.exterior.points.xyz.view(),
+        ) {
+            // check against holes, if any
+            if let Some(holes) = &self.holes {
+                // if the point is within a hole, it is not within the polygon
+                !holes.polygons.par_iter().any(|hole| {
+                    point_in_polygon_exterior(
+                        &other.xyz.view(),
+                        // calculate the centroid of the hole's exterior
+                        &hole.interior_point.xyz.view(),
+                        &hole.exterior.points.xyz.view(),
+                    )
+                })
+            } else {
+                // if there are no holes
+                true
+            }
+        } else {
+            // if the point is NOT within the polygon exterior
+            false
+        }
     }
 
     fn within(self, _: &VectorPoint) -> bool {
@@ -139,18 +229,55 @@ impl GeometricOperations<&VectorPoint> for &SphericalPolygon {
         self.contains(other)
     }
 
-    fn intersection(self, other: &VectorPoint) -> GeometryCollection {
+    #[allow(refining_impl_trait)]
+    fn intersection(self, other: &VectorPoint) -> Option<VectorPoint> {
         other.intersection(self)
     }
 }
 
 impl GeometricOperations<&MultiVectorPoint> for &SphericalPolygon {
     fn distance(self, other: &MultiVectorPoint) -> f64 {
-        todo!()
+        min_1darray(
+            &Zip::from(other.xyz.rows())
+                .par_map_collect(|point| {
+                    unsafe { VectorPoint::try_from(point.to_owned()).unwrap_unchecked() }
+                        .distance(&self.exterior)
+                })
+                .view(),
+        )
+        .unwrap_or(0.0)
     }
 
     fn contains(self, other: &MultiVectorPoint) -> bool {
-        todo!()
+        // use the classical even-crossings ray algorithm for point-in-polygon
+        for point in other.xyz.rows() {
+            if point_in_polygon_exterior(
+                &point,
+                &self.interior_point.xyz.view(),
+                &self.exterior.points.xyz.view(),
+            ) {
+                // check against holes, if any
+                if let Some(holes) = &self.holes {
+                    if holes.polygons.par_iter().any(|hole| {
+                        point_in_polygon_exterior(
+                            &point,
+                            // calculate the centroid of the hole's exterior
+                            &hole.interior_point.xyz.view(),
+                            &hole.exterior.points.xyz.view(),
+                        )
+                    }) {
+                        // if the point is within a hole, it is not within the polygon
+                        return false;
+                    }
+                }
+            } else {
+                // if the point is NOT within the polygon exterior
+                return false;
+            }
+        }
+
+        // if none of the points returned false
+        return true;
     }
 
     fn within(self, _: &MultiVectorPoint) -> bool {
@@ -158,11 +285,80 @@ impl GeometricOperations<&MultiVectorPoint> for &SphericalPolygon {
     }
 
     fn intersects(self, other: &MultiVectorPoint) -> bool {
-        todo!()
+        // use the classical even-crossings ray algorithm for point-in-polygon
+        for point in other.xyz.rows() {
+            if point_in_polygon_exterior(
+                &point,
+                &self.interior_point.xyz.view(),
+                &self.exterior.points.xyz.view(),
+            ) {
+                // check against holes, if any
+                if let Some(holes) = &self.holes {
+                    // if the point is within a hole, it is not within the polygon
+                    if !holes.polygons.par_iter().any(|hole| {
+                        point_in_polygon_exterior(
+                            &point,
+                            // calculate the centroid of the hole's exterior
+                            &hole.interior_point.xyz.view(),
+                            &hole.exterior.points.xyz.view(),
+                        )
+                    }) {
+                        // if the point is not within any holes
+                        return true;
+                    }
+                } else {
+                    // if there are no holes
+                    return true;
+                }
+            }
+        }
+
+        // if no points returned true
+        return false;
     }
 
-    fn intersection(self, other: &MultiVectorPoint) -> GeometryCollection {
-        todo!()
+    #[allow(refining_impl_trait)]
+    fn intersection(self, other: &MultiVectorPoint) -> Option<MultiVectorPoint> {
+        let mut intersections = vec![];
+
+        // use the classical even-crossings ray algorithm for point-in-polygon
+        for point in other.xyz.rows() {
+            if point_in_polygon_exterior(
+                &point,
+                &self.interior_point.xyz.view(),
+                &self.exterior.points.xyz.view(),
+            ) {
+                // check against holes, if any
+                if let Some(holes) = &self.holes {
+                    // if the point is within a hole, it is not within the polygon
+                    if !holes.polygons.par_iter().any(|hole| {
+                        point_in_polygon_exterior(
+                            &point,
+                            // calculate the centroid of the hole's exterior
+                            &hole.interior_point.xyz.view(),
+                            &hole.exterior.points.xyz.view(),
+                        )
+                    }) {
+                        // if the point is not within any holes
+                        intersections.push(point);
+                    }
+                } else {
+                    // if there are no holes
+                    intersections.push(point);
+                }
+            }
+        }
+
+        if intersections.len() > 0 {
+            Some(unsafe {
+                MultiVectorPoint::try_from(
+                    stack(Axis(0), intersections.as_slice()).unwrap_unchecked(),
+                )
+                .unwrap_unchecked()
+            })
+        } else {
+            None
+        }
     }
 }
 
@@ -180,32 +376,47 @@ impl GeometricOperations<&ArcString> for &SphericalPolygon {
     }
 
     fn intersects(self, other: &ArcString) -> bool {
-        todo!()
+        if self.contains(other) {
+            if let Some(holes) = &self.holes {
+                // make sure the arcstring does not fully reside within a hole
+                !holes.polygons.par_iter().any(|hole| hole.contains(other))
+            } else {
+                true
+            }
+        } else {
+            self.exterior.intersects(other)
+        }
     }
 
-    fn intersection(self, other: &ArcString) -> GeometryCollection {
+    #[allow(refining_impl_trait)]
+    fn intersection(self, other: &ArcString) -> Option<MultiArcString> {
         todo!()
     }
 }
 
 impl GeometricOperations<&MultiArcString> for &SphericalPolygon {
     fn distance(self, other: &MultiArcString) -> f64 {
-        todo!()
+        if self.contains(other) {
+            0.0
+        } else {
+            self.exterior.distance(other)
+        }
     }
 
     fn contains(self, other: &MultiArcString) -> bool {
-        todo!()
+        other.within(self)
     }
 
-    fn within(self, other: &MultiArcString) -> bool {
-        todo!()
+    fn within(self, _: &MultiArcString) -> bool {
+        false
     }
 
     fn intersects(self, other: &MultiArcString) -> bool {
-        todo!()
+        other.intersects(self)
     }
 
-    fn intersection(self, other: &MultiArcString) -> crate::geometrycollection::GeometryCollection {
+    #[allow(refining_impl_trait)]
+    fn intersection(self, other: &MultiArcString) -> Option<MultiArcString> {
         todo!()
     }
 }
@@ -216,19 +427,26 @@ impl GeometricOperations<&AngularBounds> for &SphericalPolygon {
     }
 
     fn contains(self, other: &AngularBounds) -> bool {
-        todo!()
+        self.contains(&other.points())
     }
 
-    fn within(self, other: &AngularBounds) -> bool {
-        todo!()
+    fn within(self, _: &AngularBounds) -> bool {
+        false
     }
 
     fn intersects(self, other: &AngularBounds) -> bool {
-        todo!()
+        other
+            .convex_hull()
+            .map_or(false, |convex_hull| self.intersects(&convex_hull))
     }
 
-    fn intersection(self, other: &AngularBounds) -> crate::geometrycollection::GeometryCollection {
-        todo!()
+    #[allow(refining_impl_trait)]
+    fn intersection(self, other: &AngularBounds) -> Option<MultiSphericalPolygon> {
+        if let Some(convex_hull) = other.convex_hull() {
+            self.intersection(&convex_hull)
+        } else {
+            None
+        }
     }
 }
 
@@ -238,7 +456,7 @@ impl GeometricOperations<&SphericalPolygon> for &SphericalPolygon {
     }
 
     fn contains(self, other: &SphericalPolygon) -> bool {
-        todo!()
+        self.contains(&other.points())
     }
 
     fn within(self, other: &SphericalPolygon) -> bool {
@@ -246,22 +464,22 @@ impl GeometricOperations<&SphericalPolygon> for &SphericalPolygon {
     }
 
     fn intersects(self, other: &SphericalPolygon) -> bool {
-        self.intersection(other).len() > 0
+        self.intersection(other).is_some()
     }
 
     #[allow(refining_impl_trait)]
-    fn intersection(self, other: &SphericalPolygon) -> GeometryCollection {
+    fn intersection(self, other: &SphericalPolygon) -> Option<MultiSphericalPolygon> {
         todo!()
     }
 }
 
 impl GeometricOperations<&MultiSphericalPolygon> for &SphericalPolygon {
     fn distance(self, other: &MultiSphericalPolygon) -> f64 {
-        todo!()
+        other.distance(self)
     }
 
     fn contains(self, other: &MultiSphericalPolygon) -> bool {
-        todo!()
+        other.within(self)
     }
 
     fn within(self, other: &MultiSphericalPolygon) -> bool {
@@ -272,7 +490,8 @@ impl GeometricOperations<&MultiSphericalPolygon> for &SphericalPolygon {
         other.intersects(self)
     }
 
-    fn intersection(self, other: &MultiSphericalPolygon) -> GeometryCollection {
+    #[allow(refining_impl_trait)]
+    fn intersection(self, other: &MultiSphericalPolygon) -> Option<MultiSphericalPolygon> {
         other.intersection(self)
     }
 }
@@ -285,19 +504,6 @@ pub struct MultiSphericalPolygon {
 
 impl From<Vec<SphericalPolygon>> for MultiSphericalPolygon {
     fn from(polygons: Vec<SphericalPolygon>) -> Self {
-        let mut points = vec![];
-        for polygon in &polygons {
-            points.extend(
-                polygon
-                    .exterior
-                    .points
-                    .xyz
-                    .rows()
-                    .into_iter()
-                    .map(|point| [point[0], point[1], point[2]]),
-            );
-        }
-
         Self {
             polygons: polygons.into(),
         }
@@ -344,11 +550,11 @@ impl PartialEq<Vec<SphericalPolygon>> for MultiSphericalPolygon {
 
 impl Geometry for &MultiSphericalPolygon {
     fn area(&self) -> f64 {
-        todo!();
+        self.polygons.par_iter().map(|polygon| polygon.area()).sum()
     }
 
     fn length(&self) -> f64 {
-        todo!();
+        todo!()
     }
 
     fn convex_hull(&self) -> Option<SphericalPolygon> {
@@ -356,7 +562,10 @@ impl Geometry for &MultiSphericalPolygon {
     }
 
     fn points(&self) -> crate::vectorpoint::MultiVectorPoint {
-        self.polygons.iter().map(|geometry| geometry.points()).sum()
+        self.polygons
+            .par_iter()
+            .map(|geometry| geometry.points())
+            .sum()
     }
 }
 
@@ -390,6 +599,16 @@ impl MultiGeometry for MultiSphericalPolygon {
     }
 }
 
+impl Sum for MultiSphericalPolygon {
+    fn sum<I: Iterator<Item = Self>>(iter: I) -> Self {
+        let mut polygons = vec![];
+        for multipolygon in iter {
+            polygons.extend(multipolygon.polygons);
+        }
+        Self::from(polygons)
+    }
+}
+
 impl ExtendMultiGeometry<SphericalPolygon> for MultiSphericalPolygon {
     fn extend(&mut self, other: Self) {
         self.polygons.extend(other.polygons);
@@ -406,7 +625,9 @@ impl GeometricOperations<&VectorPoint> for &MultiSphericalPolygon {
     }
 
     fn contains(self, other: &VectorPoint) -> bool {
-        self.polygons.iter().any(|polygon| polygon.contains(other))
+        self.polygons
+            .par_iter()
+            .any(|polygon| polygon.contains(other))
     }
 
     fn within(self, _: &VectorPoint) -> bool {
@@ -417,7 +638,8 @@ impl GeometricOperations<&VectorPoint> for &MultiSphericalPolygon {
         self.contains(other)
     }
 
-    fn intersection(self, other: &VectorPoint) -> GeometryCollection {
+    #[allow(refining_impl_trait)]
+    fn intersection(self, other: &VectorPoint) -> Option<VectorPoint> {
         other.intersection(self)
     }
 }
@@ -428,7 +650,7 @@ impl GeometricOperations<&MultiVectorPoint> for &MultiSphericalPolygon {
     }
 
     fn contains(self, other: &MultiVectorPoint) -> bool {
-        todo!()
+        other.within(self)
     }
 
     fn within(self, _: &MultiVectorPoint) -> bool {
@@ -436,11 +658,15 @@ impl GeometricOperations<&MultiVectorPoint> for &MultiSphericalPolygon {
     }
 
     fn intersects(self, other: &MultiVectorPoint) -> bool {
-        todo!()
+        other.intersects(self)
     }
 
-    fn intersection(self, other: &MultiVectorPoint) -> GeometryCollection {
-        todo!()
+    #[allow(refining_impl_trait)]
+    fn intersection(self, other: &MultiVectorPoint) -> Option<MultiVectorPoint> {
+        self.polygons
+            .par_iter()
+            .map(|polygon| polygon.intersection(other))
+            .sum()
     }
 }
 
@@ -450,7 +676,9 @@ impl GeometricOperations<&ArcString> for &MultiSphericalPolygon {
     }
 
     fn contains(self, other: &ArcString) -> bool {
-        self.polygons.iter().any(|polygon| polygon.contains(other))
+        self.polygons
+            .par_iter()
+            .any(|polygon| polygon.contains(other))
     }
 
     fn within(self, _: &ArcString) -> bool {
@@ -458,11 +686,17 @@ impl GeometricOperations<&ArcString> for &MultiSphericalPolygon {
     }
 
     fn intersects(self, other: &ArcString) -> bool {
-        todo!()
+        self.polygons
+            .par_iter()
+            .any(|polygon| polygon.intersects(other))
     }
 
-    fn intersection(self, other: &ArcString) -> GeometryCollection {
-        todo!()
+    #[allow(refining_impl_trait)]
+    fn intersection(self, other: &ArcString) -> Option<MultiArcString> {
+        self.polygons
+            .par_iter()
+            .map(|polygon| polygon.intersection(other))
+            .sum()
     }
 }
 
@@ -480,43 +714,64 @@ impl GeometricOperations<&MultiArcString> for &MultiSphericalPolygon {
     }
 
     fn intersects(self, other: &MultiArcString) -> bool {
-        todo!()
+        self.polygons
+            .par_iter()
+            .any(|polygon| self.intersects(polygon))
     }
 
-    fn intersection(self, other: &MultiArcString) -> crate::geometrycollection::GeometryCollection {
+    #[allow(refining_impl_trait)]
+    fn intersection(self, other: &MultiArcString) -> Option<MultiArcString> {
         todo!()
     }
 }
 
 impl GeometricOperations<&AngularBounds> for &MultiSphericalPolygon {
     fn distance(self, other: &AngularBounds) -> f64 {
-        todo!()
+        if let Some(convex_hull) = other.convex_hull() {
+            self.distance(&convex_hull)
+        } else {
+            0.0
+        }
     }
 
     fn contains(self, other: &AngularBounds) -> bool {
-        todo!()
+        self.contains(&other.points())
     }
 
     fn within(self, other: &AngularBounds) -> bool {
-        todo!()
+        self.polygons
+            .par_iter()
+            .all(|polygon| polygon.within(other))
     }
 
     fn intersects(self, other: &AngularBounds) -> bool {
-        todo!()
+        self.polygons
+            .par_iter()
+            .any(|polygon| polygon.intersects(other))
     }
 
-    fn intersection(self, other: &AngularBounds) -> crate::geometrycollection::GeometryCollection {
-        todo!()
+    #[allow(refining_impl_trait)]
+    fn intersection(self, other: &AngularBounds) -> Option<MultiSphericalPolygon> {
+        self.polygons
+            .par_iter()
+            .map(|polygon| polygon.intersection(other))
+            .sum()
     }
 }
 
 impl GeometricOperations<&SphericalPolygon> for &MultiSphericalPolygon {
     fn distance(self, other: &SphericalPolygon) -> f64 {
-        todo!()
+        self.polygons
+            .par_iter()
+            .map(|polygon| polygon.distance(other))
+            .min_by(|a, b| a.partial_cmp(b).unwrap())
+            .unwrap()
     }
 
     fn contains(self, other: &SphericalPolygon) -> bool {
-        self.polygons.iter().any(|polygon| polygon.contains(other))
+        self.polygons
+            .par_iter()
+            .any(|polygon| polygon.contains(other))
     }
 
     fn within(self, _: &SphericalPolygon) -> bool {
@@ -524,21 +779,24 @@ impl GeometricOperations<&SphericalPolygon> for &MultiSphericalPolygon {
     }
 
     fn intersects(self, other: &SphericalPolygon) -> bool {
-        todo!()
+        self.polygons
+            .par_iter()
+            .any(|polygon| polygon.intersects(other))
     }
 
-    fn intersection(self, other: &SphericalPolygon) -> GeometryCollection {
+    #[allow(refining_impl_trait)]
+    fn intersection(self, other: &SphericalPolygon) -> Option<MultiSphericalPolygon> {
         todo!()
     }
 }
 
 impl GeometricOperations<&MultiSphericalPolygon> for &MultiSphericalPolygon {
     fn distance(self, other: &MultiSphericalPolygon) -> f64 {
-        todo!();
+        todo!()
     }
 
     fn contains(self, other: &MultiSphericalPolygon) -> bool {
-        todo!();
+        todo!()
     }
 
     fn within(self, other: &MultiSphericalPolygon) -> bool {
@@ -546,11 +804,17 @@ impl GeometricOperations<&MultiSphericalPolygon> for &MultiSphericalPolygon {
     }
 
     fn intersects(self, other: &MultiSphericalPolygon) -> bool {
-        self.intersection(other).len() > 0
+        self.polygons
+            .par_iter()
+            .any(|polygon| polygon.intersects(other))
     }
 
-    fn intersection(self, other: &MultiSphericalPolygon) -> GeometryCollection {
-        todo!();
+    #[allow(refining_impl_trait)]
+    fn intersection(self, other: &MultiSphericalPolygon) -> Option<MultiSphericalPolygon> {
+        self.polygons
+            .par_iter()
+            .map(|polygon| polygon.intersection(other))
+            .sum()
     }
 }
 
@@ -567,6 +831,7 @@ impl<'a> Iterator for MultiGeometryIterator<'a, MultiSphericalPolygon> {
 }
 
 impl MultiSphericalPolygon {
+    #[allow(dead_code)]
     fn iter(&self) -> MultiGeometryIterator<MultiSphericalPolygon> {
         MultiGeometryIterator::<MultiSphericalPolygon> {
             multi: self,

@@ -1,6 +1,10 @@
 use crate::geometry::{GeometricOperations, Geometry};
-use numpy::ndarray::{array, s, Array1};
+use numpy::{
+    datetime::units::Seconds,
+    ndarray::{array, s, Array1},
+};
 use pyo3::prelude::*;
+use rayon::iter::{IntoParallelRefIterator, ParallelIterator};
 
 /// an ortholinear rectangle aligned with the angular axes of the sphere
 #[pyclass]
@@ -75,6 +79,10 @@ impl AngularBounds {
             self.to_owned()
         }
     }
+
+    pub fn contains_lonlat(&self, lon: f64, lat: f64) -> bool {
+        lon > self.min_x && lat > self.min_y && lon < self.max_x && lat < self.max_y
+    }
 }
 
 impl ToString for AngularBounds {
@@ -108,7 +116,7 @@ impl Geometry for &AngularBounds {
     }
 
     fn length(&self) -> f64 {
-        crate::arcstring::arc_length_from_vectors(
+        crate::arcstring::vector_arc_length(
             &array![self.min_x, self.min_y].view(),
             &array![self.max_x, self.max_y].view(),
         )
@@ -181,7 +189,9 @@ impl GeometricOperations<&crate::vectorpoint::VectorPoint> for &AngularBounds {
     }
 
     fn contains(self, other: &crate::vectorpoint::VectorPoint) -> bool {
-        other.within(self)
+        let point = other.to_lonlat(self.degrees);
+
+        self.contains_lonlat(point[0], point[1])
     }
 
     fn within(self, _: &crate::vectorpoint::VectorPoint) -> bool {
@@ -189,13 +199,14 @@ impl GeometricOperations<&crate::vectorpoint::VectorPoint> for &AngularBounds {
     }
 
     fn intersects(self, other: &crate::vectorpoint::VectorPoint) -> bool {
-        self.contains(other)
+        other.intersects(self)
     }
 
+    #[allow(refining_impl_trait)]
     fn intersection(
         self,
         other: &crate::vectorpoint::VectorPoint,
-    ) -> crate::geometrycollection::GeometryCollection {
+    ) -> Option<crate::vectorpoint::VectorPoint> {
         other.intersection(self)
     }
 }
@@ -206,7 +217,16 @@ impl GeometricOperations<&crate::vectorpoint::MultiVectorPoint> for &AngularBoun
     }
 
     fn contains(self, other: &crate::vectorpoint::MultiVectorPoint) -> bool {
-        other.within(self)
+        other
+            .to_lonlats(self.degrees)
+            .rows()
+            .into_iter()
+            .all(|point| {
+                point[0] > self.min_x
+                    && point[1] > self.min_y
+                    && point[0] < self.max_x
+                    && point[1] < self.max_y
+            })
     }
 
     fn within(self, _: &crate::vectorpoint::MultiVectorPoint) -> bool {
@@ -214,14 +234,45 @@ impl GeometricOperations<&crate::vectorpoint::MultiVectorPoint> for &AngularBoun
     }
 
     fn intersects(self, other: &crate::vectorpoint::MultiVectorPoint) -> bool {
-        todo!()
+        other
+            .to_lonlats(self.degrees)
+            .rows()
+            .into_iter()
+            .any(|point| {
+                point[0] > self.min_x
+                    && point[1] > self.min_y
+                    && point[0] < self.max_x
+                    && point[1] < self.max_y
+            })
     }
 
+    #[allow(refining_impl_trait)]
     fn intersection(
         self,
         other: &crate::vectorpoint::MultiVectorPoint,
-    ) -> crate::geometrycollection::GeometryCollection {
-        todo!()
+    ) -> Option<crate::vectorpoint::MultiVectorPoint> {
+        let points: Vec<Array1<f64>> = other
+            .to_lonlats(self.degrees)
+            .rows()
+            .into_iter()
+            .filter_map(|point| {
+                if point[0] > self.min_x
+                    && point[1] > self.min_y
+                    && point[0] < self.max_x
+                    && point[1] < self.max_y
+                {
+                    Some(point.to_owned())
+                } else {
+                    None
+                }
+            })
+            .collect();
+
+        if !points.is_empty() {
+            Some(crate::vectorpoint::MultiVectorPoint::try_from(points).unwrap())
+        } else {
+            None
+        }
     }
 }
 
@@ -231,7 +282,7 @@ impl GeometricOperations<&crate::arcstring::ArcString> for &AngularBounds {
     }
 
     fn contains(self, other: &crate::arcstring::ArcString) -> bool {
-        todo!()
+        other.within(self)
     }
 
     fn within(self, _: &crate::arcstring::ArcString) -> bool {
@@ -239,14 +290,15 @@ impl GeometricOperations<&crate::arcstring::ArcString> for &AngularBounds {
     }
 
     fn intersects(self, other: &crate::arcstring::ArcString) -> bool {
-        todo!()
+        other.intersects(self)
     }
 
+    #[allow(refining_impl_trait)]
     fn intersection(
         self,
         other: &crate::arcstring::ArcString,
-    ) -> crate::geometrycollection::GeometryCollection {
-        todo!()
+    ) -> Option<crate::arcstring::MultiArcString> {
+        other.intersection(self)
     }
 }
 
@@ -256,22 +308,23 @@ impl GeometricOperations<&crate::arcstring::MultiArcString> for &AngularBounds {
     }
 
     fn contains(self, other: &crate::arcstring::MultiArcString) -> bool {
-        todo!()
+        other.within(self)
     }
 
-    fn within(self, other: &crate::arcstring::MultiArcString) -> bool {
-        todo!()
+    fn within(self, _: &crate::arcstring::MultiArcString) -> bool {
+        false
     }
 
     fn intersects(self, other: &crate::arcstring::MultiArcString) -> bool {
-        todo!()
+        other.intersects(self)
     }
 
+    #[allow(refining_impl_trait)]
     fn intersection(
         self,
         other: &crate::arcstring::MultiArcString,
-    ) -> crate::geometrycollection::GeometryCollection {
-        todo!()
+    ) -> Option<crate::arcstring::MultiArcString> {
+        other.intersection(self)
     }
 }
 
@@ -306,7 +359,8 @@ impl GeometricOperations<&AngularBounds> for &AngularBounds {
             || other.max_y > self.min_y
     }
 
-    fn intersection(self, other: &AngularBounds) -> crate::geometrycollection::GeometryCollection {
+    #[allow(refining_impl_trait)]
+    fn intersection(self, other: &AngularBounds) -> Option<AngularBounds> {
         let other = if self.degrees == other.degrees {
             other
         } else if other.degrees {
@@ -337,17 +391,15 @@ impl GeometricOperations<&AngularBounds> for &AngularBounds {
                 self.max_y
             };
 
-            crate::geometrycollection::GeometryCollection::from(vec![
-                crate::geometry::AnyGeometry::AngularBounds(AngularBounds {
-                    min_x,
-                    min_y,
-                    max_x,
-                    max_y,
-                    degrees: self.degrees,
-                }),
-            ])
+            Some(AngularBounds {
+                min_x,
+                min_y,
+                max_x,
+                max_y,
+                degrees: self.degrees,
+            })
         } else {
-            crate::geometrycollection::GeometryCollection::empty()
+            None
         }
     }
 }
@@ -358,22 +410,28 @@ impl GeometricOperations<&crate::sphericalpolygon::SphericalPolygon> for &Angula
     }
 
     fn contains(self, other: &crate::sphericalpolygon::SphericalPolygon) -> bool {
-        todo!()
+        self.contains(&other.exterior.points)
     }
 
     fn within(self, other: &crate::sphericalpolygon::SphericalPolygon) -> bool {
-        todo!()
+        self.points().within(other)
     }
 
     fn intersects(self, other: &crate::sphericalpolygon::SphericalPolygon) -> bool {
-        todo!()
+        self.convex_hull()
+            .map_or(false, |convex_hull| convex_hull.intersects(other))
     }
 
+    #[allow(refining_impl_trait)]
     fn intersection(
         self,
         other: &crate::sphericalpolygon::SphericalPolygon,
-    ) -> crate::geometrycollection::GeometryCollection {
-        todo!()
+    ) -> Option<crate::sphericalpolygon::MultiSphericalPolygon> {
+        if let Some(convex_hull) = self.convex_hull() {
+            convex_hull.intersection(other)
+        } else {
+            None
+        }
     }
 }
 
@@ -383,21 +441,35 @@ impl GeometricOperations<&crate::sphericalpolygon::MultiSphericalPolygon> for &A
     }
 
     fn contains(self, other: &crate::sphericalpolygon::MultiSphericalPolygon) -> bool {
-        todo!()
+        other
+            .polygons
+            .par_iter()
+            .all(|polygon| self.contains(polygon))
     }
 
     fn within(self, other: &crate::sphericalpolygon::MultiSphericalPolygon) -> bool {
-        todo!()
+        other
+            .polygons
+            .par_iter()
+            .any(|polygon| self.within(polygon))
     }
 
     fn intersects(self, other: &crate::sphericalpolygon::MultiSphericalPolygon) -> bool {
-        todo!()
+        other
+            .polygons
+            .par_iter()
+            .any(|polygon| self.intersects(polygon))
     }
 
+    #[allow(refining_impl_trait)]
     fn intersection(
         self,
         other: &crate::sphericalpolygon::MultiSphericalPolygon,
-    ) -> crate::geometrycollection::GeometryCollection {
-        todo!()
+    ) -> Option<crate::sphericalpolygon::MultiSphericalPolygon> {
+        other
+            .polygons
+            .par_iter()
+            .map(|polygon| self.intersection(polygon))
+            .sum()
     }
 }
