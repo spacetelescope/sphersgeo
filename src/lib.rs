@@ -1,5 +1,6 @@
 #![allow(unused_variables, refining_impl_trait)]
 mod arcstring;
+mod edgegraph;
 mod geometry;
 mod sphericalpoint;
 mod sphericalpolygon;
@@ -11,9 +12,7 @@ use pyo3::prelude::*;
 #[pymodule(name = "sphersgeo")]
 mod py_sphersgeo {
     use super::*;
-    use crate::geometry::{
-        AnyGeometry, ExtendMultiGeometry, GeometricOperations, Geometry, MultiGeometry,
-    };
+    use crate::geometry::{AnyGeometry, GeometricOperations, Geometry, MultiGeometry};
     use numpy::{
         ndarray::{array, s, Array, Array2, Axis},
         IntoPyArray, PyArray1, PyArray2, PyReadonlyArray1, PyReadonlyArray2, ToPyArray,

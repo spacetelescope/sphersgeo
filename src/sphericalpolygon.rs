@@ -1,6 +1,7 @@
 use crate::{
     arcstring::{vector_arc_crossing, ArcString, MultiArcString},
-    geometry::{ExtendMultiGeometry, GeometricOperations, Geometry, MultiGeometry},
+    edgegraph::GeometricEdgeGraph,
+    geometry::{GeometricOperations, Geometry, GeometryCollection, MultiGeometry},
     sphericalpoint::{
         angle_between_vectors_radians, vector_arc_radians, MultiSphericalPoint, SphericalPoint,
     },
@@ -11,7 +12,7 @@ use ndarray::{
     s, stack, Array1, ArrayView1, ArrayView2, Axis, Zip,
 };
 use pyo3::prelude::*;
-use std::{cmp::Ordering, collections::VecDeque, fmt::Display, iter::Sum};
+use std::{cmp::Ordering, fmt::Display, iter::Sum};
 
 /// surface area of a triangle on the sphere via Girard's theorum
 ///
@@ -419,8 +420,8 @@ impl Geometry for SphericalPolygon {
     }
 }
 
-impl GeometricOperations<&SphericalPoint> for &SphericalPolygon {
-    fn distance(self, other: &SphericalPoint) -> f64 {
+impl GeometricOperations<SphericalPoint> for SphericalPolygon {
+    fn distance(&self, other: &SphericalPoint) -> f64 {
         if self.contains(other) {
             0.0
         } else {
@@ -428,7 +429,7 @@ impl GeometricOperations<&SphericalPoint> for &SphericalPolygon {
         }
     }
 
-    fn contains(self, other: &SphericalPoint) -> bool {
+    fn contains(&self, other: &SphericalPoint) -> bool {
         point_in_polygon_boundary(
             &other.xyz.view(),
             &self.interior_point.xyz.view(),
@@ -436,33 +437,33 @@ impl GeometricOperations<&SphericalPoint> for &SphericalPolygon {
         )
     }
 
-    fn within(self, _: &SphericalPoint) -> bool {
+    fn within(&self, _: &SphericalPoint) -> bool {
         false
     }
 
-    fn touches(self, other: &SphericalPoint) -> bool {
+    fn touches(&self, other: &SphericalPoint) -> bool {
         self.boundary.contains(other)
     }
 
-    fn crosses(self, _: &SphericalPoint) -> bool {
+    fn crosses(&self, _: &SphericalPoint) -> bool {
         false
     }
 
-    fn intersects(self, other: &SphericalPoint) -> bool {
+    fn intersects(&self, other: &SphericalPoint) -> bool {
         self.touches(other) || self.contains(other) || self.within(other)
     }
 
-    fn intersection(self, other: &SphericalPoint) -> Option<SphericalPoint> {
+    fn intersection(&self, other: &SphericalPoint) -> Option<SphericalPoint> {
         other.intersection(self)
     }
 
-    fn split(self, other: &SphericalPoint) -> MultiSphericalPolygon {
+    fn split(&self, other: &SphericalPoint) -> MultiSphericalPolygon {
         MultiSphericalPolygon::from(vec![self.to_owned()])
     }
 }
 
-impl GeometricOperations<&MultiSphericalPoint> for &SphericalPolygon {
-    fn distance(self, other: &MultiSphericalPoint) -> f64 {
+impl GeometricOperations<MultiSphericalPoint> for SphericalPolygon {
+    fn distance(&self, other: &MultiSphericalPoint) -> f64 {
         if self.contains(other) {
             0.0
         } else {
@@ -470,7 +471,7 @@ impl GeometricOperations<&MultiSphericalPoint> for &SphericalPolygon {
         }
     }
 
-    fn contains(self, other: &MultiSphericalPoint) -> bool {
+    fn contains(&self, other: &MultiSphericalPoint) -> bool {
         for xyz in other.xyz.rows() {
             if !point_in_polygon_boundary(
                 &xyz,
@@ -486,19 +487,19 @@ impl GeometricOperations<&MultiSphericalPoint> for &SphericalPolygon {
         true
     }
 
-    fn within(self, _: &MultiSphericalPoint) -> bool {
+    fn within(&self, _: &MultiSphericalPoint) -> bool {
         false
     }
 
-    fn touches(self, other: &MultiSphericalPoint) -> bool {
+    fn touches(&self, other: &MultiSphericalPoint) -> bool {
         self.boundary.intersects(other)
     }
 
-    fn crosses(self, _: &MultiSphericalPoint) -> bool {
+    fn crosses(&self, _: &MultiSphericalPoint) -> bool {
         false
     }
 
-    fn intersects(self, other: &MultiSphericalPoint) -> bool {
+    fn intersects(&self, other: &MultiSphericalPoint) -> bool {
         for xyz in other.xyz.rows() {
             if point_in_polygon_boundary(
                 &xyz,
@@ -513,7 +514,7 @@ impl GeometricOperations<&MultiSphericalPoint> for &SphericalPolygon {
         false
     }
 
-    fn intersection(self, other: &MultiSphericalPoint) -> Option<MultiSphericalPoint> {
+    fn intersection(&self, other: &MultiSphericalPoint) -> Option<MultiSphericalPoint> {
         let mut intersections = vec![];
 
         for xyz in other.xyz.rows() {
@@ -529,13 +530,13 @@ impl GeometricOperations<&MultiSphericalPoint> for &SphericalPolygon {
         MultiSphericalPoint::try_from(stack(Axis(0), intersections.as_slice()).unwrap()).ok()
     }
 
-    fn split(self, other: &MultiSphericalPoint) -> MultiSphericalPolygon {
+    fn split(&self, other: &MultiSphericalPoint) -> MultiSphericalPolygon {
         MultiSphericalPolygon::from(vec![self.to_owned()])
     }
 }
 
-impl GeometricOperations<&ArcString> for &SphericalPolygon {
-    fn distance(self, other: &ArcString) -> f64 {
+impl GeometricOperations<ArcString> for SphericalPolygon {
+    fn distance(&self, other: &ArcString) -> f64 {
         if self.contains(other) {
             0.0
         } else {
@@ -543,7 +544,7 @@ impl GeometricOperations<&ArcString> for &SphericalPolygon {
         }
     }
 
-    fn contains(self, other: &ArcString) -> bool {
+    fn contains(&self, other: &ArcString) -> bool {
         self.contains(
             &MultiSphericalPoint::try_from(
                 other
@@ -556,23 +557,23 @@ impl GeometricOperations<&ArcString> for &SphericalPolygon {
         )
     }
 
-    fn within(self, _: &ArcString) -> bool {
+    fn within(&self, _: &ArcString) -> bool {
         false
     }
 
-    fn touches(self, other: &ArcString) -> bool {
+    fn touches(&self, other: &ArcString) -> bool {
         self.boundary.touches(other)
     }
 
-    fn crosses(self, other: &ArcString) -> bool {
+    fn crosses(&self, other: &ArcString) -> bool {
         self.boundary.crosses(other)
     }
 
-    fn intersects(self, other: &ArcString) -> bool {
+    fn intersects(&self, other: &ArcString) -> bool {
         self.touches(other) || self.crosses(other) || self.contains(other)
     }
 
-    fn intersection(self, other: &ArcString) -> Option<MultiArcString> {
+    fn intersection(&self, other: &ArcString) -> Option<MultiArcString> {
         let mut arcstrings = vec![];
 
         if other.within(self) {
@@ -590,7 +591,7 @@ impl GeometricOperations<&ArcString> for &SphericalPolygon {
         MultiArcString::try_from(arcstrings).ok()
     }
 
-    fn split(self, other: &ArcString) -> MultiSphericalPolygon {
+    fn split(&self, other: &ArcString) -> MultiSphericalPolygon {
         let tolerance = 3e-11;
 
         // split this polygon into several pieces
@@ -614,7 +615,7 @@ impl GeometricOperations<&ArcString> for &SphericalPolygon {
                                 // this polygon will be split into two
                                 polygon_removal_indices.push(index);
 
-                                let mut boundary_segments: VecDeque<ArcString> =
+                                let mut boundary_segments: Vec<ArcString> =
                                     polygon.boundary.split(&crossing_segment).arcstrings;
 
                                 // stitch the pieces back together; they should form two complete boundaries
@@ -650,7 +651,7 @@ impl GeometricOperations<&ArcString> for &SphericalPolygon {
 
                                     // remove attached segments
                                     for segment_index in segment_removal_indices {
-                                        boundary_segments.swap_remove_back(segment_index);
+                                        boundary_segments.swap_remove(segment_index);
                                     }
 
                                     if !found {
@@ -667,7 +668,7 @@ impl GeometricOperations<&ArcString> for &SphericalPolygon {
                 }
 
                 for polygon_index in polygon_removal_indices {
-                    polygons.polygons.swap_remove_back(polygon_index);
+                    polygons.polygons.swap_remove(polygon_index);
                 }
 
                 polygons.polygons.extend(new_polygons);
@@ -678,8 +679,8 @@ impl GeometricOperations<&ArcString> for &SphericalPolygon {
     }
 }
 
-impl GeometricOperations<&MultiArcString> for &SphericalPolygon {
-    fn distance(self, other: &MultiArcString) -> f64 {
+impl GeometricOperations<MultiArcString> for SphericalPolygon {
+    fn distance(&self, other: &MultiArcString) -> f64 {
         if self.contains(other) {
             0.0
         } else {
@@ -687,27 +688,27 @@ impl GeometricOperations<&MultiArcString> for &SphericalPolygon {
         }
     }
 
-    fn contains(self, other: &MultiArcString) -> bool {
+    fn contains(&self, other: &MultiArcString) -> bool {
         other.within(self)
     }
 
-    fn within(self, _: &MultiArcString) -> bool {
+    fn within(&self, _: &MultiArcString) -> bool {
         false
     }
 
-    fn touches(self, other: &MultiArcString) -> bool {
+    fn touches(&self, other: &MultiArcString) -> bool {
         self.boundary.touches(other)
     }
 
-    fn crosses(self, other: &MultiArcString) -> bool {
+    fn crosses(&self, other: &MultiArcString) -> bool {
         self.boundary.crosses(other)
     }
 
-    fn intersects(self, other: &MultiArcString) -> bool {
+    fn intersects(&self, other: &MultiArcString) -> bool {
         self.touches(other) || self.crosses(other) || other.intersects(self)
     }
 
-    fn intersection(self, other: &MultiArcString) -> Option<MultiArcString> {
+    fn intersection(&self, other: &MultiArcString) -> Option<MultiArcString> {
         let mut arcstrings = vec![];
 
         for arcstring in &other.arcstrings {
@@ -719,7 +720,7 @@ impl GeometricOperations<&MultiArcString> for &SphericalPolygon {
         MultiArcString::try_from(arcstrings).ok()
     }
 
-    fn split(self, other: &MultiArcString) -> MultiSphericalPolygon {
+    fn split(&self, other: &MultiArcString) -> MultiSphericalPolygon {
         let mut polygons = vec![];
 
         for arcstring in &other.arcstrings {
@@ -730,8 +731,8 @@ impl GeometricOperations<&MultiArcString> for &SphericalPolygon {
     }
 }
 
-impl GeometricOperations<&SphericalPolygon> for &SphericalPolygon {
-    fn distance(self, other: &SphericalPolygon) -> f64 {
+impl GeometricOperations<SphericalPolygon> for SphericalPolygon {
+    fn distance(&self, other: &SphericalPolygon) -> f64 {
         if self.contains(other) {
             0.0
         } else {
@@ -739,27 +740,27 @@ impl GeometricOperations<&SphericalPolygon> for &SphericalPolygon {
         }
     }
 
-    fn contains(self, other: &SphericalPolygon) -> bool {
+    fn contains(&self, other: &SphericalPolygon) -> bool {
         self.contains(&other.vertices())
     }
 
-    fn within(self, other: &SphericalPolygon) -> bool {
+    fn within(&self, other: &SphericalPolygon) -> bool {
         other.contains(self)
     }
 
-    fn touches(self, other: &SphericalPolygon) -> bool {
+    fn touches(&self, other: &SphericalPolygon) -> bool {
         self.boundary.touches(&other.boundary)
     }
 
-    fn crosses(self, other: &SphericalPolygon) -> bool {
+    fn crosses(&self, other: &SphericalPolygon) -> bool {
         self.boundary.crosses(other)
     }
 
-    fn intersects(self, other: &SphericalPolygon) -> bool {
+    fn intersects(&self, other: &SphericalPolygon) -> bool {
         self.touches(other) || self.crosses(other) || self.contains(other) || self.within(other)
     }
 
-    fn intersection(self, other: &SphericalPolygon) -> Option<MultiSphericalPolygon> {
+    fn intersection(&self, other: &SphericalPolygon) -> Option<MultiSphericalPolygon> {
         let mut polygons = vec![];
         if self.intersects(other) {
             for polygon in self.split(other).polygons {
@@ -776,10 +777,10 @@ impl GeometricOperations<&SphericalPolygon> for &SphericalPolygon {
         }
     }
 
-    fn split(self, other: &SphericalPolygon) -> MultiSphericalPolygon {
+    fn split(&self, other: &SphericalPolygon) -> MultiSphericalPolygon {
         let mut polygons = vec![];
         if self.intersects(other) {
-            let mut segments: VecDeque<ArcString> = self.boundary.split(&other.boundary).arcstrings;
+            let mut segments: Vec<ArcString> = self.boundary.split(&other.boundary).arcstrings;
             if let Some(other_intersection) = self.intersection(&other.boundary) {
                 segments.extend(other_intersection.arcstrings);
             }
@@ -795,6 +796,7 @@ impl GeometricOperations<&SphericalPolygon> for &SphericalPolygon {
                             if joined.closed {
                                 polygons.push(SphericalPolygon::new(joined, None).unwrap());
                             } else {
+                                println!("joining {segment_index} and {other_segment_index}");
                                 joined_segments.push(joined);
                                 segment_removal_indices.push(segment_index);
                                 segment_removal_indices.push(other_segment_index);
@@ -812,8 +814,9 @@ impl GeometricOperations<&SphericalPolygon> for &SphericalPolygon {
                 segment_removal_indices.sort_unstable();
                 segment_removal_indices.reverse();
                 segment_removal_indices.dedup();
+                println!("{segment_removal_indices:?}");
                 for segment_index in segment_removal_indices {
-                    segments.swap_remove_back(segment_index);
+                    segments.swap_remove(segment_index);
                 }
 
                 // add joined segments
@@ -827,8 +830,8 @@ impl GeometricOperations<&SphericalPolygon> for &SphericalPolygon {
     }
 }
 
-impl GeometricOperations<&MultiSphericalPolygon> for &SphericalPolygon {
-    fn distance(self, other: &MultiSphericalPolygon) -> f64 {
+impl GeometricOperations<MultiSphericalPolygon> for SphericalPolygon {
+    fn distance(&self, other: &MultiSphericalPolygon) -> f64 {
         if self.contains(other) {
             0.0
         } else {
@@ -836,27 +839,27 @@ impl GeometricOperations<&MultiSphericalPolygon> for &SphericalPolygon {
         }
     }
 
-    fn contains(self, other: &MultiSphericalPolygon) -> bool {
+    fn contains(&self, other: &MultiSphericalPolygon) -> bool {
         other.within(self)
     }
 
-    fn within(self, other: &MultiSphericalPolygon) -> bool {
+    fn within(&self, other: &MultiSphericalPolygon) -> bool {
         other.contains(self)
     }
 
-    fn touches(self, other: &MultiSphericalPolygon) -> bool {
+    fn touches(&self, other: &MultiSphericalPolygon) -> bool {
         self.boundary.touches(other)
     }
 
-    fn crosses(self, other: &MultiSphericalPolygon) -> bool {
+    fn crosses(&self, other: &MultiSphericalPolygon) -> bool {
         self.boundary.crosses(other)
     }
 
-    fn intersects(self, other: &MultiSphericalPolygon) -> bool {
+    fn intersects(&self, other: &MultiSphericalPolygon) -> bool {
         self.touches(other) || self.crosses(other) || other.intersects(self) || self.within(other)
     }
 
-    fn intersection(self, other: &MultiSphericalPolygon) -> Option<MultiSphericalPolygon> {
+    fn intersection(&self, other: &MultiSphericalPolygon) -> Option<MultiSphericalPolygon> {
         other
             .polygons
             .par_iter()
@@ -864,7 +867,7 @@ impl GeometricOperations<&MultiSphericalPolygon> for &SphericalPolygon {
             .sum()
     }
 
-    fn split(self, other: &MultiSphericalPolygon) -> MultiSphericalPolygon {
+    fn split(&self, other: &MultiSphericalPolygon) -> MultiSphericalPolygon {
         other
             .polygons
             .par_iter()
@@ -876,14 +879,22 @@ impl GeometricOperations<&MultiSphericalPolygon> for &SphericalPolygon {
 #[pyclass]
 #[derive(Clone, Debug)]
 pub struct MultiSphericalPolygon {
-    pub polygons: VecDeque<SphericalPolygon>,
+    pub polygons: Vec<SphericalPolygon>,
 }
 
 impl From<Vec<SphericalPolygon>> for MultiSphericalPolygon {
     fn from(polygons: Vec<SphericalPolygon>) -> Self {
-        Self {
-            polygons: polygons.into(),
+        Self { polygons }
+    }
+}
+
+impl MultiSphericalPolygon {
+    fn graph(&self) -> GeometricEdgeGraph<SphericalPolygon> {
+        let mut graph = GeometricEdgeGraph::<SphericalPolygon>::default();
+        for polygon in self.polygons.iter() {
+            graph.add_polygon(polygon);
         }
+        graph
     }
 }
 
@@ -998,15 +1009,25 @@ impl Geometry for MultiSphericalPolygon {
     }
 }
 
-impl MultiGeometry for &MultiSphericalPolygon {
+// impl MultiGeometry for &MultiSphericalPolygon {
+//     fn len(&self) -> usize {
+//         self.polygons.len()
+//     }
+// }
+
+impl MultiGeometry<SphericalPolygon> for MultiSphericalPolygon {
     fn len(&self) -> usize {
         self.polygons.len()
     }
-}
+    // }
 
-impl MultiGeometry for MultiSphericalPolygon {
-    fn len(&self) -> usize {
-        (&self).len()
+    // impl ExtendableMultiGeometry<SphericalPolygon> for MultiSphericalPolygon {
+    fn extend(&mut self, other: Self) {
+        self.polygons.extend(other.polygons);
+    }
+
+    fn push(&mut self, value: SphericalPolygon) {
+        self.polygons.push(value);
     }
 }
 
@@ -1020,18 +1041,8 @@ impl Sum for MultiSphericalPolygon {
     }
 }
 
-impl ExtendMultiGeometry<SphericalPolygon> for MultiSphericalPolygon {
-    fn extend(&mut self, other: Self) {
-        self.polygons.extend(other.polygons);
-    }
-
-    fn push(&mut self, value: SphericalPolygon) {
-        self.polygons.push_back(value);
-    }
-}
-
-impl GeometricOperations<&SphericalPoint> for &MultiSphericalPolygon {
-    fn distance(self, other: &SphericalPoint) -> f64 {
+impl GeometricOperations<SphericalPoint, SphericalPolygon> for MultiSphericalPolygon {
+    fn distance(&self, other: &SphericalPoint) -> f64 {
         if self.contains(other) {
             0.0
         } else {
@@ -1039,41 +1050,41 @@ impl GeometricOperations<&SphericalPoint> for &MultiSphericalPolygon {
         }
     }
 
-    fn contains(self, other: &SphericalPoint) -> bool {
+    fn contains(&self, other: &SphericalPoint) -> bool {
         self.polygons
             .par_iter()
             .any(|polygon| polygon.contains(other))
     }
 
-    fn within(self, _: &SphericalPoint) -> bool {
+    fn within(&self, _: &SphericalPoint) -> bool {
         false
     }
 
-    fn touches(self, other: &SphericalPoint) -> bool {
+    fn touches(&self, other: &SphericalPoint) -> bool {
         self.polygons
             .par_iter()
             .any(|polygon| polygon.touches(other))
     }
 
-    fn crosses(self, _: &SphericalPoint) -> bool {
+    fn crosses(&self, _: &SphericalPoint) -> bool {
         false
     }
 
-    fn intersects(self, other: &SphericalPoint) -> bool {
+    fn intersects(&self, other: &SphericalPoint) -> bool {
         self.touches(other) || self.crosses(other) || self.contains(other)
     }
 
-    fn intersection(self, other: &SphericalPoint) -> Option<SphericalPoint> {
+    fn intersection(&self, other: &SphericalPoint) -> Option<SphericalPoint> {
         other.intersection(self)
     }
 
-    fn split(self, other: &SphericalPoint) -> MultiSphericalPolygon {
+    fn split(&self, other: &SphericalPoint) -> MultiSphericalPolygon {
         self.to_owned()
     }
 }
 
-impl GeometricOperations<&MultiSphericalPoint> for &MultiSphericalPolygon {
-    fn distance(self, other: &MultiSphericalPoint) -> f64 {
+impl GeometricOperations<MultiSphericalPoint, SphericalPolygon> for MultiSphericalPolygon {
+    fn distance(&self, other: &MultiSphericalPoint) -> f64 {
         if self.contains(other) {
             0.0
         } else {
@@ -1081,25 +1092,25 @@ impl GeometricOperations<&MultiSphericalPoint> for &MultiSphericalPolygon {
         }
     }
 
-    fn contains(self, other: &MultiSphericalPoint) -> bool {
+    fn contains(&self, other: &MultiSphericalPoint) -> bool {
         other.within(self)
     }
 
-    fn within(self, _: &MultiSphericalPoint) -> bool {
+    fn within(&self, _: &MultiSphericalPoint) -> bool {
         false
     }
 
-    fn touches(self, other: &MultiSphericalPoint) -> bool {
+    fn touches(&self, other: &MultiSphericalPoint) -> bool {
         self.polygons
             .par_iter()
             .any(|polygon| polygon.touches(other))
     }
 
-    fn crosses(self, _: &MultiSphericalPoint) -> bool {
+    fn crosses(&self, _: &MultiSphericalPoint) -> bool {
         false
     }
 
-    fn intersects(self, other: &MultiSphericalPoint) -> bool {
+    fn intersects(&self, other: &MultiSphericalPoint) -> bool {
         self.touches(other)
             || self.crosses(other)
             || self
@@ -1108,20 +1119,20 @@ impl GeometricOperations<&MultiSphericalPoint> for &MultiSphericalPolygon {
                 .any(|polygon| polygon.intersects(other))
     }
 
-    fn intersection(self, other: &MultiSphericalPoint) -> Option<MultiSphericalPoint> {
+    fn intersection(&self, other: &MultiSphericalPoint) -> Option<MultiSphericalPoint> {
         self.polygons
             .par_iter()
             .map(|polygon| polygon.intersection(other))
             .sum()
     }
 
-    fn split(self, other: &MultiSphericalPoint) -> MultiSphericalPolygon {
+    fn split(&self, other: &MultiSphericalPoint) -> MultiSphericalPolygon {
         self.to_owned()
     }
 }
 
-impl GeometricOperations<&ArcString> for &MultiSphericalPolygon {
-    fn distance(self, other: &ArcString) -> f64 {
+impl GeometricOperations<ArcString, SphericalPolygon> for MultiSphericalPolygon {
+    fn distance(&self, other: &ArcString) -> f64 {
         if self.contains(other) {
             0.0
         } else {
@@ -1129,40 +1140,40 @@ impl GeometricOperations<&ArcString> for &MultiSphericalPolygon {
         }
     }
 
-    fn contains(self, other: &ArcString) -> bool {
+    fn contains(&self, other: &ArcString) -> bool {
         self.polygons
             .par_iter()
             .any(|polygon| polygon.contains(other))
     }
 
-    fn within(self, _: &ArcString) -> bool {
+    fn within(&self, _: &ArcString) -> bool {
         false
     }
 
-    fn touches(self, other: &ArcString) -> bool {
+    fn touches(&self, other: &ArcString) -> bool {
         self.polygons
             .par_iter()
             .any(|polygon| polygon.touches(other))
     }
 
-    fn crosses(self, other: &ArcString) -> bool {
+    fn crosses(&self, other: &ArcString) -> bool {
         self.polygons
             .par_iter()
             .any(|polygon| polygon.crosses(other))
     }
 
-    fn intersects(self, other: &ArcString) -> bool {
+    fn intersects(&self, other: &ArcString) -> bool {
         self.touches(other) || self.crosses(other) || self.contains(other)
     }
 
-    fn intersection(self, other: &ArcString) -> Option<MultiArcString> {
+    fn intersection(&self, other: &ArcString) -> Option<MultiArcString> {
         self.polygons
             .par_iter()
             .map(|polygon| polygon.intersection(other))
             .sum()
     }
 
-    fn split(self, other: &ArcString) -> MultiSphericalPolygon {
+    fn split(&self, other: &ArcString) -> MultiSphericalPolygon {
         self.polygons
             .par_iter()
             .map(|polygon| polygon.split(other))
@@ -1170,8 +1181,8 @@ impl GeometricOperations<&ArcString> for &MultiSphericalPolygon {
     }
 }
 
-impl GeometricOperations<&MultiArcString> for &MultiSphericalPolygon {
-    fn distance(self, other: &MultiArcString) -> f64 {
+impl GeometricOperations<MultiArcString, SphericalPolygon> for MultiSphericalPolygon {
+    fn distance(&self, other: &MultiArcString) -> f64 {
         if self.contains(other) {
             0.0
         } else {
@@ -1179,41 +1190,41 @@ impl GeometricOperations<&MultiArcString> for &MultiSphericalPolygon {
         }
     }
 
-    fn contains(self, other: &MultiArcString) -> bool {
+    fn contains(&self, other: &MultiArcString) -> bool {
         other
             .arcstrings
             .par_iter()
             .all(|arcstring| arcstring.within(self))
     }
 
-    fn within(self, _: &MultiArcString) -> bool {
+    fn within(&self, _: &MultiArcString) -> bool {
         false
     }
 
-    fn touches(self, other: &MultiArcString) -> bool {
+    fn touches(&self, other: &MultiArcString) -> bool {
         self.polygons
             .par_iter()
             .any(|polygon| polygon.touches(other))
     }
 
-    fn crosses(self, other: &MultiArcString) -> bool {
+    fn crosses(&self, other: &MultiArcString) -> bool {
         self.polygons
             .par_iter()
             .any(|polygon| polygon.crosses(other))
     }
 
-    fn intersects(self, other: &MultiArcString) -> bool {
+    fn intersects(&self, other: &MultiArcString) -> bool {
         self.touches(other) || self.crosses(other) || other.intersects(self)
     }
 
-    fn intersection(self, other: &MultiArcString) -> Option<MultiArcString> {
+    fn intersection(&self, other: &MultiArcString) -> Option<MultiArcString> {
         self.polygons
             .par_iter()
             .map(|polygon| polygon.intersection(other))
             .sum()
     }
 
-    fn split(self, other: &MultiArcString) -> MultiSphericalPolygon {
+    fn split(&self, other: &MultiArcString) -> MultiSphericalPolygon {
         self.polygons
             .par_iter()
             .map(|polygon| polygon.split(other))
@@ -1221,8 +1232,8 @@ impl GeometricOperations<&MultiArcString> for &MultiSphericalPolygon {
     }
 }
 
-impl GeometricOperations<&SphericalPolygon> for &MultiSphericalPolygon {
-    fn distance(self, other: &SphericalPolygon) -> f64 {
+impl GeometricOperations<SphericalPolygon, SphericalPolygon> for MultiSphericalPolygon {
+    fn distance(&self, other: &SphericalPolygon) -> f64 {
         if self.contains(other) {
             0.0
         } else {
@@ -1230,44 +1241,44 @@ impl GeometricOperations<&SphericalPolygon> for &MultiSphericalPolygon {
         }
     }
 
-    fn contains(self, other: &SphericalPolygon) -> bool {
+    fn contains(&self, other: &SphericalPolygon) -> bool {
         self.polygons
             .par_iter()
             .any(|polygon| polygon.contains(other))
     }
 
-    fn within(self, other: &SphericalPolygon) -> bool {
+    fn within(&self, other: &SphericalPolygon) -> bool {
         self.polygons
             .par_iter()
             .all(|polygon| polygon.within(other))
     }
 
-    fn touches(self, other: &SphericalPolygon) -> bool {
+    fn touches(&self, other: &SphericalPolygon) -> bool {
         self.polygons
             .par_iter()
             .any(|polygon| polygon.touches(other))
     }
 
-    fn crosses(self, other: &SphericalPolygon) -> bool {
+    fn crosses(&self, other: &SphericalPolygon) -> bool {
         self.polygons
             .par_iter()
             .any(|polygon| polygon.crosses(other))
     }
 
-    fn intersects(self, other: &SphericalPolygon) -> bool {
+    fn intersects(&self, other: &SphericalPolygon) -> bool {
         self.polygons
             .par_iter()
             .any(|polygon| polygon.intersects(other))
     }
 
-    fn intersection(self, other: &SphericalPolygon) -> Option<MultiSphericalPolygon> {
+    fn intersection(&self, other: &SphericalPolygon) -> Option<MultiSphericalPolygon> {
         self.polygons
             .par_iter()
             .map(|polygon| polygon.intersection(other))
             .sum()
     }
 
-    fn split(self, other: &SphericalPolygon) -> MultiSphericalPolygon {
+    fn split(&self, other: &SphericalPolygon) -> MultiSphericalPolygon {
         self.polygons
             .par_iter()
             .map(|polygon| polygon.split(other))
@@ -1275,8 +1286,8 @@ impl GeometricOperations<&SphericalPolygon> for &MultiSphericalPolygon {
     }
 }
 
-impl GeometricOperations<&MultiSphericalPolygon> for &MultiSphericalPolygon {
-    fn distance(self, other: &MultiSphericalPolygon) -> f64 {
+impl GeometricOperations<MultiSphericalPolygon, SphericalPolygon> for MultiSphericalPolygon {
+    fn distance(&self, other: &MultiSphericalPolygon) -> f64 {
         if self.contains(other) {
             0.0
         } else {
@@ -1284,45 +1295,63 @@ impl GeometricOperations<&MultiSphericalPolygon> for &MultiSphericalPolygon {
         }
     }
 
-    fn contains(self, other: &MultiSphericalPolygon) -> bool {
+    fn contains(&self, other: &MultiSphericalPolygon) -> bool {
         other.within(self)
     }
 
-    fn within(self, other: &MultiSphericalPolygon) -> bool {
+    fn within(&self, other: &MultiSphericalPolygon) -> bool {
         self.polygons
             .par_iter()
             .all(|polygon| polygon.within(other))
     }
 
-    fn touches(self, other: &MultiSphericalPolygon) -> bool {
+    fn touches(&self, other: &MultiSphericalPolygon) -> bool {
         self.polygons
             .par_iter()
             .any(|polygon| polygon.touches(other))
     }
 
-    fn crosses(self, other: &MultiSphericalPolygon) -> bool {
+    fn crosses(&self, other: &MultiSphericalPolygon) -> bool {
         self.polygons
             .par_iter()
             .any(|polygon| polygon.crosses(other))
     }
 
-    fn intersects(self, other: &MultiSphericalPolygon) -> bool {
+    fn intersects(&self, other: &MultiSphericalPolygon) -> bool {
         self.polygons
             .par_iter()
             .any(|polygon| polygon.intersects(other))
     }
 
-    fn intersection(self, other: &MultiSphericalPolygon) -> Option<MultiSphericalPolygon> {
+    fn intersection(&self, other: &MultiSphericalPolygon) -> Option<MultiSphericalPolygon> {
         self.polygons
             .par_iter()
             .map(|polygon| polygon.intersection(other))
             .sum()
     }
 
-    fn split(self, other: &MultiSphericalPolygon) -> MultiSphericalPolygon {
+    fn split(&self, other: &MultiSphericalPolygon) -> MultiSphericalPolygon {
         self.polygons
             .par_iter()
             .map(|polygon| polygon.split(other))
             .sum()
+    }
+}
+
+impl GeometryCollection<SphericalPolygon, MultiSphericalPolygon> for MultiSphericalPolygon {
+    fn join(&self) -> Result<SphericalPolygon, String> {
+        let mut graph = self.graph();
+        graph.join_self()
+    }
+
+    fn overlap(&self) -> Option<SphericalPolygon> {
+        let mut graph = self.graph();
+        graph.overlap_self()
+    }
+
+    fn split(&self) -> MultiSphericalPolygon {
+        let mut graph = self.graph();
+        graph.split_self();
+        graph.extract_polygons()
     }
 }

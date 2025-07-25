@@ -23,57 +23,66 @@ pub trait Geometry {
     }
 }
 
-pub trait MultiGeometry {
+pub trait MultiGeometry<G: Geometry> {
     /// number of elements in this collection
     fn len(&self) -> usize;
-}
 
-pub trait ExtendMultiGeometry<T: Geometry> {
     /// extend this collection with geometries from the other collection
     fn extend(&mut self, other: Self);
 
     /// append the geometry to this collection
-    fn push(&mut self, other: T);
+    fn push(&mut self, other: G);
 }
 
-pub trait GeometricOperations<O: Geometry = Self> {
+pub trait GeometricOperations<O: Geometry = Self, S: Geometry = Self> {
     /// shortest great-circle distance over the sphere from any part of this geometry to another
-    fn distance(self, other: O) -> f64;
+    fn distance(&self, other: &O) -> f64;
 
     /// One geometry contains another if the other geometry is a subset of it and their interiors have at least one point in common.
     /// Contains is the inverse of Within.
     /// https://esri.github.io/geometry-api-java/doc/Contains.html
-    fn contains(self, other: O) -> bool;
+    fn contains(&self, other: &O) -> bool;
 
     /// One geometry is within another if it is a subset of the other geometry and their interiors have at least one point in common. Within is the inverse of Contains.
     /// https://esri.github.io/geometry-api-java/doc/Within.html
-    fn within(self, other: O) -> bool;
+    fn within(&self, other: &O) -> bool;
 
     /// An object is said to touch other if it has at least one point in common with other and its interior does not intersect with any part of the other.
     /// Overlapping features therefore do not touch.
     /// https://esri.github.io/geometry-api-java/doc/Touches.html
-    fn touches(self, other: O) -> bool;
+    fn touches(&self, other: &O) -> bool;
 
     /// the geometries have some, but not all interior points in common
     ///
     /// Two polylines cross if they meet at (a) point/s only, and at least one of the shared points is internal to both polylines.
     /// A polyline and polygon cross if a connected part of the polyline is partly inside and partly outside the polygon.
     /// https://esri.github.io/geometry-api-java/doc/Crosses.html
-    fn crosses(self, other: O) -> bool;
+    fn crosses(&self, other: &O) -> bool;
 
     /// Two geometries intersect if they share at least one point in common.
     /// https://esri.github.io/geometry-api-java/doc/Intersects.html
-    fn intersects(self, other: O) -> bool;
+    fn intersects(&self, other: &O) -> bool;
 
     /// any part of this geometry that is within another
     ///
     /// NOTE: this function is NOT rigorous;
     /// it will ONLY return the lower order of geometry being compared
     /// and will NOT handle touching, collinear overlap, or degenerate cases
-    fn intersection(self, other: O) -> Option<impl Geometry>;
+    fn intersection(&self, other: &O) -> Option<impl Geometry>;
 
     /// split this geometry into a multi-geometry, at the crossing with the given geometry
-    fn split(self, other: O) -> impl MultiGeometry;
+    fn split(&self, other: &O) -> impl MultiGeometry<S>;
+}
+
+pub trait GeometryCollection<G: Geometry, M: MultiGeometry<G>> {
+    /// join geometries into one; errors if any of the geometries are disjoint
+    fn join(&self) -> Result<G, String>;
+
+    /// find overlapping regions between geometries, if any
+    fn overlap(&self) -> Option<G>;
+
+    /// split geometries so none are overlapping
+    fn split(&self) -> M;
 }
 
 #[derive(FromPyObject, IntoPyObject, Debug, Clone, PartialEq)]
