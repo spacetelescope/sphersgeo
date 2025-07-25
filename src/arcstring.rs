@@ -278,10 +278,16 @@ pub struct ArcString {
 
 impl From<MultiSphericalPoint> for ArcString {
     fn from(points: MultiSphericalPoint) -> Self {
-        Self {
-            points,
-            closed: false,
-        }
+        let (points, closed) = if points.xyz.slice(s![-1, ..]) == points.xyz.slice(s![0, ..]) {
+            (
+                MultiSphericalPoint::try_from(points.xyz.slice(s![..-1, ..]).to_owned()).unwrap(),
+                true,
+            )
+        } else {
+            (points, false)
+        };
+
+        Self { points, closed }
     }
 }
 
