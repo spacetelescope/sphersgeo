@@ -44,16 +44,25 @@ class SphericalPoint:
     ) -> SphericalPoint: ...
 
     @property
+    def vertices(self) -> MultiSphericalPoint: ...
+
+    @property
     def area(self) -> float: ...
 
     @property
     def length(self) -> float: ...
 
     @property
-    def convex_hull(self) -> SphericalPolygon | None: ...
+    def representative_point(self) -> SphericalPoint: ...
 
     @property
-    def vertices(self) -> MultiSphericalPoint: ...
+    def centroid(self) -> SphericalPoint: ...
+
+    @property
+    def boundary(self) -> None: ...
+
+    @property
+    def convex_hull(self) -> None: ...
 
     def distance(
         self,
@@ -77,6 +86,26 @@ class SphericalPoint:
     ) -> bool: ...
 
     def within(
+        self,
+        other: SphericalPoint
+        | MultiSphericalPoint
+        | ArcString
+        | MultiArcString
+        | SphericalPolygon
+        | MultiSphericalPolygon,
+    ) -> bool: ...
+
+    def touches(
+        self,
+        other: SphericalPoint
+        | MultiSphericalPoint
+        | ArcString
+        | MultiArcString
+        | SphericalPolygon
+        | MultiSphericalPolygon,
+    ) -> bool: ...
+
+    def crosses(
         self,
         other: SphericalPoint
         | MultiSphericalPoint
@@ -165,16 +194,25 @@ class MultiSphericalPoint:
     def append(self, other: SphericalPoint): ...
 
     @property
+    def vertices(self) -> MultiSphericalPoint: ...
+
+    @property
     def area(self) -> float: ...
 
     @property
     def length(self) -> float: ...
 
     @property
-    def convex_hull(self) -> SphericalPolygon | None: ...
+    def representative_point(self) -> SphericalPoint: ...
 
     @property
-    def vertices(self) -> MultiSphericalPoint: ...
+    def centroid(self) -> SphericalPoint: ...
+
+    @property
+    def boundary(self) -> None: ...
+
+    @property
+    def convex_hull(self) -> SphericalPolygon | None: ...
 
     def distance(
         self,
@@ -198,6 +236,26 @@ class MultiSphericalPoint:
     ) -> bool: ...
 
     def within(
+        self,
+        other: SphericalPoint
+        | MultiSphericalPoint
+        | ArcString
+        | MultiArcString
+        | SphericalPolygon
+        | MultiSphericalPolygon,
+    ) -> bool: ...
+
+    def touches(
+        self,
+        other: SphericalPoint
+        | MultiSphericalPoint
+        | ArcString
+        | MultiArcString
+        | SphericalPolygon
+        | MultiSphericalPolygon,
+    ) -> bool: ...
+
+    def crosses(
         self,
         other: SphericalPoint
         | MultiSphericalPoint
@@ -260,16 +318,25 @@ class ArcString:
     def crossings_with_self(self) -> MultiSphericalPoint: ...
 
     @property
+    def vertices(self) -> MultiSphericalPoint: ...
+
+    @property
     def area(self) -> float: ...
 
     @property
     def length(self) -> float: ...
 
     @property
-    def convex_hull(self) -> SphericalPolygon | None: ...
+    def representative_point(self) -> SphericalPoint: ...
 
     @property
-    def vertices(self) -> MultiSphericalPoint: ...
+    def centroid(self) -> SphericalPoint: ...
+
+    @property
+    def boundary(self) -> MultiSphericalPoint: ...
+
+    @property
+    def convex_hull(self) -> SphericalPolygon | None: ...
 
     def distance(
         self,
@@ -293,6 +360,26 @@ class ArcString:
     ) -> bool: ...
 
     def within(
+        self,
+        other: SphericalPoint
+        | MultiSphericalPoint
+        | ArcString
+        | MultiArcString
+        | SphericalPolygon
+        | MultiSphericalPolygon,
+    ) -> bool: ...
+
+    def touches(
+        self,
+        other: SphericalPoint
+        | MultiSphericalPoint
+        | ArcString
+        | MultiArcString
+        | SphericalPolygon
+        | MultiSphericalPolygon,
+    ) -> bool: ...
+
+    def crosses(
         self,
         other: SphericalPoint
         | MultiSphericalPoint
@@ -334,16 +421,25 @@ class MultiArcString:
     ): ...
 
     @property
+    def vertices(self) -> MultiSphericalPoint: ...
+
+    @property
     def area(self) -> float: ...
 
     @property
     def length(self) -> float: ...
 
     @property
-    def convex_hull(self) -> SphericalPolygon | None: ...
+    def representative_point(self) -> SphericalPoint: ...
 
     @property
-    def vertices(self) -> MultiSphericalPoint: ...
+    def centroid(self) -> SphericalPoint: ...
+
+    @property
+    def boundary(self) -> MultiSphericalPoint: ...
+
+    @property
+    def convex_hull(self) -> SphericalPolygon | None: ...
 
     def distance(
         self,
@@ -367,6 +463,26 @@ class MultiArcString:
     ) -> bool: ...
 
     def within(
+        self,
+        other: SphericalPoint
+        | MultiSphericalPoint
+        | ArcString
+        | MultiArcString
+        | SphericalPolygon
+        | MultiSphericalPolygon,
+    ) -> bool: ...
+
+    def touches(
+        self,
+        other: SphericalPoint
+        | MultiSphericalPoint
+        | ArcString
+        | MultiArcString
+        | SphericalPolygon
+        | MultiSphericalPolygon,
+    ) -> bool: ...
+
+    def crosses(
         self,
         other: SphericalPoint
         | MultiSphericalPoint
@@ -438,16 +554,25 @@ class SphericalPolygon:
     def is_clockwise(self) -> bool: ...
 
     @property
+    def vertices(self) -> MultiSphericalPoint: ...
+
+    @property
     def area(self) -> float: ...
 
     @property
     def length(self) -> float: ...
 
     @property
-    def convex_hull(self) -> SphericalPolygon | None: ...
+    def representative_point(self) -> SphericalPoint: ...
 
     @property
-    def vertices(self) -> MultiSphericalPoint: ...
+    def centroid(self) -> SphericalPoint: ...
+
+    @property
+    def boundary(self) -> ArcString: ...
+
+    @property
+    def convex_hull(self) -> SphericalPolygon: ...
 
     def distance(
         self,
@@ -471,6 +596,26 @@ class SphericalPolygon:
     ) -> bool: ...
 
     def within(
+        self,
+        other: SphericalPoint
+        | MultiSphericalPoint
+        | ArcString
+        | MultiArcString
+        | SphericalPolygon
+        | MultiSphericalPolygon,
+    ) -> bool: ...
+
+    def touches(
+        self,
+        other: SphericalPoint
+        | MultiSphericalPoint
+        | ArcString
+        | MultiArcString
+        | SphericalPolygon
+        | MultiSphericalPolygon,
+    ) -> bool: ...
+
+    def crosses(
         self,
         other: SphericalPoint
         | MultiSphericalPoint
@@ -505,16 +650,25 @@ class MultiSphericalPolygon:
     def __init__(self, polygons: list[SphericalPolygon]): ...
 
     @property
+    def vertices(self) -> MultiSphericalPoint: ...
+
+    @property
     def area(self) -> float: ...
 
     @property
     def length(self) -> float: ...
 
     @property
-    def convex_hull(self) -> SphericalPolygon | None: ...
+    def representative_point(self) -> SphericalPoint: ...
 
     @property
-    def vertices(self) -> MultiSphericalPoint: ...
+    def centroid(self) -> SphericalPoint: ...
+
+    @property
+    def boundary(self) -> MultiArcString: ...
+
+    @property
+    def convex_hull(self) -> SphericalPolygon: ...
 
     def distance(
         self,
@@ -547,6 +701,26 @@ class MultiSphericalPolygon:
         | MultiSphericalPolygon,
     ) -> bool: ...
 
+    def touches(
+        self,
+        other: SphericalPoint
+        | MultiSphericalPoint
+        | ArcString
+        | MultiArcString
+        | SphericalPolygon
+        | MultiSphericalPolygon,
+    ) -> bool: ...
+
+    def crosses(
+        self,
+        other: SphericalPoint
+        | MultiSphericalPoint
+        | ArcString
+        | MultiArcString
+        | SphericalPolygon
+        | MultiSphericalPolygon,
+    ) -> bool: ...
+
     def intersects(
         self,
         other: SphericalPoint
@@ -569,9 +743,9 @@ class MultiSphericalPolygon:
 
 
 class AnyGeometry(Enum):
-    SphericalPoint = (SphericalPoint,)
-    MultiSphericalPoint = (MultiSphericalPoint,)
-    ArcString = (ArcString,)
-    MultiArcString = (MultiArcString,)
-    SphericalPolygon = (SphericalPolygon,)
-    MultiSphericalPolygon = (MultiSphericalPolygon,)
+    SphericalPoint = SphericalPoint
+    MultiSphericalPoint = MultiSphericalPoint
+    ArcString = ArcString
+    MultiArcString = MultiArcString
+    SphericalPolygon = SphericalPolygon
+    MultiSphericalPolygon = MultiSphericalPolygon

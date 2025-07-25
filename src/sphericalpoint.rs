@@ -601,6 +601,10 @@ impl Add<&MultiSphericalPoint> for &SphericalPoint {
 }
 
 impl Geometry for &SphericalPoint {
+    fn vertices(&self) -> MultiSphericalPoint {
+        self.to_owned().into()
+    }
+
     fn area(&self) -> f64 {
         0.
     }
@@ -609,28 +613,28 @@ impl Geometry for &SphericalPoint {
         0.
     }
 
-    fn centroid(&self) -> crate::sphericalpoint::SphericalPoint {
+    fn representative_point(&self) -> SphericalPoint {
         (*self).to_owned()
     }
 
-    fn convex_hull(&self) -> Option<crate::sphericalpolygon::SphericalPolygon> {
-        None
-    }
-
-    fn vertices(&self) -> MultiSphericalPoint {
-        self.to_owned().into()
+    fn centroid(&self) -> crate::sphericalpoint::SphericalPoint {
+        (*self).to_owned()
     }
 
     fn boundary(&self) -> Option<SphericalPoint> {
         None
     }
 
-    fn representative_point(&self) -> SphericalPoint {
-        (*self).to_owned()
+    fn convex_hull(&self) -> Option<crate::sphericalpolygon::SphericalPolygon> {
+        None
     }
 }
 
 impl Geometry for SphericalPoint {
+    fn vertices(&self) -> MultiSphericalPoint {
+        self.into()
+    }
+
     fn area(&self) -> f64 {
         (&self).area()
     }
@@ -639,24 +643,20 @@ impl Geometry for SphericalPoint {
         (&self).length()
     }
 
+    fn representative_point(&self) -> SphericalPoint {
+        (&self).representative_point()
+    }
+
     fn centroid(&self) -> crate::sphericalpoint::SphericalPoint {
         self.to_owned()
-    }
-
-    fn convex_hull(&self) -> Option<crate::sphericalpolygon::SphericalPolygon> {
-        (&self).convex_hull()
-    }
-
-    fn vertices(&self) -> MultiSphericalPoint {
-        self.into()
     }
 
     fn boundary(&self) -> Option<SphericalPoint> {
         (&self).boundary()
     }
 
-    fn representative_point(&self) -> SphericalPoint {
-        (&self).representative_point()
+    fn convex_hull(&self) -> Option<crate::sphericalpolygon::SphericalPolygon> {
+        (&self).convex_hull()
     }
 }
 
@@ -1317,6 +1317,10 @@ impl AddAssign<&SphericalPoint> for MultiSphericalPoint {
 }
 
 impl Geometry for &MultiSphericalPoint {
+    fn vertices(&self) -> MultiSphericalPoint {
+        (*self).to_owned()
+    }
+
     fn area(&self) -> f64 {
         0.
     }
@@ -1325,9 +1329,19 @@ impl Geometry for &MultiSphericalPoint {
         0.
     }
 
+    fn representative_point(&self) -> SphericalPoint {
+        SphericalPoint {
+            xyz: self.xyz.slice(s![0, ..]).to_owned(),
+        }
+    }
+
     fn centroid(&self) -> crate::sphericalpoint::SphericalPoint {
         crate::sphericalpoint::SphericalPoint::try_from(self.xyz.mean_axis(Axis(0)).unwrap())
             .unwrap()
+    }
+
+    fn boundary(&self) -> Option<MultiSphericalPoint> {
+        None
     }
 
     /// This code implements Andrew's monotone chain algorithm, which is a simple
@@ -1424,23 +1438,13 @@ impl Geometry for &MultiSphericalPoint {
         )
         .ok()
     }
-
-    fn vertices(&self) -> MultiSphericalPoint {
-        (*self).to_owned()
-    }
-
-    fn boundary(&self) -> Option<MultiSphericalPoint> {
-        None
-    }
-
-    fn representative_point(&self) -> SphericalPoint {
-        SphericalPoint {
-            xyz: self.xyz.slice(s![0, ..]).to_owned(),
-        }
-    }
 }
 
 impl Geometry for MultiSphericalPoint {
+    fn vertices(&self) -> MultiSphericalPoint {
+        self.to_owned()
+    }
+
     fn area(&self) -> f64 {
         (&self).area()
     }
@@ -1449,24 +1453,20 @@ impl Geometry for MultiSphericalPoint {
         (&self).length()
     }
 
+    fn representative_point(&self) -> crate::sphericalpoint::SphericalPoint {
+        (&self).representative_point()
+    }
+
     fn centroid(&self) -> crate::sphericalpoint::SphericalPoint {
         (&self).centroid()
-    }
-
-    fn convex_hull(&self) -> Option<crate::sphericalpolygon::SphericalPolygon> {
-        (&self).convex_hull()
-    }
-
-    fn vertices(&self) -> MultiSphericalPoint {
-        self.to_owned()
     }
 
     fn boundary(&self) -> Option<MultiSphericalPoint> {
         (&self).boundary()
     }
 
-    fn representative_point(&self) -> crate::sphericalpoint::SphericalPoint {
-        (&self).representative_point()
+    fn convex_hull(&self) -> Option<crate::sphericalpolygon::SphericalPolygon> {
+        (&self).convex_hull()
     }
 }
 

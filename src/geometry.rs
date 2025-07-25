@@ -2,9 +2,14 @@ use kiddo::traits::DistanceMetric;
 use pyo3::prelude::*;
 
 pub trait Geometry {
+    fn vertices(&self) -> crate::sphericalpoint::MultiSphericalPoint;
+
     fn area(&self) -> f64;
 
     fn length(&self) -> f64;
+
+    /// point guaranteed to be within the object
+    fn representative_point(&self) -> crate::sphericalpoint::SphericalPoint;
 
     // mean position of all possible points within the geometry
     fn centroid(&self) -> crate::sphericalpoint::SphericalPoint;
@@ -16,11 +21,6 @@ pub trait Geometry {
     fn convex_hull(&self) -> Option<crate::sphericalpolygon::SphericalPolygon> {
         self.vertices().convex_hull()
     }
-
-    fn vertices(&self) -> crate::sphericalpoint::MultiSphericalPoint;
-
-    /// point guaranteed to be within the object
-    fn representative_point(&self) -> crate::sphericalpoint::SphericalPoint;
 }
 
 pub trait MultiGeometry {
@@ -90,6 +90,17 @@ pub enum AnyGeometry {
 }
 
 impl Geometry for AnyGeometry {
+    fn vertices(&self) -> crate::sphericalpoint::MultiSphericalPoint {
+        match self {
+            AnyGeometry::SphericalPoint(point) => point.vertices(),
+            AnyGeometry::MultiSphericalPoint(multipoint) => multipoint.vertices(),
+            AnyGeometry::ArcString(arcstring) => arcstring.vertices(),
+            AnyGeometry::MultiArcString(multiarcstring) => multiarcstring.vertices(),
+            AnyGeometry::SphericalPolygon(polygon) => polygon.vertices(),
+            AnyGeometry::MultiSphericalPolygon(multipolygon) => multipolygon.vertices(),
+        }
+    }
+
     fn area(&self) -> f64 {
         match self {
             AnyGeometry::SphericalPoint(point) => point.area(),
@@ -112,6 +123,17 @@ impl Geometry for AnyGeometry {
         }
     }
 
+    fn representative_point(&self) -> crate::sphericalpoint::SphericalPoint {
+        match self {
+            AnyGeometry::SphericalPoint(point) => point.representative_point(),
+            AnyGeometry::MultiSphericalPoint(multipoint) => multipoint.representative_point(),
+            AnyGeometry::ArcString(arcstring) => arcstring.representative_point(),
+            AnyGeometry::MultiArcString(multiarcstring) => multiarcstring.representative_point(),
+            AnyGeometry::SphericalPolygon(polygon) => polygon.representative_point(),
+            AnyGeometry::MultiSphericalPolygon(multipolygon) => multipolygon.representative_point(),
+        }
+    }
+
     fn centroid(&self) -> crate::sphericalpoint::SphericalPoint {
         match self {
             AnyGeometry::SphericalPoint(point) => point.centroid(),
@@ -120,28 +142,6 @@ impl Geometry for AnyGeometry {
             AnyGeometry::MultiArcString(multiarcstring) => multiarcstring.centroid(),
             AnyGeometry::SphericalPolygon(polygon) => polygon.centroid(),
             AnyGeometry::MultiSphericalPolygon(multipolygon) => multipolygon.centroid(),
-        }
-    }
-
-    fn convex_hull(&self) -> Option<crate::sphericalpolygon::SphericalPolygon> {
-        match self {
-            AnyGeometry::SphericalPoint(point) => point.convex_hull(),
-            AnyGeometry::MultiSphericalPoint(multipoint) => multipoint.convex_hull(),
-            AnyGeometry::ArcString(arcstring) => arcstring.convex_hull(),
-            AnyGeometry::MultiArcString(multiarcstring) => multiarcstring.convex_hull(),
-            AnyGeometry::SphericalPolygon(polygon) => polygon.convex_hull(),
-            AnyGeometry::MultiSphericalPolygon(multipolygon) => multipolygon.convex_hull(),
-        }
-    }
-
-    fn vertices(&self) -> crate::sphericalpoint::MultiSphericalPoint {
-        match self {
-            AnyGeometry::SphericalPoint(point) => point.vertices(),
-            AnyGeometry::MultiSphericalPoint(multipoint) => multipoint.vertices(),
-            AnyGeometry::ArcString(arcstring) => arcstring.vertices(),
-            AnyGeometry::MultiArcString(multiarcstring) => multiarcstring.vertices(),
-            AnyGeometry::SphericalPolygon(polygon) => polygon.vertices(),
-            AnyGeometry::MultiSphericalPolygon(multipolygon) => multipolygon.vertices(),
         }
     }
 
@@ -168,14 +168,14 @@ impl Geometry for AnyGeometry {
         }
     }
 
-    fn representative_point(&self) -> crate::sphericalpoint::SphericalPoint {
+    fn convex_hull(&self) -> Option<crate::sphericalpolygon::SphericalPolygon> {
         match self {
-            AnyGeometry::SphericalPoint(point) => point.representative_point(),
-            AnyGeometry::MultiSphericalPoint(multipoint) => multipoint.representative_point(),
-            AnyGeometry::ArcString(arcstring) => arcstring.representative_point(),
-            AnyGeometry::MultiArcString(multiarcstring) => multiarcstring.representative_point(),
-            AnyGeometry::SphericalPolygon(polygon) => polygon.representative_point(),
-            AnyGeometry::MultiSphericalPolygon(multipolygon) => multipolygon.representative_point(),
+            AnyGeometry::SphericalPoint(point) => point.convex_hull(),
+            AnyGeometry::MultiSphericalPoint(multipoint) => multipoint.convex_hull(),
+            AnyGeometry::ArcString(arcstring) => arcstring.convex_hull(),
+            AnyGeometry::MultiArcString(multiarcstring) => multiarcstring.convex_hull(),
+            AnyGeometry::SphericalPolygon(polygon) => polygon.convex_hull(),
+            AnyGeometry::MultiSphericalPolygon(multipolygon) => multipolygon.convex_hull(),
         }
     }
 }
