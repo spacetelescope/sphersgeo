@@ -4,8 +4,6 @@ mod sphericalgraph;
 mod sphericalpolygon;
 mod vectorpoint;
 
-#[macro_use]
-extern crate impl_ops;
 extern crate numpy;
 
 use numpy::ndarray::s;
@@ -129,8 +127,11 @@ pub mod sphersgeo {
             cls: &Bound<'_, PyType>,
             coordinates: PyReadonlyArray2<'py, f64>,
             degrees: bool,
-        ) -> Self {
-            Self::from_lonlats(&coordinates.as_array(), degrees)
+        ) -> PyResult<Self> {
+            match Self::try_from_lonlats(&coordinates.as_array(), degrees) {
+                Ok(result) => Ok(result),
+                Err(err) => Err(PyValueError::new_err(err)),
+            }
         }
 
         /// xyz vector as a 2-dimensional array of Nx3 floats
