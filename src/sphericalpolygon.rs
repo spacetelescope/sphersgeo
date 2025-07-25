@@ -360,7 +360,26 @@ impl Geometry for SphericalPolygon {
     }
 
     fn length(&self) -> f64 {
-        self.boundary().map_or(0.0, |boundary| boundary.length())
+        (0..self.boundary.points.len())
+            .map(|index| {
+                // due to the nature of this search, we can skip all previous indices
+                (index + 1..self.boundary.points.len())
+                    .filter_map(|other_index| {
+                        if index != other_index {
+                            Some(crate::sphericalpoint::xyz_radians_over_sphere_between(
+                                &self.boundary.points.xyzs[index],
+                                &self.boundary.points.xyzs[other_index],
+                            ))
+                        } else {
+                            None
+                        }
+                    })
+                    .max_by(|a, b| a.partial_cmp(b).unwrap())
+                    .unwrap()
+            })
+            .max_by(|a, b| a.partial_cmp(b).unwrap())
+            .unwrap()
+            .to_degrees()
     }
 
     fn representative(&self) -> crate::sphericalpoint::SphericalPoint {
