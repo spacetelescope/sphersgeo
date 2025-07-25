@@ -347,9 +347,8 @@ impl Geometry for &SphericalPolygon {
             - ((self.boundary.points.len() - 1) as f64 * std::f64::consts::PI)
     }
 
-    /// length of this polygon
     fn length(&self) -> f64 {
-        todo!()
+        self.boundary().map_or(0.0, |boundary| boundary.length())
     }
 
     fn centroid(&self) -> crate::sphericalpoint::SphericalPoint {
@@ -711,7 +710,7 @@ impl Geometry for &MultiSphericalPolygon {
     }
 
     fn length(&self) -> f64 {
-        todo!()
+        self.boundary().map_or(0.0, |boundary| boundary.length())
     }
 
     fn centroid(&self) -> crate::sphericalpoint::SphericalPoint {
