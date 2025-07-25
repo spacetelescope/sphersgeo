@@ -1,8 +1,9 @@
+mod angularbounds;
+mod angularpolygon;
 mod arcstring;
 mod geometry;
 mod geometrycollection;
 mod sphericalgraph;
-mod sphericalpolygon;
 mod vectorpoint;
 
 extern crate numpy;
@@ -11,14 +12,17 @@ use crate::geometry::AnyGeometry;
 use pyo3::prelude::*;
 
 #[pymodule(name = "sphersgeo")]
-mod py_module {
+mod py_sphersgeo {
+    use ndarray::Array2;
     use numpy::{
-        ndarray::s, IntoPyArray, PyArray1, PyArray2, PyReadonlyArray1, PyReadonlyArray2, ToPyArray,
+        ndarray::{s, Array, Axis},
+        IntoPyArray, PyArray1, PyArray2, PyReadonlyArray1, PyReadonlyArray2, ToPyArray,
     };
     use pyo3::{exceptions::PyValueError, types::PyType};
 
     use super::*;
     use crate::{
+        angularbounds::AngularBounds,
         arcstring::{angle, angles, arc_length, interpolate},
         geometry::{ExtendMultiGeometry, GeometricOperations, Geometry, MultiGeometry},
         geometrycollection::GeometryCollection,
@@ -27,12 +31,22 @@ mod py_module {
     #[pymodule_export]
     use super::vectorpoint::VectorPoint;
 
+    #[derive(FromPyObject)]
+    enum PyVectorPointInputs<'py> {
+        NumpyArray(PyReadonlyArray1<'py, f64>),
+        List(Vec<f64>),
+    }
+
     #[pymethods]
     impl VectorPoint {
         #[new]
-        fn __new__<'py>(xyz: PyReadonlyArray1<'py, f64>) -> PyResult<Self> {
-            Self::try_from(xyz.as_array().to_owned())
-                .map_err(|err| PyValueError::new_err(format!("{:?}", err)))
+        fn __new__<'py>(xyz: PyVectorPointInputs) -> PyResult<Self> {
+            let xyz = match xyz {
+                PyVectorPointInputs::NumpyArray(xyz) => xyz.as_array().to_owned(),
+                PyVectorPointInputs::List(list) => Array::from_vec(list),
+            };
+
+            Self::try_from(xyz).map_err(|err| PyValueError::new_err(format!("{:?}", err)))
         }
 
         /// from the given coordinates, build an xyz vector representing a point on the sphere
@@ -40,10 +54,15 @@ mod py_module {
         #[pyo3(name="from_lonlat", signature=(coordinates,degrees=true))]
         fn py_from_lonlat<'py>(
             _: &Bound<'_, PyType>,
-            coordinates: PyReadonlyArray1<'py, f64>,
+            coordinates: PyVectorPointInputs,
             degrees: bool,
         ) -> PyResult<Self> {
-            match Self::try_from_lonlat(&coordinates.as_array(), degrees) {
+            let coordinates = match coordinates {
+                PyVectorPointInputs::NumpyArray(coordinates) => coordinates.as_array().to_owned(),
+                PyVectorPointInputs::List(list) => Array::from_vec(list),
+            };
+
+            match Self::try_from_lonlat(&coordinates.view(), degrees) {
                 Ok(result) => Ok(result),
                 Err(err) => Err(PyValueError::new_err(err)),
             }
@@ -76,13 +95,13 @@ mod py_module {
 
         /// bounding box [minX,minY,maxX,maxY]
         #[pyo3(name = "bounds", signature=(degrees=false))]
-        fn py_bounds(&self, degrees: bool) -> [f64; 4] {
+        fn py_bounds(&self, degrees: bool) -> AngularBounds {
             self.bounds(degrees)
         }
 
         #[getter]
         #[pyo3(name = "convex_hull")]
-        fn py_convex_hull(&self) -> Option<SphericalPolygon> {
+        fn py_convex_hull(&self) -> Option<AngularPolygon> {
             self.convex_hull()
         }
 
@@ -93,8 +112,10 @@ mod py_module {
                 AnyGeometry::VectorPoint(point) => self.distance(point),
                 AnyGeometry::MultiVectorPoint(multipoint) => self.distance(multipoint),
                 AnyGeometry::ArcString(arcstring) => self.distance(arcstring),
-                AnyGeometry::SphericalPolygon(polygon) => self.distance(polygon),
-                AnyGeometry::MultiSphericalPolygon(multipolygon) => self.distance(multipolygon),
+                AnyGeometry::MultiArcString(multiarcstring) => self.distance(multiarcstring),
+                AnyGeometry::AngularBounds(bounds) => self.distance(bounds),
+                AnyGeometry::AngularPolygon(polygon) => self.distance(polygon),
+                AnyGeometry::MultiAngularPolygon(multipolygon) => self.distance(multipolygon),
             }
         }
 
@@ -104,8 +125,10 @@ mod py_module {
                 AnyGeometry::VectorPoint(point) => self.contains(point),
                 AnyGeometry::MultiVectorPoint(multipoint) => self.contains(multipoint),
                 AnyGeometry::ArcString(arcstring) => self.contains(arcstring),
-                AnyGeometry::SphericalPolygon(polygon) => self.contains(polygon),
-                AnyGeometry::MultiSphericalPolygon(multipolygon) => self.contains(multipolygon),
+                AnyGeometry::MultiArcString(multiarcstring) => self.contains(multiarcstring),
+                AnyGeometry::AngularBounds(bounds) => self.contains(bounds),
+                AnyGeometry::AngularPolygon(polygon) => self.contains(polygon),
+                AnyGeometry::MultiAngularPolygon(multipolygon) => self.contains(multipolygon),
             }
         }
 
@@ -115,8 +138,10 @@ mod py_module {
                 AnyGeometry::VectorPoint(point) => self.within(point),
                 AnyGeometry::MultiVectorPoint(multipoint) => self.within(multipoint),
                 AnyGeometry::ArcString(arcstring) => self.within(arcstring),
-                AnyGeometry::SphericalPolygon(polygon) => self.within(polygon),
-                AnyGeometry::MultiSphericalPolygon(multipolygon) => self.within(multipolygon),
+                AnyGeometry::MultiArcString(multiarcstring) => self.within(multiarcstring),
+                AnyGeometry::AngularBounds(bounds) => self.within(bounds),
+                AnyGeometry::AngularPolygon(polygon) => self.within(polygon),
+                AnyGeometry::MultiAngularPolygon(multipolygon) => self.within(multipolygon),
             }
         }
 
@@ -126,8 +151,10 @@ mod py_module {
                 AnyGeometry::VectorPoint(point) => self.intersects(point),
                 AnyGeometry::MultiVectorPoint(multipoint) => self.intersects(multipoint),
                 AnyGeometry::ArcString(arcstring) => self.intersects(arcstring),
-                AnyGeometry::SphericalPolygon(polygon) => self.intersects(polygon),
-                AnyGeometry::MultiSphericalPolygon(multipolygon) => self.intersects(multipolygon),
+                AnyGeometry::MultiArcString(multiarcstring) => self.intersects(multiarcstring),
+                AnyGeometry::AngularBounds(bounds) => self.intersects(bounds),
+                AnyGeometry::AngularPolygon(polygon) => self.intersects(polygon),
+                AnyGeometry::MultiAngularPolygon(multipolygon) => self.intersects(multipolygon),
             }
         }
 
@@ -137,8 +164,10 @@ mod py_module {
                 AnyGeometry::VectorPoint(point) => self.intersection(point),
                 AnyGeometry::MultiVectorPoint(multipoint) => self.intersection(multipoint),
                 AnyGeometry::ArcString(arcstring) => self.intersection(arcstring),
-                AnyGeometry::SphericalPolygon(polygon) => self.intersection(polygon),
-                AnyGeometry::MultiSphericalPolygon(multipolygon) => self.intersection(multipolygon),
+                AnyGeometry::MultiArcString(multiarcstring) => self.intersection(multiarcstring),
+                AnyGeometry::AngularBounds(bounds) => self.intersection(bounds),
+                AnyGeometry::AngularPolygon(polygon) => self.intersection(polygon),
+                AnyGeometry::MultiAngularPolygon(multipolygon) => self.intersection(multipolygon),
             }
         }
 
@@ -199,12 +228,29 @@ mod py_module {
     #[pymodule_export]
     use super::vectorpoint::MultiVectorPoint;
 
+    #[derive(FromPyObject)]
+    enum PyMultiVectorPointInputs<'py> {
+        NumpyArray(PyReadonlyArray2<'py, f64>),
+        NestedList(Vec<Vec<f64>>),
+        FlatList(Vec<f64>),
+    }
+
     #[pymethods]
     impl MultiVectorPoint {
         #[new]
-        fn __new__<'py>(xyz: PyReadonlyArray2<'py, f64>) -> PyResult<Self> {
-            Self::try_from(xyz.as_array().to_owned())
-                .map_err(|err| PyValueError::new_err(format!("{:?}", err)))
+        fn __new__<'py>(xyz: PyMultiVectorPointInputs) -> PyResult<Self> {
+            match xyz {
+                PyMultiVectorPointInputs::NumpyArray(xyz) => {
+                    Self::try_from(xyz.as_array().to_owned())
+                        .map_err(|err| PyValueError::new_err(format!("{:?}", err)))
+                }
+                PyMultiVectorPointInputs::NestedList(list) => {
+                    Self::try_from(list).map_err(|err| PyValueError::new_err(format!("{:?}", err)))
+                }
+                PyMultiVectorPointInputs::FlatList(list) => {
+                    Self::try_from(list).map_err(|err| PyValueError::new_err(format!("{:?}", err)))
+                }
+            }
         }
 
         /// from the given coordinates, build xyz vectors representing points on the sphere
@@ -212,10 +258,30 @@ mod py_module {
         #[pyo3(name = "from_lonlats", signature=(coordinates, degrees = true))]
         fn py_from_lonlats<'py>(
             _: &Bound<'_, PyType>,
-            coordinates: PyReadonlyArray2<'py, f64>,
+            coordinates: PyMultiVectorPointInputs,
             degrees: bool,
         ) -> PyResult<Self> {
-            match Self::try_from_lonlats(&coordinates.as_array(), degrees) {
+            let coordinates = match coordinates {
+                PyMultiVectorPointInputs::NumpyArray(coordinates) => {
+                    coordinates.as_array().to_owned()
+                }
+                PyMultiVectorPointInputs::NestedList(list) => {
+                    let mut xyz = Array2::<f64>::default((list.len(), 3));
+                    for (i, mut point) in xyz.axis_iter_mut(Axis(0)).enumerate() {
+                        for (j, value) in point.iter_mut().enumerate() {
+                            *value = list[i][j];
+                        }
+                    }
+
+                    xyz
+                }
+                PyMultiVectorPointInputs::FlatList(list) => {
+                    Array2::from_shape_vec((list.len(), 3), list)
+                        .map_err(|err| PyValueError::new_err(format!("{:?}", err)))?
+                }
+            };
+
+            match Self::try_from_lonlats(&coordinates.view(), degrees) {
                 Ok(result) => Ok(result),
                 Err(err) => Err(PyValueError::new_err(err)),
             }
@@ -247,13 +313,13 @@ mod py_module {
 
         /// bounding box [minX,minY,maxX,maxY]
         #[pyo3(name = "bounds", signature=(degrees=false))]
-        fn py_bounds(&self, degrees: bool) -> [f64; 4] {
+        fn py_bounds(&self, degrees: bool) -> AngularBounds {
             self.bounds(degrees)
         }
 
         #[getter]
         #[pyo3(name = "convex_hull")]
-        fn py_convex_hull(&self) -> Option<SphericalPolygon> {
+        fn py_convex_hull(&self) -> Option<AngularPolygon> {
             self.convex_hull()
         }
 
@@ -270,8 +336,10 @@ mod py_module {
                 AnyGeometry::VectorPoint(point) => self.distance(point),
                 AnyGeometry::MultiVectorPoint(multipoint) => self.distance(multipoint),
                 AnyGeometry::ArcString(arcstring) => self.distance(arcstring),
-                AnyGeometry::SphericalPolygon(polygon) => self.distance(polygon),
-                AnyGeometry::MultiSphericalPolygon(multipolygon) => self.distance(multipolygon),
+                AnyGeometry::MultiArcString(multiarcstring) => self.distance(multiarcstring),
+                AnyGeometry::AngularBounds(bounds) => self.distance(bounds),
+                AnyGeometry::AngularPolygon(polygon) => self.distance(polygon),
+                AnyGeometry::MultiAngularPolygon(multipolygon) => self.distance(multipolygon),
             }
         }
 
@@ -281,8 +349,10 @@ mod py_module {
                 AnyGeometry::VectorPoint(point) => self.contains(point),
                 AnyGeometry::MultiVectorPoint(multipoint) => self.contains(multipoint),
                 AnyGeometry::ArcString(arcstring) => self.contains(arcstring),
-                AnyGeometry::SphericalPolygon(polygon) => self.contains(polygon),
-                AnyGeometry::MultiSphericalPolygon(multipolygon) => self.contains(multipolygon),
+                AnyGeometry::MultiArcString(multiarcstring) => self.contains(multiarcstring),
+                AnyGeometry::AngularBounds(bounds) => self.contains(bounds),
+                AnyGeometry::AngularPolygon(polygon) => self.contains(polygon),
+                AnyGeometry::MultiAngularPolygon(multipolygon) => self.contains(multipolygon),
             }
         }
 
@@ -292,8 +362,10 @@ mod py_module {
                 AnyGeometry::VectorPoint(point) => self.within(point),
                 AnyGeometry::MultiVectorPoint(multipoint) => self.within(multipoint),
                 AnyGeometry::ArcString(arcstring) => self.within(arcstring),
-                AnyGeometry::SphericalPolygon(polygon) => self.within(polygon),
-                AnyGeometry::MultiSphericalPolygon(multipolygon) => self.within(multipolygon),
+                AnyGeometry::MultiArcString(multiarcstring) => self.within(multiarcstring),
+                AnyGeometry::AngularBounds(bounds) => self.within(bounds),
+                AnyGeometry::AngularPolygon(polygon) => self.within(polygon),
+                AnyGeometry::MultiAngularPolygon(multipolygon) => self.within(multipolygon),
             }
         }
 
@@ -303,8 +375,10 @@ mod py_module {
                 AnyGeometry::VectorPoint(point) => self.intersects(point),
                 AnyGeometry::MultiVectorPoint(multipoint) => self.intersects(multipoint),
                 AnyGeometry::ArcString(arcstring) => self.intersects(arcstring),
-                AnyGeometry::SphericalPolygon(polygon) => self.intersects(polygon),
-                AnyGeometry::MultiSphericalPolygon(multipolygon) => self.intersects(multipolygon),
+                AnyGeometry::MultiArcString(multiarcstring) => self.intersects(multiarcstring),
+                AnyGeometry::AngularBounds(bounds) => self.intersects(bounds),
+                AnyGeometry::AngularPolygon(polygon) => self.intersects(polygon),
+                AnyGeometry::MultiAngularPolygon(multipolygon) => self.intersects(multipolygon),
             }
         }
 
@@ -314,8 +388,10 @@ mod py_module {
                 AnyGeometry::VectorPoint(point) => self.intersection(point),
                 AnyGeometry::MultiVectorPoint(multipoint) => self.intersection(multipoint),
                 AnyGeometry::ArcString(arcstring) => self.intersection(arcstring),
-                AnyGeometry::SphericalPolygon(polygon) => self.intersection(polygon),
-                AnyGeometry::MultiSphericalPolygon(multipolygon) => self.intersection(multipolygon),
+                AnyGeometry::MultiArcString(multiarcstring) => self.intersection(multiarcstring),
+                AnyGeometry::AngularBounds(bounds) => self.intersection(bounds),
+                AnyGeometry::AngularPolygon(polygon) => self.intersection(polygon),
+                AnyGeometry::MultiAngularPolygon(multipolygon) => self.intersection(multipolygon),
             }
         }
 
@@ -416,61 +492,34 @@ mod py_module {
         }
     }
 
-    /// radians subtended by this arc on the sphere
-    #[pyfunction]
-    #[pyo3(name = "arc_length")]
-    fn py_arc_length(a: PyReadonlyArray1<f64>, b: PyReadonlyArray1<f64>) -> f64 {
-        arc_length(&a.as_array(), &b.as_array())
-    }
-
-    /// generate the given number of points at equal intervals between vectorpoints A and B
-    #[pyfunction]
-    #[pyo3(name="interpolate", signature=(a,b,n=50))]
-    fn py_interpolate<'py>(
-        py: Python<'py>,
-        a: PyReadonlyArray1<f64>,
-        b: PyReadonlyArray1<f64>,
-        n: usize,
-    ) -> PyResult<Bound<'py, PyArray2<f64>>> {
-        match interpolate(&a.as_array(), &b.as_array(), n) {
-            Ok(result) => Ok(result.to_pyarray(py)),
-            Err(err) => Err(PyValueError::new_err(err)),
-        }
-    }
-
-    /// generate the given number of points at equal intervals between vectorpoints A and B
-    #[pyfunction]
-    #[pyo3(name="angle", signature=(a,b,c,degrees=true))]
-    fn py_angle(
-        a: PyReadonlyArray1<f64>,
-        b: PyReadonlyArray1<f64>,
-        c: PyReadonlyArray1<f64>,
-        degrees: bool,
-    ) -> f64 {
-        angle(&a.as_array(), &b.as_array(), &c.as_array(), degrees)
-    }
-
-    /// generate the given number of points at equal intervals between vectorpoints A and B
-    #[pyfunction]
-    #[pyo3(name="angles", signature=(a,b,c,degrees=true))]
-    fn py_angles<'py>(
-        py: Python<'py>,
-        a: PyReadonlyArray2<f64>,
-        b: PyReadonlyArray2<f64>,
-        c: PyReadonlyArray2<f64>,
-        degrees: bool,
-    ) -> Bound<'py, PyArray1<f64>> {
-        angles(&a.as_array(), &b.as_array(), &c.as_array(), degrees).to_pyarray(py)
-    }
-
     #[pymodule_export]
     use super::arcstring::ArcString;
+
+    #[derive(FromPyObject)]
+    enum PyArcStringInputs<'py> {
+        NumpyArray(PyReadonlyArray2<'py, f64>),
+        MultiPoint(MultiVectorPoint),
+        NestedList(Vec<Vec<f64>>),
+        FlatList(Vec<f64>),
+    }
 
     #[pymethods]
     impl ArcString {
         #[new]
-        fn __new__(points: &MultiVectorPoint) -> Self {
-            points.to_owned().into()
+        fn __new__(points: PyArcStringInputs) -> PyResult<Self> {
+            let points = match points {
+                PyArcStringInputs::NumpyArray(xyz) => {
+                    MultiVectorPoint::try_from(xyz.as_array().to_owned())
+                        .map_err(|err| PyValueError::new_err(format!("{:?}", err)))?
+                }
+                PyArcStringInputs::MultiPoint(points) => points.to_owned(),
+                PyArcStringInputs::NestedList(list) => MultiVectorPoint::try_from(list)
+                    .map_err(|err| PyValueError::new_err(format!("{:?}", err)))?,
+                PyArcStringInputs::FlatList(list) => MultiVectorPoint::try_from(list)
+                    .map_err(|err| PyValueError::new_err(format!("{:?}", err)))?,
+            };
+
+            Self::try_from(points).map_err(|err| PyValueError::new_err(format!("{:?}", err)))
         }
 
         #[getter]
@@ -481,7 +530,7 @@ mod py_module {
 
         /// number of arcs in this string
         fn __len__(&self) -> usize {
-            self.len()
+            self.points.len() - 1
         }
 
         /// radians subtended by each arc on the sphere
@@ -512,13 +561,13 @@ mod py_module {
 
         /// bounding box [minX,minY,maxX,maxY]
         #[pyo3(name = "bounds", signature=(degrees=false))]
-        fn py_bounds(&self, degrees: bool) -> [f64; 4] {
+        fn py_bounds(&self, degrees: bool) -> AngularBounds {
             self.bounds(degrees)
         }
 
         #[getter]
         #[pyo3(name = "convex_hull")]
-        fn py_convex_hull(&self) -> Option<SphericalPolygon> {
+        fn py_convex_hull(&self) -> Option<AngularPolygon> {
             self.convex_hull()
         }
 
@@ -529,8 +578,10 @@ mod py_module {
                 AnyGeometry::VectorPoint(point) => self.distance(point),
                 AnyGeometry::MultiVectorPoint(multipoint) => self.distance(multipoint),
                 AnyGeometry::ArcString(arcstring) => self.distance(arcstring),
-                AnyGeometry::SphericalPolygon(polygon) => self.distance(polygon),
-                AnyGeometry::MultiSphericalPolygon(multipolygon) => self.distance(multipolygon),
+                AnyGeometry::MultiArcString(multiarcstring) => self.distance(multiarcstring),
+                AnyGeometry::AngularBounds(bounds) => self.distance(bounds),
+                AnyGeometry::AngularPolygon(polygon) => self.distance(polygon),
+                AnyGeometry::MultiAngularPolygon(multipolygon) => self.distance(multipolygon),
             }
         }
 
@@ -540,8 +591,10 @@ mod py_module {
                 AnyGeometry::VectorPoint(point) => self.contains(point),
                 AnyGeometry::MultiVectorPoint(multipoint) => self.contains(multipoint),
                 AnyGeometry::ArcString(arcstring) => self.contains(arcstring),
-                AnyGeometry::SphericalPolygon(polygon) => self.contains(polygon),
-                AnyGeometry::MultiSphericalPolygon(multipolygon) => self.contains(multipolygon),
+                AnyGeometry::MultiArcString(multiarcstring) => self.contains(multiarcstring),
+                AnyGeometry::AngularBounds(bounds) => self.contains(bounds),
+                AnyGeometry::AngularPolygon(polygon) => self.contains(polygon),
+                AnyGeometry::MultiAngularPolygon(multipolygon) => self.contains(multipolygon),
             }
         }
 
@@ -551,8 +604,10 @@ mod py_module {
                 AnyGeometry::VectorPoint(point) => self.within(point),
                 AnyGeometry::MultiVectorPoint(multipoint) => self.within(multipoint),
                 AnyGeometry::ArcString(arcstring) => self.within(arcstring),
-                AnyGeometry::SphericalPolygon(polygon) => self.within(polygon),
-                AnyGeometry::MultiSphericalPolygon(multipolygon) => self.within(multipolygon),
+                AnyGeometry::MultiArcString(multiarcstring) => self.within(multiarcstring),
+                AnyGeometry::AngularBounds(bounds) => self.within(bounds),
+                AnyGeometry::AngularPolygon(polygon) => self.within(polygon),
+                AnyGeometry::MultiAngularPolygon(multipolygon) => self.within(multipolygon),
             }
         }
 
@@ -562,8 +617,10 @@ mod py_module {
                 AnyGeometry::VectorPoint(point) => self.intersects(point),
                 AnyGeometry::MultiVectorPoint(multipoint) => self.intersects(multipoint),
                 AnyGeometry::ArcString(arcstring) => self.intersects(arcstring),
-                AnyGeometry::SphericalPolygon(polygon) => self.intersects(polygon),
-                AnyGeometry::MultiSphericalPolygon(multipolygon) => self.intersects(multipolygon),
+                AnyGeometry::MultiArcString(multiarcstring) => self.intersects(multiarcstring),
+                AnyGeometry::AngularBounds(bounds) => self.intersects(bounds),
+                AnyGeometry::AngularPolygon(polygon) => self.intersects(polygon),
+                AnyGeometry::MultiAngularPolygon(multipolygon) => self.intersects(multipolygon),
             }
         }
 
@@ -573,8 +630,10 @@ mod py_module {
                 AnyGeometry::VectorPoint(point) => self.intersection(point),
                 AnyGeometry::MultiVectorPoint(multipoint) => self.intersection(multipoint),
                 AnyGeometry::ArcString(arcstring) => self.intersection(arcstring),
-                AnyGeometry::SphericalPolygon(polygon) => self.intersection(polygon),
-                AnyGeometry::MultiSphericalPolygon(multipolygon) => self.intersection(multipolygon),
+                AnyGeometry::MultiArcString(multiarcstring) => self.intersection(multiarcstring),
+                AnyGeometry::AngularBounds(bounds) => self.intersection(bounds),
+                AnyGeometry::AngularPolygon(polygon) => self.intersection(polygon),
+                AnyGeometry::MultiAngularPolygon(multipolygon) => self.intersection(multipolygon),
             }
         }
 
@@ -592,14 +651,197 @@ mod py_module {
     }
 
     #[pymodule_export]
-    use crate::sphericalpolygon::SphericalPolygon;
+    use crate::angularpolygon::AngularPolygon;
 
     #[pymethods]
-    impl SphericalPolygon {}
+    impl AngularPolygon {
+        #[new]
+        fn __new__(points: PyArcStringInputs) -> PyResult<Self> {
+            let points = match points {
+                PyArcStringInputs::NumpyArray(xyz) => {
+                    MultiVectorPoint::try_from(xyz.as_array().to_owned())
+                        .map_err(|err| PyValueError::new_err(format!("{:?}", err)))?
+                }
+                PyArcStringInputs::MultiPoint(points) => points.to_owned(),
+                PyArcStringInputs::NestedList(list) => MultiVectorPoint::try_from(list)
+                    .map_err(|err| PyValueError::new_err(format!("{:?}", err)))?,
+                PyArcStringInputs::FlatList(list) => MultiVectorPoint::try_from(list)
+                    .map_err(|err| PyValueError::new_err(format!("{:?}", err)))?,
+            };
+
+            Self::try_from(points).map_err(|err| PyValueError::new_err(format!("{:?}", err)))
+        }
+
+        #[getter]
+        #[pyo3(name = "points")]
+        fn py_points(&self) -> MultiVectorPoint {
+            self.points()
+        }
+
+        #[getter]
+        #[pyo3(name = "area")]
+        fn py_area(&self) -> f64 {
+            self.area()
+        }
+
+        #[getter]
+        #[pyo3(name = "length")]
+        fn py_length(&self) -> f64 {
+            self.length()
+        }
+
+        /// bounding box [minX,minY,maxX,maxY]
+        #[pyo3(name = "bounds", signature=(degrees=false))]
+        fn py_bounds(&self, degrees: bool) -> AngularBounds {
+            self.bounds(degrees)
+        }
+
+        #[getter]
+        #[pyo3(name = "convex_hull")]
+        fn py_convex_hull(&self) -> Option<AngularPolygon> {
+            self.convex_hull()
+        }
+
+        /// closest angular distance on the sphere between this geometry and another
+        #[pyo3(name = "distance")]
+        fn py_distance(&self, other: &AnyGeometry) -> f64 {
+            match other {
+                AnyGeometry::VectorPoint(point) => self.distance(point),
+                AnyGeometry::MultiVectorPoint(multipoint) => self.distance(multipoint),
+                AnyGeometry::ArcString(arcstring) => self.distance(arcstring),
+                AnyGeometry::MultiArcString(multiarcstring) => self.distance(multiarcstring),
+                AnyGeometry::AngularBounds(bounds) => self.distance(bounds),
+                AnyGeometry::AngularPolygon(polygon) => self.distance(polygon),
+                AnyGeometry::MultiAngularPolygon(multipolygon) => self.distance(multipolygon),
+            }
+        }
+
+        #[pyo3(name = "contains")]
+        fn py_contains(&self, other: &AnyGeometry) -> bool {
+            match other {
+                AnyGeometry::VectorPoint(point) => self.contains(point),
+                AnyGeometry::MultiVectorPoint(multipoint) => self.contains(multipoint),
+                AnyGeometry::ArcString(arcstring) => self.contains(arcstring),
+                AnyGeometry::MultiArcString(multiarcstring) => self.contains(multiarcstring),
+                AnyGeometry::AngularBounds(bounds) => self.contains(bounds),
+                AnyGeometry::AngularPolygon(polygon) => self.contains(polygon),
+                AnyGeometry::MultiAngularPolygon(multipolygon) => self.contains(multipolygon),
+            }
+        }
+
+        #[pyo3(name = "within")]
+        fn py_within(&self, other: &AnyGeometry) -> bool {
+            match other {
+                AnyGeometry::VectorPoint(point) => self.within(point),
+                AnyGeometry::MultiVectorPoint(multipoint) => self.within(multipoint),
+                AnyGeometry::ArcString(arcstring) => self.within(arcstring),
+                AnyGeometry::MultiArcString(multiarcstring) => self.within(multiarcstring),
+                AnyGeometry::AngularBounds(bounds) => self.within(bounds),
+                AnyGeometry::AngularPolygon(polygon) => self.within(polygon),
+                AnyGeometry::MultiAngularPolygon(multipolygon) => self.within(multipolygon),
+            }
+        }
+
+        #[pyo3(name = "intersects")]
+        fn py_intersects(&self, other: &AnyGeometry) -> bool {
+            match other {
+                AnyGeometry::VectorPoint(point) => self.intersects(point),
+                AnyGeometry::MultiVectorPoint(multipoint) => self.intersects(multipoint),
+                AnyGeometry::ArcString(arcstring) => self.intersects(arcstring),
+                AnyGeometry::MultiArcString(multiarcstring) => self.intersects(multiarcstring),
+                AnyGeometry::AngularBounds(bounds) => self.intersects(bounds),
+                AnyGeometry::AngularPolygon(polygon) => self.intersects(polygon),
+                AnyGeometry::MultiAngularPolygon(multipolygon) => self.intersects(multipolygon),
+            }
+        }
+
+        #[pyo3(name = "intersection")]
+        fn py_intersection(&self, other: &AnyGeometry) -> GeometryCollection {
+            match other {
+                AnyGeometry::VectorPoint(point) => self.intersection(point),
+                AnyGeometry::MultiVectorPoint(multipoint) => self.intersection(multipoint),
+                AnyGeometry::ArcString(arcstring) => self.intersection(arcstring),
+                AnyGeometry::MultiArcString(multiarcstring) => self.intersection(multiarcstring),
+                AnyGeometry::AngularBounds(bounds) => self.intersection(bounds),
+                AnyGeometry::AngularPolygon(polygon) => self.intersection(polygon),
+                AnyGeometry::MultiAngularPolygon(multipolygon) => self.intersection(multipolygon),
+            }
+        }
+
+        fn __eq__(&self, other: &Self) -> bool {
+            &self.arcstring == &other.arcstring
+        }
+
+        fn __str__(&self) -> String {
+            self.to_string()
+        }
+
+        fn __repr__(&self) -> String {
+            self.to_string()
+        }
+    }
+
+    #[pymodule_export]
+    use crate::angularpolygon::MultiAngularPolygon;
+
+    #[pymethods]
+    impl MultiAngularPolygon {}
 
     #[pymodule_export]
     use crate::sphericalgraph::SphericalGraph;
 
     #[pymethods]
     impl SphericalGraph {}
+
+    #[pymodule(name = "raw")]
+    pub mod py_raw {
+        use super::*;
+
+        /// radians subtended by this arc on the sphere
+        #[pyfunction]
+        #[pyo3(name = "arc_length")]
+        fn py_arc_length(a: PyReadonlyArray1<f64>, b: PyReadonlyArray1<f64>) -> f64 {
+            arc_length(&a.as_array(), &b.as_array())
+        }
+
+        /// generate the given number of points at equal intervals between vectorpoints A and B
+        #[pyfunction]
+        #[pyo3(name="interpolate", signature=(a,b,n=50))]
+        fn py_interpolate<'py>(
+            py: Python<'py>,
+            a: PyReadonlyArray1<f64>,
+            b: PyReadonlyArray1<f64>,
+            n: usize,
+        ) -> PyResult<Bound<'py, PyArray2<f64>>> {
+            match interpolate(&a.as_array(), &b.as_array(), n) {
+                Ok(result) => Ok(result.to_pyarray(py)),
+                Err(err) => Err(PyValueError::new_err(err)),
+            }
+        }
+
+        /// generate the given number of points at equal intervals between vectorpoints A and B
+        #[pyfunction]
+        #[pyo3(name="angle", signature=(a,b,c,degrees=true))]
+        fn py_angle(
+            a: PyReadonlyArray1<f64>,
+            b: PyReadonlyArray1<f64>,
+            c: PyReadonlyArray1<f64>,
+            degrees: bool,
+        ) -> f64 {
+            angle(&a.as_array(), &b.as_array(), &c.as_array(), degrees)
+        }
+
+        /// generate the given number of points at equal intervals between vectorpoints A and B
+        #[pyfunction]
+        #[pyo3(name="angles", signature=(a,b,c,degrees=true))]
+        fn py_angles<'py>(
+            py: Python<'py>,
+            a: PyReadonlyArray2<f64>,
+            b: PyReadonlyArray2<f64>,
+            c: PyReadonlyArray2<f64>,
+            degrees: bool,
+        ) -> Bound<'py, PyArray1<f64>> {
+            angles(&a.as_array(), &b.as_array(), &c.as_array(), degrees).to_pyarray(py)
+        }
+    }
 }

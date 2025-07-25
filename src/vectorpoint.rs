@@ -1,8 +1,12 @@
 use crate::{
-    arcstring::{angle, arc_length, collinear, ArcString},
-    geometry::{AnyGeometry, ExtendMultiGeometry, GeometricOperations, Geometry, MultiGeometry},
+    angularbounds::AngularBounds,
+    angularpolygon::{AngularPolygon, MultiAngularPolygon},
+    arcstring::{angle, arc_length, collinear, ArcString, MultiArcString},
+    geometry::{
+        AnyGeometry, ExtendMultiGeometry, GeometricOperations, Geometry, MultiGeometry,
+        MultiGeometryIntoIterator, MultiGeometryIterator,
+    },
     geometrycollection::GeometryCollection,
-    sphericalpolygon::{MultiSphericalPolygon, SphericalPolygon},
 };
 use kiddo::{ImmutableKdTree, SquaredEuclidean};
 use numpy::ndarray::{
@@ -320,12 +324,12 @@ impl Geometry for &VectorPoint {
         0.
     }
 
-    fn bounds(&self, degrees: bool) -> [f64; 4] {
+    fn bounds(&self, degrees: bool) -> crate::angularbounds::AngularBounds {
         let lonlat = self.to_lonlat(degrees);
-        [lonlat[0], lonlat[1], lonlat[0], lonlat[1]]
+        [lonlat[0], lonlat[1], lonlat[0], lonlat[1]].into()
     }
 
-    fn convex_hull(&self) -> Option<crate::sphericalpolygon::SphericalPolygon> {
+    fn convex_hull(&self) -> Option<crate::angularpolygon::AngularPolygon> {
         None
     }
 
@@ -343,11 +347,11 @@ impl Geometry for VectorPoint {
         (&self).length()
     }
 
-    fn bounds(&self, degrees: bool) -> [f64; 4] {
+    fn bounds(&self, degrees: bool) -> crate::angularbounds::AngularBounds {
         (&self).bounds(degrees)
     }
 
-    fn convex_hull(&self) -> Option<crate::sphericalpolygon::SphericalPolygon> {
+    fn convex_hull(&self) -> Option<crate::angularpolygon::AngularPolygon> {
         (&self).convex_hull()
     }
 
@@ -447,24 +451,24 @@ impl GeometricOperations<&ArcString> for &VectorPoint {
     }
 }
 
-impl GeometricOperations<&SphericalPolygon> for &VectorPoint {
-    fn distance(self, other: &SphericalPolygon) -> f64 {
+impl GeometricOperations<&MultiArcString> for &VectorPoint {
+    fn distance(self, other: &MultiArcString) -> f64 {
         other.distance(self)
     }
 
-    fn contains(self, _: &SphericalPolygon) -> bool {
+    fn contains(self, _: &MultiArcString) -> bool {
         false
     }
 
-    fn within(self, other: &SphericalPolygon) -> bool {
+    fn within(self, other: &MultiArcString) -> bool {
         other.contains(self)
     }
 
-    fn intersects(self, other: &SphericalPolygon) -> bool {
+    fn intersects(self, other: &MultiArcString) -> bool {
         self.within(other)
     }
 
-    fn intersection(self, other: &SphericalPolygon) -> GeometryCollection {
+    fn intersection(self, other: &MultiArcString) -> crate::geometrycollection::GeometryCollection {
         if self.within(other) {
             GeometryCollection {
                 geometries: vec![AnyGeometry::VectorPoint(self.to_owned())],
@@ -475,24 +479,80 @@ impl GeometricOperations<&SphericalPolygon> for &VectorPoint {
     }
 }
 
-impl GeometricOperations<&MultiSphericalPolygon> for &VectorPoint {
-    fn distance(self, other: &MultiSphericalPolygon) -> f64 {
+impl GeometricOperations<&AngularBounds> for &VectorPoint {
+    fn distance(self, other: &AngularBounds) -> f64 {
         other.distance(self)
     }
 
-    fn contains(self, _: &MultiSphericalPolygon) -> bool {
+    fn contains(self, _: &AngularBounds) -> bool {
         false
     }
 
-    fn within(self, other: &MultiSphericalPolygon) -> bool {
+    fn within(self, other: &AngularBounds) -> bool {
         other.contains(self)
     }
 
-    fn intersects(self, other: &MultiSphericalPolygon) -> bool {
+    fn intersects(self, other: &AngularBounds) -> bool {
+        other.contains(self)
+    }
+
+    fn intersection(self, other: &AngularBounds) -> crate::geometrycollection::GeometryCollection {
+        if self.within(other) {
+            GeometryCollection {
+                geometries: vec![AnyGeometry::VectorPoint(self.to_owned())],
+            }
+        } else {
+            GeometryCollection::empty()
+        }
+    }
+}
+
+impl GeometricOperations<&AngularPolygon> for &VectorPoint {
+    fn distance(self, other: &AngularPolygon) -> f64 {
+        other.distance(self)
+    }
+
+    fn contains(self, _: &AngularPolygon) -> bool {
+        false
+    }
+
+    fn within(self, other: &AngularPolygon) -> bool {
+        other.contains(self)
+    }
+
+    fn intersects(self, other: &AngularPolygon) -> bool {
         self.within(other)
     }
 
-    fn intersection(self, other: &MultiSphericalPolygon) -> GeometryCollection {
+    fn intersection(self, other: &AngularPolygon) -> GeometryCollection {
+        if self.within(other) {
+            GeometryCollection {
+                geometries: vec![AnyGeometry::VectorPoint(self.to_owned())],
+            }
+        } else {
+            GeometryCollection::empty()
+        }
+    }
+}
+
+impl GeometricOperations<&MultiAngularPolygon> for &VectorPoint {
+    fn distance(self, other: &MultiAngularPolygon) -> f64 {
+        other.distance(self)
+    }
+
+    fn contains(self, _: &MultiAngularPolygon) -> bool {
+        false
+    }
+
+    fn within(self, other: &MultiAngularPolygon) -> bool {
+        other.contains(self)
+    }
+
+    fn intersects(self, other: &MultiAngularPolygon) -> bool {
+        self.within(other)
+    }
+
+    fn intersection(self, other: &MultiAngularPolygon) -> GeometryCollection {
         if self.intersects(other) {
             GeometryCollection {
                 geometries: vec![AnyGeometry::VectorPoint(self.to_owned())],
@@ -508,7 +568,7 @@ impl GeometricOperations<&MultiSphericalPolygon> for &VectorPoint {
 #[derive(Clone, Debug)]
 pub struct MultiVectorPoint {
     pub xyz: Array2<f64>,
-    tree: ImmutableKdTree<f64, 3>,
+    pub kdtree: ImmutableKdTree<f64, 3>,
 }
 
 impl From<Vec<VectorPoint>> for MultiVectorPoint {
@@ -523,13 +583,59 @@ impl From<Vec<VectorPoint>> for MultiVectorPoint {
     }
 }
 
+impl<'a> Iterator for MultiGeometryIterator<'a, MultiVectorPoint> {
+    type Item = VectorPoint;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        if self.index < self.multi.len() {
+            Some(
+                VectorPoint::try_from(self.multi.xyz.slice(s![self.index, ..]).to_owned()).unwrap(),
+            )
+        } else {
+            None
+        }
+    }
+}
+
+impl MultiVectorPoint {
+    fn iter(&self) -> MultiGeometryIterator<MultiVectorPoint> {
+        MultiGeometryIterator::<MultiVectorPoint> {
+            multi: self,
+            index: 0,
+        }
+    }
+}
+
+impl Iterator for MultiGeometryIntoIterator<MultiVectorPoint> {
+    type Item = VectorPoint;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        if self.index < self.multi.len() {
+            Some(
+                VectorPoint::try_from(self.multi.xyz.slice(s![self.index, ..]).to_owned()).unwrap(),
+            )
+        } else {
+            None
+        }
+    }
+}
+
+impl IntoIterator for MultiVectorPoint {
+    type Item = VectorPoint;
+
+    type IntoIter = MultiGeometryIntoIterator<MultiVectorPoint>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        Self::IntoIter {
+            multi: self,
+            index: 0,
+        }
+    }
+}
+
 impl Into<Vec<VectorPoint>> for &MultiVectorPoint {
     fn into(self) -> Vec<VectorPoint> {
-        self.xyz
-            .rows()
-            .into_iter()
-            .map(|row| unsafe { VectorPoint::try_from(row.to_owned()).unwrap_unchecked() })
-            .collect()
+        self.iter().collect()
     }
 }
 
@@ -541,15 +647,28 @@ impl TryFrom<Array2<f64>> for MultiVectorPoint {
         if xyz.shape()[1] != 3 {
             Err(format!("array should be Nx3, not Nx{:?}", xyz.shape()[1]))
         } else {
-            let vec_xyz: Vec<[f64; 3]> = xyz
-                .rows()
-                .into_iter()
-                .map(|point| [point[0], point[1], point[2]])
-                .collect();
+            let mut vec_xyz: Vec<[f64; 3]> = vec![];
+            let tolerance = 1e-10;
+            for current_row in 0..xyz.nrows() {
+                let point = xyz.slice(s![current_row, ..]);
+                for other_row in 0..xyz.nrows() {
+                    if other_row != current_row {
+                        let other_point = xyz.slice(s![other_row, ..]);
+                        if (&point - &other_point).abs().sum() < tolerance {
+                            return Err(format!(
+                                "duplicate points at indices {} and {}",
+                                current_row, other_row
+                            ));
+                        }
+                    }
+                }
+
+                vec_xyz.push([point[0], point[1], point[2]]);
+            }
 
             Ok(Self {
                 xyz,
-                tree: vec_xyz.as_slice().into(),
+                kdtree: vec_xyz.as_slice().into(),
             })
         }
     }
@@ -574,7 +693,7 @@ impl From<Vec<[f64; 3]>> for MultiVectorPoint {
         let kdtree = ImmutableKdTree::<f64, 3>::from(xyz.as_slice());
         Self {
             xyz: xyz.into(),
-            tree: kdtree,
+            kdtree,
         }
     }
 }
@@ -586,6 +705,47 @@ impl Into<Vec<[f64; 3]>> for &MultiVectorPoint {
             .into_iter()
             .map(|row| unsafe { row.to_vec().try_into().unwrap_unchecked() })
             .collect()
+    }
+}
+
+impl TryFrom<Vec<Vec<f64>>> for MultiVectorPoint {
+    type Error = String;
+
+    fn try_from(list: Vec<Vec<f64>>) -> Result<Self, Self::Error> {
+        let mut xyz = Array2::<f64>::default((list.len(), 3));
+        for (i, mut point) in xyz.axis_iter_mut(Axis(0)).enumerate() {
+            for (j, value) in point.iter_mut().enumerate() {
+                *value = list[i][j];
+            }
+        }
+
+        Self::try_from(xyz)
+    }
+}
+
+impl TryFrom<Vec<f64>> for MultiVectorPoint {
+    type Error = String;
+
+    fn try_from(list: Vec<f64>) -> Result<Self, Self::Error> {
+        Self::try_from(
+            Array2::from_shape_vec((list.len(), 3), list).map_err(|err| format!("{:?}", err))?,
+        )
+    }
+}
+
+impl TryFrom<Array1<f64>> for MultiVectorPoint {
+    type Error = String;
+
+    fn try_from(xyz: Array1<f64>) -> Result<Self, Self::Error> {
+        if xyz.len() % 3 == 0 {
+            Ok(Self::try_from(
+                xyz.to_shape((xyz.len() / 3, 3))
+                    .map_err(|err| format!("{:?}", err))?
+                    .to_owned(),
+            )?)
+        } else {
+            Err(format!("invalid shape {:?}", xyz.shape()))
+        }
     }
 }
 
@@ -817,7 +977,7 @@ impl Geometry for &MultiVectorPoint {
         0.
     }
 
-    fn bounds(&self, degrees: bool) -> [f64; 4] {
+    fn bounds(&self, degrees: bool) -> crate::angularbounds::AngularBounds {
         let coordinates = self.to_lonlats(degrees);
         let x = coordinates.slice(s![.., 0]);
         let y = coordinates.slice(s![.., 1]);
@@ -828,6 +988,7 @@ impl Geometry for &MultiVectorPoint {
             max_1darray(&x).unwrap(),
             max_1darray(&y).unwrap(),
         ]
+        .into()
     }
 
     /// This code implements Andrew's monotone chain algorithm, which is a simple
@@ -839,7 +1000,11 @@ impl Geometry for &MultiVectorPoint {
     /// the angle around O from the starting point).
     /// from https://github.com/google/s2geometry/blob/master/src/s2/s2convex_hull_query.cc#L123
     /// https://www.researchgate.net/profile/Jayaram-Ma-2/publication/303522254/figure/fig1/AS:365886075621376@1464245446409/Monotone-Chain-Algorithm-and-graphic-illustration.png
-    fn convex_hull(&self) -> Option<crate::sphericalpolygon::SphericalPolygon> {
+    fn convex_hull(&self) -> Option<crate::angularpolygon::AngularPolygon> {
+        if self.len() < 3 {
+            return None;
+        }
+
         let radians = self.to_lonlats(false);
 
         let tolerance: f64 = 3e-11;
@@ -853,7 +1018,7 @@ impl Geometry for &MultiVectorPoint {
         }
 
         // sort points by distance to the starting point, using squared euclidean distance along the 3D cloud to find and test the points
-        let points = self.tree.nearest_n::<SquaredEuclidean>(
+        let points = self.kdtree.nearest_n::<SquaredEuclidean>(
             unsafe {
                 west_points[0]
                     .as_slice()
@@ -883,11 +1048,11 @@ impl Geometry for MultiVectorPoint {
         (&self).length()
     }
 
-    fn bounds(&self, degrees: bool) -> [f64; 4] {
+    fn bounds(&self, degrees: bool) -> crate::angularbounds::AngularBounds {
         (&self).bounds(degrees)
     }
 
-    fn convex_hull(&self) -> Option<crate::sphericalpolygon::SphericalPolygon> {
+    fn convex_hull(&self) -> Option<crate::angularpolygon::AngularPolygon> {
         (&self).convex_hull()
     }
 
@@ -928,9 +1093,11 @@ impl ExtendMultiGeometry<VectorPoint> for MultiVectorPoint {
 impl GeometricOperations<&VectorPoint> for &MultiVectorPoint {
     fn distance(self, other: &VectorPoint) -> f64 {
         // find the nearest point in 3D space
-        let nearest =
-            self.tree
-                .nearest_one::<SquaredEuclidean>(&[other.xyz[0], other.xyz[1], other.xyz[2]]);
+        let nearest = self.kdtree.nearest_one::<SquaredEuclidean>(&[
+            other.xyz[0],
+            other.xyz[1],
+            other.xyz[2],
+        ]);
 
         arc_length(
             &other.xyz.view(),
@@ -949,9 +1116,11 @@ impl GeometricOperations<&VectorPoint> for &MultiVectorPoint {
 
     fn contains(self, other: &VectorPoint) -> bool {
         // find the nearest point in 3D space
-        let nearest =
-            self.tree
-                .nearest_one::<SquaredEuclidean>(&[other.xyz[0], other.xyz[1], other.xyz[2]]);
+        let nearest = self.kdtree.nearest_one::<SquaredEuclidean>(&[
+            other.xyz[0],
+            other.xyz[1],
+            other.xyz[2],
+        ]);
 
         let tolerance = 1e-10;
 
@@ -1052,58 +1221,150 @@ impl GeometricOperations<&ArcString> for &MultiVectorPoint {
     }
 
     fn within(self, other: &ArcString) -> bool {
-        other.contains(self)
+        // TODO: vectorize this across xyz array
+        let points: Vec<VectorPoint> = self.into();
+        points.iter().all(|point| point.within(other))
     }
 
     fn intersects(self, other: &ArcString) -> bool {
-        other.intersects(self)
+        // TODO: vectorize this across xyz array
+        let points: Vec<VectorPoint> = self.into();
+        points.iter().any(|point| point.within(other))
     }
 
     fn intersection(self, other: &ArcString) -> GeometryCollection {
+        // TODO: vectorize this across xyz array
+        let points: Vec<VectorPoint> = self.into();
+        points
+            .iter()
+            .filter_map(|point| {
+                if point.within(other) {
+                    Some(AnyGeometry::VectorPoint(point.to_owned()))
+                } else {
+                    None
+                }
+            })
+            .collect::<Vec<AnyGeometry>>()
+            .into()
+    }
+}
+
+impl GeometricOperations<&MultiArcString> for &MultiVectorPoint {
+    fn distance(self, other: &MultiArcString) -> f64 {
+        other.distance(self)
+    }
+
+    fn contains(self, other: &MultiArcString) -> bool {
+        other.within(self)
+    }
+
+    fn within(self, other: &MultiArcString) -> bool {
+        // TODO: vectorize this across xyz array
+        let points: Vec<VectorPoint> = self.into();
+        points.iter().all(|point| point.within(other))
+    }
+
+    fn intersects(self, other: &MultiArcString) -> bool {
+        // TODO: vectorize this across xyz array
+        let points: Vec<VectorPoint> = self.into();
+        points.iter().any(|point| point.within(other))
+    }
+
+    fn intersection(self, other: &MultiArcString) -> crate::geometrycollection::GeometryCollection {
+        // TODO: vectorize this across xyz array
+        let points: Vec<VectorPoint> = self.into();
+        points
+            .iter()
+            .filter_map(|point| {
+                if point.within(other) {
+                    Some(AnyGeometry::VectorPoint(point.to_owned()))
+                } else {
+                    None
+                }
+            })
+            .collect::<Vec<An>>()
+            .into()
+    }
+}
+
+impl GeometricOperations<&AngularBounds> for &MultiVectorPoint {
+    fn distance(self, other: &AngularBounds) -> f64 {
+        other.distance(self)
+    }
+
+    fn contains(self, _: &AngularBounds) -> bool {
+        false
+    }
+
+    fn within(self, other: &AngularBounds) -> bool {
+        // TODO: vectorize this across xyz array
+        let points: Vec<VectorPoint> = self.into();
+        points.iter().all(|point| point.within(other))
+    }
+
+    fn intersects(self, other: &AngularBounds) -> bool {
+        // TODO: vectorize this across xyz array
+        let points: Vec<VectorPoint> = self.into();
+        points.iter().any(|point| point.within(other))
+    }
+
+    fn intersection(self, other: &AngularBounds) -> crate::geometrycollection::GeometryCollection {
+        // TODO: vectorize this across xyz array
+        let points: Vec<VectorPoint> = self.into();
+        points
+            .iter()
+            .filter_map(|point| {
+                if point.within(other) {
+                    Some(AnyGeometry::VectorPoint(point.to_owned()))
+                } else {
+                    None
+                }
+            })
+            .collect::<Vec<An>>()
+            .into()
+    }
+}
+
+impl GeometricOperations<&AngularPolygon> for &MultiVectorPoint {
+    fn distance(self, other: &AngularPolygon) -> f64 {
+        other.distance(self)
+    }
+
+    fn contains(self, _: &AngularPolygon) -> bool {
+        false
+    }
+
+    fn within(self, other: &AngularPolygon) -> bool {
+        other.contains(self)
+    }
+
+    fn intersects(self, other: &AngularPolygon) -> bool {
+        other.intersects(self)
+    }
+
+    fn intersection(self, other: &AngularPolygon) -> GeometryCollection {
         other.intersection(self)
     }
 }
 
-impl GeometricOperations<&SphericalPolygon> for &MultiVectorPoint {
-    fn distance(self, other: &SphericalPolygon) -> f64 {
+impl GeometricOperations<&MultiAngularPolygon> for &MultiVectorPoint {
+    fn distance(self, other: &MultiAngularPolygon) -> f64 {
         other.distance(self)
     }
 
-    fn contains(self, _: &SphericalPolygon) -> bool {
+    fn contains(self, _: &MultiAngularPolygon) -> bool {
         false
     }
 
-    fn within(self, other: &SphericalPolygon) -> bool {
+    fn within(self, other: &MultiAngularPolygon) -> bool {
         other.contains(self)
     }
 
-    fn intersects(self, other: &SphericalPolygon) -> bool {
+    fn intersects(self, other: &MultiAngularPolygon) -> bool {
         other.intersects(self)
     }
 
-    fn intersection(self, other: &SphericalPolygon) -> GeometryCollection {
-        other.intersection(self)
-    }
-}
-
-impl GeometricOperations<&MultiSphericalPolygon> for &MultiVectorPoint {
-    fn distance(self, other: &MultiSphericalPolygon) -> f64 {
-        other.distance(self)
-    }
-
-    fn contains(self, _: &MultiSphericalPolygon) -> bool {
-        false
-    }
-
-    fn within(self, other: &MultiSphericalPolygon) -> bool {
-        other.contains(self)
-    }
-
-    fn intersects(self, other: &MultiSphericalPolygon) -> bool {
-        other.intersects(self)
-    }
-
-    fn intersection(self, other: &MultiSphericalPolygon) -> GeometryCollection {
+    fn intersection(self, other: &MultiAngularPolygon) -> GeometryCollection {
         other.intersection(self)
     }
 }
