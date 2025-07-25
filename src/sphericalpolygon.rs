@@ -795,7 +795,6 @@ impl GeometricOperations<&SphericalPolygon> for &SphericalPolygon {
                             if joined.closed {
                                 polygons.push(SphericalPolygon::new(joined, None).unwrap());
                             } else {
-                                println!("joining {segment_index} and {other_segment_index}");
                                 joined_segments.push(joined);
                                 segment_removal_indices.push(segment_index);
                                 segment_removal_indices.push(other_segment_index);
@@ -813,7 +812,6 @@ impl GeometricOperations<&SphericalPolygon> for &SphericalPolygon {
                 segment_removal_indices.sort_unstable();
                 segment_removal_indices.reverse();
                 segment_removal_indices.dedup();
-                println!("{segment_removal_indices:?}");
                 for segment_index in segment_removal_indices {
                     segments.swap_remove_back(segment_index);
                 }
