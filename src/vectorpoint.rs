@@ -638,7 +638,7 @@ impl Distance for &MultiVectorPoint {
 
 #[cfg(test)]
 mod tests {
-    use std::array::from_fn;
+    
 
     use super::*;
     use crate::geometry::Distance;
