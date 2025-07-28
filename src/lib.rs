@@ -124,6 +124,18 @@ mod py_sphersgeo {
             self.vector_length()
         }
 
+        /// dot product of this xyz vector with another xyz vector
+        #[pyo3(name = "vector_dot")]
+        fn py_vector_dot(&self, other: PySphericalPointInputs) -> PyResult<f64> {
+            Ok(self.vector_dot(&Self::py_new(other)?))
+        }
+
+        /// cross product of this xyz vector with another xyz vector
+        #[pyo3(name = "vector_cross")]
+        fn py_vector_cross(&self, other: PySphericalPointInputs) -> PyResult<Self> {
+            Ok(self.vector_cross(&Self::py_new(other)?))
+        }
+
         /// rotate this xyz vector by theta angle around another xyz vector
         #[pyo3(name = "vector_rotate_around")]
         fn py_vector_rotate_around(
