@@ -118,7 +118,7 @@ def test_contains():
         (-30.0, 110.0),
     ],
 )
-def test_interpolate(a, b):
+def test_interpolate_along_arc(a, b):
     tolerance = 1e-10
 
     a = SphericalPoint.from_lonlat(a)
@@ -126,7 +126,7 @@ def test_interpolate(a, b):
     ab = ArcString([a, b])
 
     interpolated_points = MultiSphericalPoint(
-        sphersgeo.array.xyz_interpolate_between(a.xyz, b.xyz, n=10)
+        sphersgeo.array.interpolate_points_along_arc((a.xyz, b.xyz), n=10)
     ).parts
 
     assert interpolated_points[0] == a

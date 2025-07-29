@@ -156,16 +156,16 @@ def test_to_lonlat():
     assert_allclose(abcde.to_lonlats(), lonlats)
 
 
-def test_xyz_radians_over_sphere_between():
+def test_arc_distance_over_sphere_radians():
     a = np.array((0.0, 0.0, 1.0))
     b = np.array((0.0, 0.0, -1.0))
     c = np.array((1.0, 1.0, 0.0))
     d = np.array((1.0, -1.0, 0.0))
 
-    assert sphersgeo.array.xyz_radians_over_sphere_between(a, b) == np.acos(a.dot(b))
-    assert sphersgeo.array.xyz_radians_over_sphere_between(b, c) == np.acos(b.dot(c))
-    assert sphersgeo.array.xyz_radians_over_sphere_between(c, d) == np.acos(c.dot(d))
-    assert sphersgeo.array.xyz_radians_over_sphere_between(d, a) == np.acos(d.dot(a))
+    assert sphersgeo.array.arc_distance_over_sphere_radians((a, b)) == np.acos(a.dot(b))
+    assert sphersgeo.array.arc_distance_over_sphere_radians((b, c)) == np.acos(b.dot(c))
+    assert sphersgeo.array.arc_distance_over_sphere_radians((c, d)) == np.acos(c.dot(d))
+    assert sphersgeo.array.arc_distance_over_sphere_radians((d, a)) == np.acos(d.dot(a))
 
 
 def test_distance():
@@ -311,9 +311,9 @@ def test_add():
 
 def test_two_arc_angle():
     # right angle
-    A = SphericalPoint((1.0, 0.0, 0.0))
+    A = (1.0, 0.0, 0.0)
     B = SphericalPoint((0.0, 1.0, 0.0))
-    C = SphericalPoint((0.0, 0.0, 1.0))
+    C = (0.0, 0.0, 1.0)
     assert B.two_arc_angle(A, C) == np.rad2deg(np.pi / 2)
     assert B.two_arc_angle(C, A) == np.rad2deg(np.pi / 2)
 
@@ -338,65 +338,65 @@ def test_two_arc_angle():
     assert_allclose(B.two_arc_angle(A, C), 30.0)
     assert_allclose(B.two_arc_angle(C, A), 30.0)
 
-    # TODO: More angle tests
-
-
-def test_angle_domain():
     A = SphericalPoint((0.0, 0.0, 0.0))
     B = SphericalPoint((0.0, 0.0, 0.0))
     C = SphericalPoint((0.0, 0.0, 0.0))
-    assert np.isnan(B.two_arc_angle(A, C))
+    assert B.two_arc_angle(A, C) == 0
 
     A = SphericalPoint((1.0, 1.0, 1.0))
     B = SphericalPoint((0.0, 0.0, 0.0))
     C = SphericalPoint((-1.0, -1.0, -1.0))
-    assert np.isnan(B.two_arc_angle(A, C))
+    assert B.two_arc_angle(A, C) == 180
 
     A = SphericalPoint((0.0, 0.0, 0.0))
     B = SphericalPoint((0.0, 1.0, 0.0))
     C = SphericalPoint((1.0, 0.0, 0.0))
-    assert np.isnan(B.two_arc_angle(A, C))
+    assert B.two_arc_angle(A, C) == 90
 
     A = SphericalPoint((0.0, 0.0, 0.0))
     B = SphericalPoint((0.0, 1.0, 0.0))
     C = SphericalPoint((0.0, 0.0, 0.0))
-    assert np.isnan(B.two_arc_angle(A, C))
+    assert B.two_arc_angle(A, C) == 0
 
 
 def test_angle_nearly_coplanar():
     # test from issue #222 + extra values
-    a = SphericalPoint((1.0, 1.0, 1.0))
-    b = SphericalPoint((1.0, 0.9999999, 1.0))
+    a = SphericalPoint((1.0, 1.0, 1.0)) # [45.0, 35.264389682754654]
+    b = SphericalPoint((1.0, 0.9999999, 1.0)) # [44.99999713521089, 35.26439103322914]
     C = MultiSphericalPoint(
         [
-            (0.0, 0.5, 1.0),
-            (0.0, 0.15, 1.0),
-            (0.0, 0.001, 1.0),
-            (-1.0, -1.0, -1.0),
-            (-1.0, 0.1, -1.0),
+            (0.0, 0.5, 1.0), # [ 90., 63.43494882]
+            (0.0, 0.15, 1.0), # [ 90., 81.46923439]
+            (0.0, 0.001, 1.0), # [ 90., 89.94270424]
+            (-1.0, -1.0, -1.0), # [225., -35.26438968]
+            (-1.0, 0.1, -1.0), # [174.28940686, -44.8574726 ]
         ]
     )
     angles = [b.two_arc_angle(a, c) for c in C.parts]
 
     assert np.isfinite(angles[1:3]).all()
 
-    assert_allclose(angles[0], np.rad2deg(np.pi / 2))
-    assert_allclose(angles[3], np.rad2deg(np.pi / 2))
-    assert_allclose(angles[4], np.rad2deg(np.pi))
+    assert_allclose(angles[0], 90)
+    assert_allclose(angles[3], 180)
+    assert_allclose(angles[4], 0)
 
 
 def test_collinear():
     # equatorial
-    A = SphericalPoint.from_lonlat((0.0, 0.0))
-    B = SphericalPoint.from_lonlat((20.0, 0.0))
+    A = SphericalPoint.from_lonlat((20.0, 0.0))
+    B = SphericalPoint.from_lonlat((0.0, 0.0))
     C = SphericalPoint.from_lonlat((-20.0, 0.0))
+    assert A.collinear(B, C)
     assert B.collinear(A, C)
+    assert C.collinear(A, B)
 
     # meridianal
     A = SphericalPoint.from_lonlat((0.0, 20.0))
-    B = SphericalPoint.from_lonlat((0.0, -20.0))
-    C = SphericalPoint.from_lonlat((0.0, 0.0))
+    B = SphericalPoint.from_lonlat((0.0, 0.0))
+    C = SphericalPoint.from_lonlat((0.0, -20.0))
+    assert A.collinear(B, C)
     assert B.collinear(A, C)
+    assert C.collinear(A, B)
 
     # non-collinear points
     A = SphericalPoint((1.0, 0.0, 0.0))

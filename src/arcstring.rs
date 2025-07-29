@@ -3,7 +3,7 @@ use crate::{
     geometry::{GeometricOperations, Geometry, GeometryCollection, MultiGeometry},
     sphericalpoint::{
         point_within_kdtree, xyz_add_xyz, xyz_cross, xyz_div_f64, xyz_dot, xyz_eq, xyz_neg,
-        xyz_radians_over_sphere_between, xyzs_collinear, MultiSphericalPoint, SphericalPoint,
+        xyzs_collinear, xyzs_distance_over_sphere_radians, MultiSphericalPoint, SphericalPoint,
     },
 };
 use numpy::ndarray::{array, concatenate, s, Array1, Array2, ArrayView2, Axis};
@@ -12,15 +12,14 @@ use rayon::prelude::*;
 use std::fmt::Display;
 use std::iter::Sum;
 
-pub fn xyz_interpolate_between(
-    a: &[f64; 3],
-    b: &[f64; 3],
+pub fn interpolate_points_along_arc(
+    arc: (&[f64; 3], &[f64; 3]),
     n: usize,
 ) -> Result<Vec<[f64; 3]>, String> {
     let n = if n < 2 { 2 } else { n };
     let t = Array1::<f64>::linspace(0.0, 1.0, n);
     let t = t.to_shape((n, 1)).unwrap();
-    let omega = crate::sphericalpoint::xyz_radians_over_sphere_between(a, b);
+    let omega = crate::sphericalpoint::xyzs_distance_over_sphere_radians(arc.0, arc.1);
 
     let offsets = if omega == 0.0 {
         t.to_owned()
@@ -30,13 +29,12 @@ pub fn xyz_interpolate_between(
     let mut inverted_offsets = offsets.to_owned();
     inverted_offsets.invert_axis(Axis(0));
 
-    Ok(
-        (inverted_offsets * array![a[0], a[1], a[2]] + offsets * array![b[0], b[1], b[2]])
-            .rows()
-            .into_iter()
-            .map(|xyz| [xyz[0], xyz[1], xyz[2]])
-            .collect(),
-    )
+    Ok((inverted_offsets * array![arc.0[0], arc.0[1], arc.0[2]]
+        + offsets * array![arc.1[0], arc.1[1], arc.1[2]])
+    .rows()
+    .into_iter()
+    .map(|xyz| [xyz[0], xyz[1], xyz[2]])
+    .collect())
 }
 
 /// Given xyz vectors of the endpoints of two great circle arcs, find the point at which the arcs cross
@@ -47,21 +45,19 @@ pub fn xyz_interpolate_between(
 /// - https://spherical-geometry.readthedocs.io/en/latest/api/spherical_geometry.great_circle_arc.intersection.html#rb82e4e1c8654-1
 /// - Spinielli, Enrico. 2014. “Understanding Great Circle Arcs Intersection Algorithm.” October 19, 2014. https://enrico.spinielli.net/posts/2014-10-19-understanding-great-circle-arcs.
 pub fn xyz_two_arc_crossing(
-    a_0: &[f64; 3],
-    a_1: &[f64; 3],
-    b_0: &[f64; 3],
-    b_1: &[f64; 3],
+    a: (&[f64; 3], &[f64; 3]),
+    b: (&[f64; 3], &[f64; 3]),
 ) -> Option<[f64; 3]> {
-    let p = xyz_cross(a_0, a_1);
-    let q = xyz_cross(b_0, b_1);
+    let p = xyz_cross(a.0, a.1);
+    let q = xyz_cross(b.0, b.1);
 
     let t = xyz_cross(&p, &q);
 
     let signs = array![
-        xyz_dot(&xyz_neg(&xyz_cross(a_0, &p)), &t),
-        xyz_dot(&xyz_cross(a_1, &p), &t),
-        xyz_dot(&xyz_neg(&xyz_cross(b_0, &q)), &t),
-        xyz_dot(&xyz_cross(b_1, &q), &t),
+        xyz_dot(&xyz_neg(&xyz_cross(a.0, &p)), &t),
+        xyz_dot(&xyz_cross(a.1, &p), &t),
+        xyz_dot(&xyz_neg(&xyz_cross(b.0, &q)), &t),
+        xyz_dot(&xyz_cross(b.1, &q), &t),
     ]
     .signum();
 
@@ -72,6 +68,32 @@ pub fn xyz_two_arc_crossing(
     } else {
         None
     }
+}
+
+pub fn arc_crosses_arcstring(arc: (&[f64; 3], &[f64; 3]), arcstring: &ArcString) -> bool {
+    for other_arc_index in 0..arcstring.points.len() - if arcstring.closed { 0 } else { 1 } {
+        let other_arc = (
+            &arcstring.points.xyzs[other_arc_index],
+            &arcstring.points.xyzs[if other_arc_index < arcstring.points.len() - 1 {
+                other_arc_index + 1
+            } else {
+                0
+            }],
+        );
+        if let Some(point) = xyz_two_arc_crossing(arc, other_arc) {
+            if xyz_eq(&point, arc.0)
+                || xyz_eq(&point, arc.1)
+                || xyz_eq(&point, other_arc.0)
+                || xyz_eq(&point, other_arc.1)
+            {
+                continue;
+            } else {
+                return true;
+            }
+        }
+    }
+
+    false
 }
 
 pub fn arcstring_contains_point(arcstring: &ArcString, xyz: &[f64; 3]) -> bool {
@@ -183,7 +205,7 @@ fn arc_radians_over_sphere_to_point(a: &[f64; 3], b: &[f64; 3], xyz: &[f64; 3]) 
     let g = xyz_cross(a, b);
     let f = xyz_cross(xyz, &g);
     let t = xyz_cross(&g, &f);
-    xyz_radians_over_sphere_between(&t, xyz)
+    xyzs_distance_over_sphere_radians(&t, xyz)
 }
 
 /// series of great circle arcs along the sphere
@@ -232,7 +254,7 @@ impl<'a> TryFrom<Vec<ArrayView2<'a, f64>>> for ArcString {
         for _ in 0..edges.len() {
             let end = connected.slice(s![connected.nrows() - 1, ..]).to_owned();
             for edge_index in 0..edges.len() {
-                if (&edges[edge_index].slice(s![0, ..]) - &end).abs().sum() < 2e-8 {
+                if (&edges[edge_index].slice(s![0, ..]) - &end).abs().sum() < 3e-11 {
                     connected = concatenate![
                         Axis(0),
                         connected.view(),
@@ -241,7 +263,7 @@ impl<'a> TryFrom<Vec<ArrayView2<'a, f64>>> for ArcString {
                 } else if (&edges[edge_index].slice(s![edges[edge_index].nrows() - 1, ..]) - &end)
                     .abs()
                     .sum()
-                    < 2e-8
+                    < 3e-11
                 {
                     let edge = edges.get_mut(edge_index).unwrap();
                     edge.invert_axis(Axis(0));
@@ -361,27 +383,28 @@ impl ArcString {
             // because a sphere is an enclosed infinite space so there's no good way to sort by longitude
             // so I guess the best we can do instead is use brute-force and skip visited arcs
             for arc_index in 0..self.points.len() - 1 {
-                let arc_start = self.points.xyzs[arc_index];
-                let arc_end = self.points.xyzs[arc_index + 1];
+                let arc = (
+                    &self.points.xyzs[arc_index],
+                    &self.points.xyzs[arc_index + 1],
+                );
 
                 // due to the nature of the search we can assume that previous indices are already checked
                 for other_arc_index in
                     arc_index + 2..self.points.len() - if self.closed { 0 } else { 1 }
                 {
-                    let other_arc_start = self.points.xyzs[other_arc_index];
-                    let other_arc_end = self.points.xyzs[if other_arc_index < self.points.len() - 1
-                    {
-                        other_arc_index + 1
-                    } else {
-                        0
-                    }];
-                    if let Some(point) =
-                        xyz_two_arc_crossing(&arc_start, &arc_end, &other_arc_start, &other_arc_end)
-                    {
-                        if xyz_eq(&point, &arc_start)
-                            || xyz_eq(&point, &arc_end)
-                            || xyz_eq(&point, &other_arc_start)
-                            || xyz_eq(&point, &other_arc_end)
+                    let other_arc = (
+                        &self.points.xyzs[other_arc_index],
+                        &self.points.xyzs[if other_arc_index < self.points.len() - 1 {
+                            other_arc_index + 1
+                        } else {
+                            0
+                        }],
+                    );
+                    if let Some(point) = xyz_two_arc_crossing(arc, other_arc) {
+                        if xyz_eq(&point, arc.0)
+                            || xyz_eq(&point, arc.1)
+                            || xyz_eq(&point, other_arc.0)
+                            || xyz_eq(&point, other_arc.1)
                         {
                             continue;
                         } else {
@@ -404,21 +427,23 @@ impl ArcString {
             // because a sphere is an enclosed infinite space so there's no good way to sort by longitude
             // so I guess the best we can do instead is use brute-force and skip visited arcs
             for arc_index in 0..self.points.len() - 1 {
-                let arc_start = self.points.xyzs[arc_index];
-                let arc_end = self.points.xyzs[arc_index + 1];
+                let arc = (
+                    &self.points.xyzs[arc_index],
+                    &self.points.xyzs[arc_index + 1],
+                );
 
                 // due to the nature of the search we can assume that previous indices are already checked
                 for other_arc_index in arc_index + 2..self.points.len() - 1 {
-                    let other_arc_start = self.points.xyzs[other_arc_index];
-                    let other_arc_end = self.points.xyzs[other_arc_index + 1];
+                    let other_arc = (
+                        &self.points.xyzs[other_arc_index],
+                        &self.points.xyzs[other_arc_index + 1],
+                    );
 
-                    if let Some(point) =
-                        xyz_two_arc_crossing(&arc_start, &arc_end, &other_arc_start, &other_arc_end)
-                    {
-                        if xyz_eq(&point, &arc_start)
-                            || xyz_eq(&point, &arc_end)
-                            || xyz_eq(&point, &other_arc_start)
-                            || xyz_eq(&point, &other_arc_end)
+                    if let Some(point) = xyz_two_arc_crossing(arc, other_arc) {
+                        if xyz_eq(&point, arc.0)
+                            || xyz_eq(&point, arc.1)
+                            || xyz_eq(&point, other_arc.0)
+                            || xyz_eq(&point, other_arc.1)
                         {
                             continue;
                         } else {
@@ -439,7 +464,7 @@ impl ArcString {
     pub fn lengths(&self) -> Vec<f64> {
         let mut lengths = (0..self.points.len() - 1)
             .map(|index| {
-                xyz_radians_over_sphere_between(
+                xyzs_distance_over_sphere_radians(
                     &self.points.xyzs[index],
                     &self.points.xyzs[index + 1],
                 )
@@ -448,7 +473,7 @@ impl ArcString {
 
         if self.closed {
             // if the arcstring is closed, also add the length of the final closing arc
-            lengths.push(xyz_radians_over_sphere_between(
+            lengths.push(xyzs_distance_over_sphere_radians(
                 &self.points.xyzs[self.points.len() - 1],
                 &self.points.xyzs[0],
             ));
@@ -740,33 +765,18 @@ impl GeometricOperations<ArcString> for ArcString {
         // because a sphere is an enclosed infinite space so there's no good way to sort by longitude
         // so I guess the best we can do instead is use brute-force
         for arc_index in 0..self.points.len() - if self.closed { 0 } else { 1 } {
-            let arc_start = self.points.xyzs[arc_index];
-            let arc_end = self.points.xyzs[if arc_index < self.points.len() - 1 {
-                arc_index + 1
-            } else {
-                0
-            }];
-
-            for other_arc_index in 0..other.points.len() - if other.closed { 0 } else { 1 } {
-                let other_arc_start = other.points.xyzs[other_arc_index];
-                let other_arc_end = other.points.xyzs[if other_arc_index < other.points.len() - 1 {
-                    other_arc_index + 1
-                } else {
-                    0
-                }];
-                if let Some(point) =
-                    xyz_two_arc_crossing(&arc_start, &arc_end, &other_arc_start, &other_arc_end)
-                {
-                    if xyz_eq(&point, &arc_start)
-                        || xyz_eq(&point, &arc_end)
-                        || xyz_eq(&point, &other_arc_start)
-                        || xyz_eq(&point, &other_arc_end)
-                    {
-                        continue;
+            if arc_crosses_arcstring(
+                (
+                    &self.points.xyzs[arc_index],
+                    &self.points.xyzs[if arc_index < self.points.len() - 1 {
+                        arc_index + 1
                     } else {
-                        return true;
-                    }
-                }
+                        0
+                    }],
+                ),
+                &other,
+            ) {
+                return true;
             }
         }
 
@@ -784,24 +794,26 @@ impl GeometricOperations<ArcString> for ArcString {
         // because a sphere is an enclosed infinite space so there's no good way to sort by longitude
         // so I guess the best we can do instead is use brute-force
         for arc_index in 0..self.points.len() - if self.closed { 0 } else { 1 } {
-            let arc_start = self.points.xyzs[arc_index];
-            let arc_end = self.points.xyzs[if arc_index < self.points.len() - 1 {
-                arc_index + 1
-            } else {
-                0
-            }];
-
-            for other_arc_index in 0..other.points.len() - if other.closed { 0 } else { 1 } {
-                let other_arc_start = other.points.xyzs[other_arc_index];
-                let other_arc_end = other.points.xyzs[if other_arc_index < other.points.len() - 1 {
-                    other_arc_index + 1
+            let arc = (
+                &self.points.xyzs[arc_index],
+                &self.points.xyzs[if arc_index < self.points.len() - 1 {
+                    arc_index + 1
                 } else {
                     0
-                }];
+                }],
+            );
 
-                if let Some(point) =
-                    xyz_two_arc_crossing(&arc_start, &arc_end, &other_arc_start, &other_arc_end)
-                {
+            for other_arc_index in 0..other.points.len() - if other.closed { 0 } else { 1 } {
+                let other_arc = (
+                    &other.points.xyzs[other_arc_index],
+                    &other.points.xyzs[if other_arc_index < other.points.len() - 1 {
+                        other_arc_index + 1
+                    } else {
+                        0
+                    }],
+                );
+
+                if let Some(point) = xyz_two_arc_crossing(arc, other_arc) {
                     intersections.push(point);
                 }
             }

@@ -73,7 +73,7 @@ pub fn xyz_abs(xyz: &[f64; 3]) -> [f64; 3] {
 }
 
 pub fn xyz_eq(a: &[f64; 3], b: &[f64; 3]) -> bool {
-    xyz_sum(&xyz_abs(&xyz_sub_xyz(a, b))) < 2e-8
+    xyz_sum(&xyz_abs(&xyz_sub_xyz(a, b))) < 3e-11
 }
 
 pub fn xyzs_sum(xyzs: &Vec<[f64; 3]>) -> [f64; 3] {
@@ -169,7 +169,7 @@ fn xyz_rotate_around(a: &[f64; 3], b: &[f64; 3], theta: &f64) -> [f64; 3] {
 /// References
 /// ----------
 /// - https://www.mathforengineers.com/math-calculators/angle-between-two-vectors-in-spherical-coordinates.html
-pub fn xyz_radians_over_sphere_between(a: &[f64; 3], b: &[f64; 3]) -> f64 {
+pub fn xyzs_distance_over_sphere_radians(a: &[f64; 3], b: &[f64; 3]) -> f64 {
     if xyz_eq(a, b) {
         0.0
     } else {
@@ -224,26 +224,27 @@ pub fn xyz_two_arc_angle_radians(a: &[f64; 3], b: &[f64; 3], c: &[f64; 3]) -> f6
     //
     // angle
 
-    let ab = xyz_radians_over_sphere_between(a, b);
-    let bc = xyz_radians_over_sphere_between(b, c);
-    let ca = xyz_radians_over_sphere_between(c, a);
+    let ab = xyzs_distance_over_sphere_radians(a, b);
+    let bc = xyzs_distance_over_sphere_radians(b, c);
+    let ca = xyzs_distance_over_sphere_radians(c, a);
 
-    let mut radians = if ca < tolerance {
-        // if the opposite side of the triangle is negligibly small
+    let radians = if ab < tolerance || bc < tolerance || ca < tolerance {
+        // if any side of the triangle is negligibly small
         0.0
-    } else if ab < tolerance || bc < tolerance {
-        // if either adjacent side of the triangle is neglibly small
-        (1.0 - ca.powi(2) / 2.0).acos()
     } else {
-        ((ca.cos() - bc.cos() * ab.cos()) / (bc.sin() * ab.sin())).acos()
+        ((ca.cos() - (bc.cos() * ab.cos())) / (bc.sin() * ab.sin())).acos()
     };
 
-    // test if all three points are collinear
-    if radians.is_nan() && (ab + bc - ca) < tolerance {
-        radians = std::f64::consts::PI;
+    // check if B is directly between A and B
+    if radians.is_nan() {
+        if (ab + bc - ca) < tolerance {
+            std::f64::consts::PI
+        } else {
+            0.0
+        }
+    } else {
+        radians
     }
-
-    radians
 }
 
 /// whether the angle formed between A->B->C is a clockwise turn
@@ -266,13 +267,13 @@ pub fn xyzs_collinear(a: &[f64; 3], b: &[f64; 3], c: &[f64; 3]) -> bool {
         let cab = xyz_two_arc_angle_radians(c, a, b);
         let bca = xyz_two_arc_angle_radians(b, c, a);
 
-        let tolerance = 2e-8;
+        let tolerance = 3e-11;
         abc < tolerance
             || cab < tolerance
             || bca < tolerance
-            || (abc - std::f64::consts::PI.to_degrees()).abs() < tolerance
-            || (cab - std::f64::consts::PI.to_degrees()).abs() < tolerance
-            || (bca - std::f64::consts::PI.to_degrees()).abs() < tolerance
+            || (abc - std::f64::consts::PI).abs() < tolerance
+            || (cab - std::f64::consts::PI).abs() < tolerance
+            || (bca - std::f64::consts::PI).abs() < tolerance
 
         // let left = arc_length(&a, &p);
         // let right = arc_length(&p, &b);
@@ -290,7 +291,7 @@ pub fn xyzs_collinear(a: &[f64; 3], b: &[f64; 3], c: &[f64; 3]) -> bool {
 
 pub fn point_within_kdtree(xyz: &[f64; 3], kdtree: &ImmutableKdTree<f64, 3>) -> bool {
     // take advantage of the kdtree's distance function in 3D space
-    kdtree.nearest_one::<SquaredEuclidean>(xyz).distance < 2e-8
+    kdtree.nearest_one::<SquaredEuclidean>(xyz).distance < 3e-11
 }
 
 /// 3D Cartesian vector representing a point on the unit sphere
@@ -303,7 +304,7 @@ pub struct SphericalPoint {
 impl From<[f64; 3]> for SphericalPoint {
     fn from(xyz: [f64; 3]) -> Self {
         let length = xyz_length(&xyz);
-        let xyz = if length < 2e-8 {
+        let xyz = if length < 2e-11 {
             xyz
         } else {
             [xyz[0] / length, xyz[1] / length, xyz[2] / length]
@@ -536,8 +537,9 @@ impl SphericalPoint {
         other: &Self,
         n: usize,
     ) -> Result<MultiSphericalPoint, String> {
-        MultiSphericalPoint::try_from(crate::arcstring::xyz_interpolate_between(
-            &self.xyz, &other.xyz, n,
+        MultiSphericalPoint::try_from(crate::arcstring::interpolate_points_along_arc(
+            (&self.xyz, &other.xyz),
+            n,
         )?)
     }
 
@@ -616,7 +618,7 @@ impl Geometry for SphericalPoint {
 
 impl GeometricOperations<SphericalPoint> for SphericalPoint {
     fn distance(&self, other: &SphericalPoint) -> f64 {
-        xyz_radians_over_sphere_between(&self.xyz, &other.xyz).to_degrees()
+        xyzs_distance_over_sphere_radians(&self.xyz, &other.xyz).to_degrees()
     }
 
     fn contains(&self, _: &SphericalPoint) -> bool {
@@ -867,7 +869,7 @@ impl TryFrom<Vec<[f64; 3]>> for MultiSphericalPoint {
                 .into_iter()
                 .map(|xyz| {
                     let length = xyz_length(&xyz);
-                    if length < 2e-8 {
+                    if length < 3e-11 {
                         xyz
                     } else {
                         [xyz[0] / length, xyz[1] / length, xyz[2] / length]
@@ -1372,7 +1374,7 @@ impl GeometricOperations<MultiSphericalPoint, SphericalPoint> for MultiSpherical
             .min_by(|a, b| a.2.partial_cmp(&b.2).unwrap())
             .unwrap();
 
-        if cartesian_distance < 2e-8 {
+        if cartesian_distance < 3e-11 {
             0.0
         } else {
             // calculate the angular distance

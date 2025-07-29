@@ -97,24 +97,32 @@ mod py_sphersgeo {
 
         /// angle on the sphere between this point and two other points
         #[pyo3(name = "two_arc_angle")]
-        fn py_two_arc_angle(&self, a: &SphericalPoint, b: &SphericalPoint) -> f64 {
-            self.two_arc_angle(a, b)
+        fn py_two_arc_angle(
+            &self,
+            a: PySphericalPointInputs,
+            b: PySphericalPointInputs,
+        ) -> PyResult<f64> {
+            Ok(self.two_arc_angle(&Self::py_new(a)?, &Self::py_new(b)?))
         }
 
         /// whether this point shares a line with two other points
         #[pyo3(name = "collinear")]
-        fn py_collinear(&self, a: &SphericalPoint, b: &SphericalPoint) -> bool {
-            self.collinear(a, b)
+        fn py_collinear(
+            &self,
+            a: PySphericalPointInputs,
+            b: PySphericalPointInputs,
+        ) -> PyResult<bool> {
+            Ok(self.collinear(&Self::py_new(a)?, &Self::py_new(b)?))
         }
 
         /// create n number of points equally spaced on an arc between this point and another point
         #[pyo3(name = "interpolate_between", signature=(other, n=16))]
         fn py_interpolate_between(
             &self,
-            other: &SphericalPoint,
+            other: PySphericalPointInputs,
             n: usize,
         ) -> PyResult<MultiSphericalPoint> {
-            self.interpolate_between(other, n)
+            self.interpolate_between(&Self::py_new(other)?, n)
                 .map_err(PyValueError::new_err)
         }
 
@@ -1585,19 +1593,19 @@ mod py_sphersgeo {
         use super::*;
 
         #[pyfunction]
-        #[pyo3(name = "xyz_radians_over_sphere_between")]
-        fn py_xyz_radians_over_sphere_between(a: [f64; 3], b: [f64; 3]) -> f64 {
-            crate::sphericalpoint::xyz_radians_over_sphere_between(&a, &b)
+        #[pyo3(name = "arc_distance_over_sphere_radians")]
+        fn py_arc_distance_over_sphere_radians(arc: ([f64; 3], [f64; 3])) -> f64 {
+            crate::sphericalpoint::xyzs_distance_over_sphere_radians(&arc.0, &arc.1)
         }
 
         #[pyfunction]
-        #[pyo3(name="xyz_interpolate_between", signature=(a, b, n=50))]
-        fn py_xyz_interpolate_between(
-            a: [f64; 3],
-            b: [f64; 3],
+        #[pyo3(name="interpolate_points_along_arc", signature=(arc, n=50))]
+        fn py_interpolate_points_along_arc(
+            arc: ([f64; 3], [f64; 3]),
             n: usize,
         ) -> PyResult<Vec<[f64; 3]>> {
-            crate::arcstring::xyz_interpolate_between(&a, &b, n).map_err(PyValueError::new_err)
+            crate::arcstring::interpolate_points_along_arc((&arc.0, &arc.1), n)
+                .map_err(PyValueError::new_err)
         }
 
         #[pyfunction]
@@ -1607,9 +1615,9 @@ mod py_sphersgeo {
         }
 
         #[pyfunction]
-        #[pyo3(name = "spherical_triangle_area")]
+        #[pyo3(name = "spherical_triangle_area_steradians")]
         fn py_spherical_triangle_area(a: [f64; 3], b: [f64; 3], c: [f64; 3]) -> f64 {
-            crate::sphericalpolygon::spherical_triangle_area(&a, &b, &c)
+            crate::sphericalpolygon::spherical_triangle_area_steradians(&a, &b, &c)
         }
     }
 }

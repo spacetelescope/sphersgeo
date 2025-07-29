@@ -3,9 +3,9 @@ use crate::{
     edgegraph::{EdgeGraph, GeometryGraph, ToGraph},
     geometry::{GeometricOperations, Geometry, GeometryCollection, MultiGeometry},
     sphericalpoint::{
-        xyz_add_xyz, xyz_cross, xyz_div_f64, xyz_mul_xyz, xyz_radians_over_sphere_between,
-        xyz_sub_xyz, xyz_sum, xyz_two_arc_angle_radians, xyzs_mean, xyzs_sum, MultiSphericalPoint,
-        SphericalPoint,
+        xyz_add_xyz, xyz_cross, xyz_div_f64, xyz_mul_xyz, xyz_sub_xyz, xyz_sum,
+        xyz_two_arc_angle_radians, xyzs_distance_over_sphere_radians, xyzs_mean, xyzs_sum,
+        MultiSphericalPoint, SphericalPoint,
     },
 };
 use ndarray::{
@@ -24,24 +24,24 @@ use std::{cmp::Ordering, fmt::Display, iter::Sum};
 /// - Klain, D. A. (2019). A probabilistic proof of the spherical excess formula (No. arXiv:1909.04505). arXiv. https://doi.org/10.48550/arXiv.1909.04505
 /// - Miller, Robert D. Computing the area of a spherical polygon. Graphics Gems IV. 1994. Academic Press. doi:10.5555/180895.180907
 ///   `pdf <https://www.google.com/books/edition/Graphics_Gems_IV/CCqzMm_-WucC?hl=en&gbpv=1&dq=Graphics%20Gems%20IV.%20p132&pg=PA133&printsec=frontcover>`_
-pub fn spherical_triangle_area(a: &[f64; 3], b: &[f64; 3], c: &[f64; 3]) -> f64 {
-    // let area_radians_squared = angle_between_vectors_radians(c, a, b)
-    //     + angle_between_vectors_radians(a, b, c)
-    //     + angle_between_vectors_radians(b, c, a)
-    //     - std::f64::consts::PI;
-    let ab = xyz_radians_over_sphere_between(a, b);
-    let bc = xyz_radians_over_sphere_between(b, c);
-    let ca = xyz_radians_over_sphere_between(c, a);
-    let s = (ab + bc + ca) / 2.0;
-    let area_radians_squared = 4.0
-        * ((s / 2.0).tan()
-            * ((s - ab) / 2.0).tan()
-            * ((s - bc) / 2.0).tan()
-            * ((s - ca) / 2.0).tan())
-        .sqrt()
-        .atan();
+pub fn spherical_triangle_area_steradians(a: &[f64; 3], b: &[f64; 3], c: &[f64; 3]) -> f64 {
+    // xyz_two_arc_angle_radians(c, a, b)
+    //     + xyz_two_arc_angle_radians(a, b, c)
+    //     + xyz_two_arc_angle_radians(b, c, a)
+    //     - std::f64::consts::PI
 
-    area_radians_squared.sqrt().to_degrees().powi(2)
+    // redefine Girard's theorum to avoid domain errors
+    let ab = xyzs_distance_over_sphere_radians(a, b);
+    let bc = xyzs_distance_over_sphere_radians(b, c);
+    let ca = xyzs_distance_over_sphere_radians(c, a);
+    let s = (ab + bc + ca) / 2.0;
+
+    4.0 * ((s / 2.0).tan()
+        * ((s - ab) / 2.0).tan()
+        * ((s - bc) / 2.0).tan()
+        * ((s - ca) / 2.0).tan())
+    .sqrt()
+    .atan()
 }
 
 // use the classical even-crossings ray algorithm for point-in-polygon
@@ -54,10 +54,11 @@ pub fn point_in_polygon_boundary(
     let mut crossings = 0;
     for index in 0..polygon_boundary_xyzs.len() - 1 {
         if xyz_two_arc_crossing(
-            point,
-            polygon_interior_xyz,
-            &polygon_boundary_xyzs[index],
-            &polygon_boundary_xyzs[index + 1],
+            (point, polygon_interior_xyz),
+            (
+                &polygon_boundary_xyzs[index],
+                &polygon_boundary_xyzs[index + 1],
+            ),
         )
         .is_some()
         {
@@ -165,16 +166,10 @@ fn interior_point_from_polygon_boundary(boundary: &ArcString) -> Result<Spherica
                 ),
             };
 
-            let ray = ArcString::try_from(
-                MultiSphericalPoint::try_from(vec![
-                    triangle_centroid.to_owned(),
-                    boundary_centroid.to_owned(),
-                ])
-                .unwrap(),
-            )
-            .unwrap();
-
-            if ray.crosses(boundary) {
+            if crate::arcstring::arc_crosses_arcstring(
+                (&triangle_centroid.xyz, &boundary_centroid.xyz),
+                boundary,
+            ) {
                 side_a.push(triangle_centroid);
             } else {
                 side_b.push(triangle_centroid);
@@ -288,11 +283,6 @@ impl SphericalPolygon {
         .unwrap()
     }
 
-    /// invert this polygon on the sphere
-    pub fn inverse(&self) -> SphericalPolygon {
-        Self::try_new(self.boundary.to_owned(), Some(&self.centroid() * &-1.0)).unwrap()
-    }
-
     /// whether all interior angles are clockwise
     pub fn is_convex(&self) -> bool {
         polygon_boundary_is_convex(&self.boundary.points.xyzs)
@@ -329,29 +319,18 @@ impl Geometry for SphericalPolygon {
                     } + 2],
                 ];
 
-                let triangle_centroid = SphericalPoint {
-                    xyz: xyzs_mean(&triangle),
-                };
-
-                let ray = ArcString::try_from(
-                    MultiSphericalPoint::try_from(vec![
-                        triangle_centroid.to_owned(),
-                        self.interior_point.to_owned(),
-                    ])
-                    .unwrap(),
-                )
-                .unwrap();
-
                 let angle_radians =
                     xyz_two_arc_angle_radians(&triangle[0], &triangle[1], &triangle[2]);
 
-                if ray.crosses(&self.boundary) {
+                if crate::arcstring::arc_crosses_arcstring(
+                    (&xyzs_mean(&triangle), &self.interior_point.xyz),
+                    &self.boundary,
+                ) {
                     // invert angle if it's on the exterior of the polygon
                     2.0 * std::f64::consts::PI - angle_radians
                 } else {
                     angle_radians
                 }
-                .to_degrees()
             })
             .collect::<Vec<f64>>();
 
@@ -366,7 +345,7 @@ impl Geometry for SphericalPolygon {
                 (index + 1..self.boundary.points.len())
                     .filter_map(|other_index| {
                         if index != other_index {
-                            Some(crate::sphericalpoint::xyz_radians_over_sphere_between(
+                            Some(crate::sphericalpoint::xyzs_distance_over_sphere_radians(
                                 &self.boundary.points.xyzs[index],
                                 &self.boundary.points.xyzs[other_index],
                             ))
@@ -529,13 +508,8 @@ impl GeometricOperations<ArcString> for SphericalPolygon {
     fn contains(&self, other: &ArcString) -> bool {
         self.touches(other)
             || self.crosses(other)
-            || self.contains(
-                &MultiSphericalPoint::try_from(
-                    // endpoints of an arcstring are not part of the set
-                    other.points.xyzs[1..other.points.len() - 1].to_owned(),
-                )
-                .unwrap(),
-            )
+            // endpoints of an arcstring are not part of the set
+            || other.points.xyzs[1..other.points.len() - 1].iter().all(|xyz| point_in_polygon_boundary(xyz, &self.interior_point.xyz, &self.boundary.points.xyzs))
     }
 
     fn within(&self, _: &ArcString) -> bool {

@@ -2,7 +2,7 @@ use std::collections::HashMap;
 
 use crate::arcstring::ArcString;
 use crate::geometry::{GeometricOperations, Geometry};
-use crate::sphericalpoint::{xyz_eq, xyz_radians_over_sphere_between, MultiSphericalPoint};
+use crate::sphericalpoint::{xyz_eq, xyzs_distance_over_sphere_radians, MultiSphericalPoint};
 use crate::sphericalpolygon::SphericalPolygon;
 
 pub trait ToGraph<S: Geometry> {
@@ -224,11 +224,11 @@ where
 
     /// remove edges of 0 length
     pub fn remove_degenerate_edges(&mut self) -> Vec<((usize, usize), Vec<usize>)> {
-        let tolerance = 2e-8;
+        let tolerance = 3e-11;
         let mut removed = vec![];
         for (node_index, node) in self.nodes.to_owned().iter().enumerate() {
             for edge_node_index in node.edges.keys() {
-                if xyz_radians_over_sphere_between(&node.xyz, &self.nodes[*edge_node_index].xyz)
+                if xyzs_distance_over_sphere_radians(&node.xyz, &self.nodes[*edge_node_index].xyz)
                     < tolerance
                 {
                     if let Some(edge) = self.remove_edge(node_index, *edge_node_index) {
@@ -300,10 +300,8 @@ where
                         {
                             let other_end_node = &self.nodes[*other_end_node_index];
                             if let Some(crossing) = crate::arcstring::xyz_two_arc_crossing(
-                                &start_node.xyz,
-                                &end_node.xyz,
-                                &other_start_node.xyz,
-                                &other_end_node.xyz,
+                                (&start_node.xyz, &end_node.xyz),
+                                (&other_start_node.xyz, &other_end_node.xyz),
                             ) {
                                 // create a new node at the crossing with four edges
                                 let crossing_node = Node {
