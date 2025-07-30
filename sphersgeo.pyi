@@ -132,7 +132,7 @@ class SphericalPoint:
         | MultiSphericalPolygon,
     ) -> AnyGeometry | None: ...
 
-    def split(
+    def symmetric_difference(
         self,
         other: SphericalPoint
         | MultiSphericalPoint
@@ -150,7 +150,7 @@ class SphericalPoint:
 
     def __div__(self, other: SphericalPoint) -> SphericalPoint: ...
 
-    def __eq__(self, other: SphericalPoint) -> bool: ...
+    def __eq__(self, other) -> bool: ...
 
     def __str__(self) -> str: ...
 
@@ -271,7 +271,7 @@ class MultiSphericalPoint:
         | MultiSphericalPolygon,
     ) -> AnyGeometry | None: ...
 
-    def split(
+    def symmetric_difference(
         self,
         other: SphericalPoint
         | MultiSphericalPoint
@@ -298,7 +298,7 @@ class MultiSphericalPoint:
 
     def __iadd__(self, other: MultiSphericalPoint): ...
 
-    def __eq__(self, other: MultiSphericalPoint) -> bool: ...
+    def __eq__(self, other) -> bool: ...
 
     def __str__(self) -> str: ...
 
@@ -425,7 +425,7 @@ class ArcString:
         | MultiSphericalPolygon,
     ) -> AnyGeometry | None: ...
 
-    def split(
+    def symmetric_difference(
         self,
         other: SphericalPoint
         | MultiSphericalPoint
@@ -435,7 +435,7 @@ class ArcString:
         | MultiSphericalPolygon,
     ) -> AnyGeometry: ...
 
-    def __eq__(self, other: SphericalPoint) -> bool: ...
+    def __eq__(self, other) -> bool: ...
 
     def __str__(self) -> str: ...
 
@@ -545,7 +545,7 @@ class MultiArcString:
         | MultiSphericalPolygon,
     ) -> AnyGeometry | None: ...
 
-    def split(
+    def symmetric_difference(
         self,
         other: SphericalPoint
         | MultiSphericalPoint
@@ -555,7 +555,7 @@ class MultiArcString:
         | MultiSphericalPolygon,
     ) -> AnyGeometry: ...
 
-    def __eq__(self, other: SphericalPoint) -> bool: ...
+    def __eq__(self, other) -> bool: ...
 
     def __str__(self) -> str: ...
 
@@ -686,7 +686,7 @@ class SphericalPolygon:
         | MultiSphericalPolygon,
     ) -> AnyGeometry | None: ...
 
-    def split(
+    def symmetric_difference(
         self,
         other: SphericalPoint
         | MultiSphericalPoint
@@ -696,7 +696,7 @@ class SphericalPolygon:
         | MultiSphericalPolygon,
     ) -> AnyGeometry: ...
 
-    def __eq__(self, other: SphericalPoint) -> bool: ...
+    def __eq__(self, other) -> bool: ...
 
     def __str__(self) -> str: ...
 
@@ -797,7 +797,7 @@ class MultiSphericalPolygon:
         | MultiSphericalPolygon,
     ) -> AnyGeometry | None: ...
 
-    def split(
+    def symmetric_difference(
         self,
         other: SphericalPoint
         | MultiSphericalPoint
@@ -807,7 +807,7 @@ class MultiSphericalPolygon:
         | MultiSphericalPolygon,
     ) -> AnyGeometry: ...
 
-    def __eq__(self, other: SphericalPoint) -> bool: ...
+    def __eq__(self, other) -> bool: ...
 
     def __str__(self) -> str: ...
 

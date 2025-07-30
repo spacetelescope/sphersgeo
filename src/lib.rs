@@ -12,7 +12,9 @@ use pyo3::prelude::*;
 #[pymodule(name = "sphersgeo")]
 mod py_sphersgeo {
     use super::*;
-    use crate::geometry::{AnyGeometry, GeometricOperations, Geometry, MultiGeometry};
+    use crate::geometry::{
+        AnyGeometry, GeometricOperations, GeometricPredicates, Geometry, MultiGeometry,
+    };
     use numpy::{
         ndarray::{Array1, Array2},
         IntoPyArray, PyArray1, PyArray2, PyReadonlyArray1, PyReadonlyArray2,
@@ -285,26 +287,26 @@ mod py_sphersgeo {
             }
         }
 
-        #[pyo3(name = "split")]
-        fn py_split(&self, other: AnyGeometry) -> AnyGeometry {
+        #[pyo3(name = "symmetric_difference")]
+        fn py_symmetric_difference(&self, other: AnyGeometry) -> AnyGeometry {
             match other {
                 AnyGeometry::SphericalPoint(point) => {
-                    AnyGeometry::MultiSphericalPoint(self.split(&point))
+                    AnyGeometry::MultiSphericalPoint(self.symmetric_difference(&point))
                 }
                 AnyGeometry::MultiSphericalPoint(multipoint) => {
-                    AnyGeometry::MultiSphericalPoint(self.split(&multipoint))
+                    AnyGeometry::MultiSphericalPoint(self.symmetric_difference(&multipoint))
                 }
                 AnyGeometry::ArcString(arcstring) => {
-                    AnyGeometry::MultiSphericalPoint(self.split(&arcstring))
+                    AnyGeometry::MultiSphericalPoint(self.symmetric_difference(&arcstring))
                 }
                 AnyGeometry::MultiArcString(multiarcstring) => {
-                    AnyGeometry::MultiSphericalPoint(self.split(&multiarcstring))
+                    AnyGeometry::MultiSphericalPoint(self.symmetric_difference(&multiarcstring))
                 }
                 AnyGeometry::SphericalPolygon(polygon) => {
-                    AnyGeometry::MultiSphericalPoint(self.split(&polygon))
+                    AnyGeometry::MultiSphericalPoint(self.symmetric_difference(&polygon))
                 }
                 AnyGeometry::MultiSphericalPolygon(multipolygon) => {
-                    AnyGeometry::MultiSphericalPoint(self.split(&multipolygon))
+                    AnyGeometry::MultiSphericalPoint(self.symmetric_difference(&multipolygon))
                 }
             }
         }
@@ -581,26 +583,26 @@ mod py_sphersgeo {
                     .map(AnyGeometry::MultiSphericalPoint),
             }
         }
-        #[pyo3(name = "split")]
-        fn py_split(&self, other: AnyGeometry) -> AnyGeometry {
+        #[pyo3(name = "symmetric_difference")]
+        fn py_symmetric_difference(&self, other: AnyGeometry) -> AnyGeometry {
             match other {
                 AnyGeometry::SphericalPoint(point) => {
-                    AnyGeometry::MultiSphericalPoint(self.split(&point))
+                    AnyGeometry::MultiSphericalPoint(self.symmetric_difference(&point))
                 }
                 AnyGeometry::MultiSphericalPoint(multipoint) => {
-                    AnyGeometry::MultiSphericalPoint(self.split(&multipoint))
+                    AnyGeometry::MultiSphericalPoint(self.symmetric_difference(&multipoint))
                 }
                 AnyGeometry::ArcString(arcstring) => {
-                    AnyGeometry::MultiSphericalPoint(self.split(&arcstring))
+                    AnyGeometry::MultiSphericalPoint(self.symmetric_difference(&arcstring))
                 }
                 AnyGeometry::MultiArcString(multiarcstring) => {
-                    AnyGeometry::MultiSphericalPoint(self.split(&multiarcstring))
+                    AnyGeometry::MultiSphericalPoint(self.symmetric_difference(&multiarcstring))
                 }
                 AnyGeometry::SphericalPolygon(polygon) => {
-                    AnyGeometry::MultiSphericalPoint(self.split(&polygon))
+                    AnyGeometry::MultiSphericalPoint(self.symmetric_difference(&polygon))
                 }
                 AnyGeometry::MultiSphericalPolygon(multipolygon) => {
-                    AnyGeometry::MultiSphericalPoint(self.split(&multipolygon))
+                    AnyGeometry::MultiSphericalPoint(self.symmetric_difference(&multipolygon))
                 }
             }
         }
@@ -885,26 +887,26 @@ mod py_sphersgeo {
                     .map(AnyGeometry::MultiArcString),
             }
         }
-        #[pyo3(name = "split")]
-        fn py_split(&self, other: AnyGeometry) -> AnyGeometry {
+        #[pyo3(name = "symmetric_difference")]
+        fn py_symmetric_difference(&self, other: AnyGeometry) -> AnyGeometry {
             match other {
                 AnyGeometry::SphericalPoint(point) => {
-                    AnyGeometry::MultiArcString(self.split(&point))
+                    AnyGeometry::MultiArcString(self.symmetric_difference(&point))
                 }
                 AnyGeometry::MultiSphericalPoint(multipoint) => {
-                    AnyGeometry::MultiArcString(self.split(&multipoint))
+                    AnyGeometry::MultiArcString(self.symmetric_difference(&multipoint))
                 }
                 AnyGeometry::ArcString(arcstring) => {
-                    AnyGeometry::MultiArcString(self.split(&arcstring))
+                    AnyGeometry::MultiArcString(self.symmetric_difference(&arcstring))
                 }
                 AnyGeometry::MultiArcString(multiarcstring) => {
-                    AnyGeometry::MultiArcString(self.split(&multiarcstring))
+                    AnyGeometry::MultiArcString(self.symmetric_difference(&multiarcstring))
                 }
                 AnyGeometry::SphericalPolygon(polygon) => {
-                    AnyGeometry::MultiArcString(self.split(&polygon))
+                    AnyGeometry::MultiArcString(self.symmetric_difference(&polygon))
                 }
                 AnyGeometry::MultiSphericalPolygon(multipolygon) => {
-                    AnyGeometry::MultiArcString(self.split(&multipolygon))
+                    AnyGeometry::MultiArcString(self.symmetric_difference(&multipolygon))
                 }
             }
         }
@@ -1113,26 +1115,26 @@ mod py_sphersgeo {
                     .map(AnyGeometry::MultiArcString),
             }
         }
-        #[pyo3(name = "split")]
-        fn py_split(&self, other: AnyGeometry) -> AnyGeometry {
+        #[pyo3(name = "symmetric_difference")]
+        fn py_symmetric_difference(&self, other: AnyGeometry) -> AnyGeometry {
             match other {
                 AnyGeometry::SphericalPoint(point) => {
-                    AnyGeometry::MultiArcString(self.split(&point))
+                    AnyGeometry::MultiArcString(self.symmetric_difference(&point))
                 }
                 AnyGeometry::MultiSphericalPoint(multipoint) => {
-                    AnyGeometry::MultiArcString(self.split(&multipoint))
+                    AnyGeometry::MultiArcString(self.symmetric_difference(&multipoint))
                 }
                 AnyGeometry::ArcString(arcstring) => {
-                    AnyGeometry::MultiArcString(self.split(&arcstring))
+                    AnyGeometry::MultiArcString(self.symmetric_difference(&arcstring))
                 }
                 AnyGeometry::MultiArcString(multiarcstring) => {
-                    AnyGeometry::MultiArcString(self.split(&multiarcstring))
+                    AnyGeometry::MultiArcString(self.symmetric_difference(&multiarcstring))
                 }
                 AnyGeometry::SphericalPolygon(polygon) => {
-                    AnyGeometry::MultiArcString(self.split(&polygon))
+                    AnyGeometry::MultiArcString(self.symmetric_difference(&polygon))
                 }
                 AnyGeometry::MultiSphericalPolygon(multipolygon) => {
-                    AnyGeometry::MultiArcString(self.split(&multipolygon))
+                    AnyGeometry::MultiArcString(self.symmetric_difference(&multipolygon))
                 }
             }
         }
@@ -1331,26 +1333,26 @@ mod py_sphersgeo {
                     .map(AnyGeometry::MultiSphericalPolygon),
             }
         }
-        #[pyo3(name = "split")]
-        fn py_split(&self, other: AnyGeometry) -> AnyGeometry {
+        #[pyo3(name = "symmetric_difference")]
+        fn py_symmetric_difference(&self, other: AnyGeometry) -> AnyGeometry {
             match other {
                 AnyGeometry::SphericalPoint(point) => {
-                    AnyGeometry::MultiSphericalPolygon(self.split(&point))
+                    AnyGeometry::MultiSphericalPolygon(self.symmetric_difference(&point))
                 }
                 AnyGeometry::MultiSphericalPoint(multipoint) => {
-                    AnyGeometry::MultiSphericalPolygon(self.split(&multipoint))
+                    AnyGeometry::MultiSphericalPolygon(self.symmetric_difference(&multipoint))
                 }
                 AnyGeometry::ArcString(arcstring) => {
-                    AnyGeometry::MultiSphericalPolygon(self.split(&arcstring))
+                    AnyGeometry::MultiSphericalPolygon(self.symmetric_difference(&arcstring))
                 }
                 AnyGeometry::MultiArcString(multiarcstring) => {
-                    AnyGeometry::MultiSphericalPolygon(self.split(&multiarcstring))
+                    AnyGeometry::MultiSphericalPolygon(self.symmetric_difference(&multiarcstring))
                 }
                 AnyGeometry::SphericalPolygon(polygon) => {
-                    AnyGeometry::MultiSphericalPolygon(self.split(&polygon))
+                    AnyGeometry::MultiSphericalPolygon(self.symmetric_difference(&polygon))
                 }
                 AnyGeometry::MultiSphericalPolygon(multipolygon) => {
-                    AnyGeometry::MultiSphericalPolygon(self.split(&multipolygon))
+                    AnyGeometry::MultiSphericalPolygon(self.symmetric_difference(&multipolygon))
                 }
             }
         }
@@ -1542,26 +1544,26 @@ mod py_sphersgeo {
                     .map(AnyGeometry::MultiSphericalPolygon),
             }
         }
-        #[pyo3(name = "split")]
-        fn py_split(&self, other: AnyGeometry) -> AnyGeometry {
+        #[pyo3(name = "symmetric_difference")]
+        fn py_symmetric_difference(&self, other: AnyGeometry) -> AnyGeometry {
             match other {
                 AnyGeometry::SphericalPoint(point) => {
-                    AnyGeometry::MultiSphericalPolygon(self.split(&point))
+                    AnyGeometry::MultiSphericalPolygon(self.symmetric_difference(&point))
                 }
                 AnyGeometry::MultiSphericalPoint(multipoint) => {
-                    AnyGeometry::MultiSphericalPolygon(self.split(&multipoint))
+                    AnyGeometry::MultiSphericalPolygon(self.symmetric_difference(&multipoint))
                 }
                 AnyGeometry::ArcString(arcstring) => {
-                    AnyGeometry::MultiSphericalPolygon(self.split(&arcstring))
+                    AnyGeometry::MultiSphericalPolygon(self.symmetric_difference(&arcstring))
                 }
                 AnyGeometry::MultiArcString(multiarcstring) => {
-                    AnyGeometry::MultiSphericalPolygon(self.split(&multiarcstring))
+                    AnyGeometry::MultiSphericalPolygon(self.symmetric_difference(&multiarcstring))
                 }
                 AnyGeometry::SphericalPolygon(polygon) => {
-                    AnyGeometry::MultiSphericalPolygon(self.split(&polygon))
+                    AnyGeometry::MultiSphericalPolygon(self.symmetric_difference(&polygon))
                 }
                 AnyGeometry::MultiSphericalPolygon(multipolygon) => {
-                    AnyGeometry::MultiSphericalPolygon(self.split(&multipolygon))
+                    AnyGeometry::MultiSphericalPolygon(self.symmetric_difference(&multipolygon))
                 }
             }
         }

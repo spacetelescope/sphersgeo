@@ -1,13 +1,5 @@
+use crate::geometry::GeometricPredicates;
 use std::collections::HashMap;
-
-use crate::arcstring::ArcString;
-use crate::geometry::{GeometricOperations, Geometry};
-use crate::sphericalpoint::{xyz_eq, xyzs_distance_over_sphere_radians, MultiSphericalPoint};
-use crate::sphericalpolygon::SphericalPolygon;
-
-pub trait ToGraph<S: Geometry> {
-    fn to_graph(&self) -> EdgeGraph<S>;
-}
 
 #[derive(Clone, Debug)]
 pub struct Node {
@@ -19,19 +11,19 @@ pub struct Node {
 
 impl PartialEq for Node {
     fn eq(&self, other: &Self) -> bool {
-        xyz_eq(&self.xyz, &other.xyz)
+        crate::sphericalpoint::xyz_eq(&self.xyz, &other.xyz)
     }
 }
 
 #[derive(Clone, Debug)]
 /// graph of edges for performing operations (union, overlap, split)
 /// on collections of higher-order geometries (arcstrings, polygons)
-pub struct EdgeGraph<'a, G: Geometry> {
+pub struct EdgeGraph<'a, G: crate::geometry::Geometry> {
     pub nodes: Vec<Node>,
     pub geometries: Vec<&'a G>,
 }
 
-impl<'a> Default for EdgeGraph<'a, SphericalPolygon> {
+impl<'a> Default for EdgeGraph<'a, crate::sphericalpolygon::SphericalPolygon> {
     fn default() -> Self {
         Self {
             nodes: vec![],
@@ -40,7 +32,7 @@ impl<'a> Default for EdgeGraph<'a, SphericalPolygon> {
     }
 }
 
-impl<'a> Default for EdgeGraph<'a, ArcString> {
+impl<'a> Default for EdgeGraph<'a, crate::arcstring::ArcString> {
     fn default() -> Self {
         Self {
             nodes: vec![],
@@ -49,23 +41,47 @@ impl<'a> Default for EdgeGraph<'a, ArcString> {
     }
 }
 
-impl<'a> From<Vec<&'a SphericalPolygon>> for EdgeGraph<'a, SphericalPolygon> {
-    fn from(polygons: Vec<&'a SphericalPolygon>) -> Self {
-        let mut instance = Self::default();
+impl<'a> From<&'a crate::sphericalpolygon::MultiSphericalPolygon>
+    for EdgeGraph<'a, crate::sphericalpolygon::SphericalPolygon>
+{
+    fn from(polygons: &'a crate::sphericalpolygon::MultiSphericalPolygon) -> Self {
+        let mut graph = Self::default();
+        for polygon in polygons.polygons.iter() {
+            graph.push(polygon);
+        }
+        graph
+    }
+}
+
+impl<'a> From<Vec<&'a crate::sphericalpolygon::SphericalPolygon>>
+    for EdgeGraph<'a, crate::sphericalpolygon::SphericalPolygon>
+{
+    fn from(polygons: Vec<&'a crate::sphericalpolygon::SphericalPolygon>) -> Self {
+        let mut graph = Self::default();
         for polygon in polygons {
-            instance.push(polygon);
+            graph.push(polygon);
         }
-        instance
+        graph
     }
 }
 
-impl<'a> From<Vec<&'a ArcString>> for EdgeGraph<'a, ArcString> {
-    fn from(arcstrings: Vec<&'a ArcString>) -> Self {
-        let mut instance = Self::default();
-        for arcstring in arcstrings {
-            instance.push(arcstring);
+impl<'a> From<&'a crate::arcstring::MultiArcString> for EdgeGraph<'a, crate::arcstring::ArcString> {
+    fn from(arcstrings: &'a crate::arcstring::MultiArcString) -> Self {
+        let mut graph = Self::default();
+        for arcstring in arcstrings.arcstrings.iter() {
+            graph.push(arcstring);
         }
-        instance
+        graph
+    }
+}
+
+impl<'a> From<Vec<&'a crate::arcstring::ArcString>> for EdgeGraph<'a, crate::arcstring::ArcString> {
+    fn from(arcstrings: Vec<&'a crate::arcstring::ArcString>) -> Self {
+        let mut graph = Self::default();
+        for arcstring in arcstrings {
+            graph.push(arcstring);
+        }
+        graph
     }
 }
 
@@ -73,14 +89,14 @@ type Edge = ((usize, usize), Vec<usize>);
 
 impl<'a, G> EdgeGraph<'a, G>
 where
-    G: Geometry + PartialEq,
+    G: crate::geometry::Geometry + PartialEq,
 {
     pub fn new_node(&mut self, xyz: &'a [f64; 3]) -> usize {
         // check if node already exists...
         if let Some(existing_index) = self
             .nodes
             .iter()
-            .position(|existing_node| xyz_eq(&existing_node.xyz, xyz))
+            .position(|existing_node| crate::sphericalpoint::xyz_eq(&existing_node.xyz, xyz))
         {
             existing_index
         } else {
@@ -156,7 +172,7 @@ where
 
     pub fn get_node_from_xyz(&self, xyz: &[f64; 3]) -> Option<usize> {
         for (index, node) in self.nodes.iter().enumerate() {
-            if xyz_eq(&node.xyz, xyz) {
+            if crate::sphericalpoint::xyz_eq(&node.xyz, xyz) {
                 return Some(index);
             }
         }
@@ -228,8 +244,10 @@ where
         let mut removed = vec![];
         for (node_index, node) in self.nodes.to_owned().iter().enumerate() {
             for edge_node_index in node.edges.keys() {
-                if xyzs_distance_over_sphere_radians(&node.xyz, &self.nodes[*edge_node_index].xyz)
-                    < tolerance
+                if crate::sphericalpoint::xyzs_distance_over_sphere_radians(
+                    &node.xyz,
+                    &self.nodes[*edge_node_index].xyz,
+                ) < tolerance
                 {
                     if let Some(edge) = self.remove_edge(node_index, *edge_node_index) {
                         removed.push(edge);
@@ -338,7 +356,7 @@ where
     }
 }
 
-impl<'a> EdgeGraph<'a, SphericalPolygon> {
+impl<'a> EdgeGraph<'a, crate::sphericalpolygon::SphericalPolygon> {
     /// assign each edge to intersecting polygon(s)
     pub fn assign_polygons_to_edges(&mut self) {
         let mut pending_source_updates: HashMap<usize, Vec<usize>> = HashMap::new();
@@ -353,8 +371,8 @@ impl<'a> EdgeGraph<'a, SphericalPolygon> {
                 )
                 .unwrap();
 
-                for (geometry_index, geometry) in self.geometries.iter().enumerate() {
-                    if !sources.contains(&geometry_index) && geometry.intersects(&arcstring) {
+                for (polygon_index, polygon) in self.geometries.iter().enumerate() {
+                    if !sources.contains(&polygon_index) && polygon.intersects(&arcstring) {
                         pending_source_updates
                             .entry(node_index)
                             .or_insert_with(|| sources.to_owned());
@@ -362,7 +380,7 @@ impl<'a> EdgeGraph<'a, SphericalPolygon> {
                         pending_source_updates
                             .get_mut(&node_index)
                             .unwrap()
-                            .push(geometry_index);
+                            .push(polygon_index);
                     }
                 }
             }
@@ -374,13 +392,15 @@ impl<'a> EdgeGraph<'a, SphericalPolygon> {
     }
 }
 
-pub trait GeometryGraph<'a, G: Geometry> {
+pub trait GeometryGraph<'a, G: crate::geometry::Geometry> {
     /// add a geometry's edges to the edge graph
     fn push(&mut self, geometry: &'a G);
 }
 
-impl<'a> GeometryGraph<'a, SphericalPolygon> for EdgeGraph<'a, SphericalPolygon> {
-    fn push(&mut self, polygon: &'a SphericalPolygon) {
+impl<'a> GeometryGraph<'a, crate::sphericalpolygon::SphericalPolygon>
+    for EdgeGraph<'a, crate::sphericalpolygon::SphericalPolygon>
+{
+    fn push(&mut self, polygon: &'a crate::sphericalpolygon::SphericalPolygon) {
         let node_indices = polygon
             .boundary
             .points
@@ -432,8 +452,10 @@ impl<'a> GeometryGraph<'a, SphericalPolygon> for EdgeGraph<'a, SphericalPolygon>
     }
 }
 
-impl<'a> From<EdgeGraph<'a, SphericalPolygon>> for Vec<SphericalPolygon> {
-    fn from(graph: EdgeGraph<'a, SphericalPolygon>) -> Self {
+impl<'a> From<EdgeGraph<'a, crate::sphericalpolygon::SphericalPolygon>>
+    for Vec<crate::sphericalpolygon::SphericalPolygon>
+{
+    fn from(graph: EdgeGraph<'a, crate::sphericalpolygon::SphericalPolygon>) -> Self {
         let mut polygons = vec![];
         let mut claimed_nodes = vec![];
 
@@ -456,8 +478,10 @@ impl<'a> From<EdgeGraph<'a, SphericalPolygon>> for Vec<SphericalPolygon> {
     }
 }
 
-impl<'a> GeometryGraph<'a, ArcString> for EdgeGraph<'a, ArcString> {
-    fn push(&mut self, arcstring: &'a ArcString) {
+impl<'a> GeometryGraph<'a, crate::arcstring::ArcString>
+    for EdgeGraph<'a, crate::arcstring::ArcString>
+{
+    fn push(&mut self, arcstring: &'a crate::arcstring::ArcString) {
         let node_indices = arcstring
             .points
             .xyzs
@@ -510,8 +534,8 @@ impl<'a> GeometryGraph<'a, ArcString> for EdgeGraph<'a, ArcString> {
     }
 }
 
-impl<'a> From<EdgeGraph<'a, ArcString>> for Vec<ArcString> {
-    fn from(value: EdgeGraph<'a, ArcString>) -> Self {
+impl<'a> From<EdgeGraph<'a, crate::arcstring::ArcString>> for Vec<crate::arcstring::ArcString> {
+    fn from(value: EdgeGraph<'a, crate::arcstring::ArcString>) -> Self {
         todo!()
     }
 }
@@ -521,7 +545,7 @@ fn trace_polygons(
     claimed_node_indices: &mut Vec<usize>,
     polygon_node_indices: &Vec<usize>,
     edge_sources: &Vec<usize>,
-) -> Vec<SphericalPolygon> {
+) -> Vec<crate::sphericalpolygon::SphericalPolygon> {
     if nodes.is_empty() {
         vec![]
     } else {
@@ -598,9 +622,9 @@ fn trace_polygons(
         } else {
             // if the traced polygon is closed...
             if polygon_node_indices[0] == polygon_node_indices[polygon_node_indices.len() - 1] {
-                vec![SphericalPolygon::try_new(
-                    ArcString::try_from(
-                        MultiSphericalPoint::try_from(
+                vec![crate::sphericalpolygon::SphericalPolygon::try_new(
+                    crate::arcstring::ArcString::try_from(
+                        crate::sphericalpoint::MultiSphericalPoint::try_from(
                             polygon_node_indices
                                 .iter()
                                 .map(|node_index| nodes[*node_index].xyz)

@@ -4,9 +4,9 @@ use pyo3::prelude::*;
 pub trait Geometry {
     fn vertices(&self) -> crate::sphericalpoint::MultiSphericalPoint;
 
-    fn area(&self) -> f64;
-
-    fn length(&self) -> f64;
+    /// lower dimension geometry that bounds the object
+    /// The boundary of a polygon is a line, the boundary of a line is a collection of endpoints, and the boundary of a point is null.
+    fn boundary(&self) -> Option<impl Geometry>;
 
     /// point guaranteed to be within the object
     fn representative(&self) -> crate::sphericalpoint::SphericalPoint;
@@ -14,13 +14,13 @@ pub trait Geometry {
     // mean position of all possible points within the geometry
     fn centroid(&self) -> crate::sphericalpoint::SphericalPoint;
 
-    /// lower dimension geometry that bounds the object
-    /// The boundary of a polygon is a line, the boundary of a line is a collection of endpoints, and the boundary of a point is null.
-    fn boundary(&self) -> Option<impl Geometry>;
-
     fn convex_hull(&self) -> Option<crate::sphericalpolygon::SphericalPolygon> {
         self.vertices().convex_hull()
     }
+
+    fn area(&self) -> f64;
+
+    fn length(&self) -> f64;
 }
 
 pub trait MultiGeometry<G: Geometry> {
@@ -34,23 +34,22 @@ pub trait MultiGeometry<G: Geometry> {
     fn push(&mut self, other: G);
 }
 
-pub trait GeometricOperations<O: Geometry = Self, S: Geometry = Self> {
-    /// shortest great-circle distance over the sphere from any part of this geometry to another
-    fn distance(&self, other: &O) -> f64;
-
-    /// One geometry contains another if the other geometry is a subset of it and their interiors have at least one point in common.
-    /// Contains is the inverse of Within.
-    /// https://esri.github.io/geometry-api-java/doc/Contains.html
-    fn contains(&self, other: &O) -> bool;
-
-    /// One geometry is within another if it is a subset of the other geometry and their interiors have at least one point in common. Within is the inverse of Contains.
-    /// https://esri.github.io/geometry-api-java/doc/Within.html
-    fn within(&self, other: &O) -> bool;
+pub trait GeometricPredicates<O: Geometry = Self> {
+    /// Two geometries intersect if they share at least one point in common.
+    /// https://esri.github.io/geometry-api-java/doc/Intersects.html
+    fn intersects(&self, other: &O) -> bool;
 
     /// An object is said to touch other if it has at least one point in common with other and its interior does not intersect with any part of the other.
     /// Overlapping features therefore do not touch.
     /// https://esri.github.io/geometry-api-java/doc/Touches.html
     fn touches(&self, other: &O) -> bool;
+
+    /// Two geometries are disjoint if they don’t have any points in common.
+    /// Disjoint is the inverse of Intersects. Disjoint is the most efficient operator and is guaranteed to work even on non-simple geometries.
+    /// https://esri.github.io/geometry-api-java/doc/Disjoint.html
+    fn disjoint(&self, other: &O) -> bool {
+        !self.intersects(other)
+    }
 
     /// the geometries have some, but not all interior points in common
     ///
@@ -59,9 +58,31 @@ pub trait GeometricOperations<O: Geometry = Self, S: Geometry = Self> {
     /// https://esri.github.io/geometry-api-java/doc/Crosses.html
     fn crosses(&self, other: &O) -> bool;
 
-    /// Two geometries intersect if they share at least one point in common.
-    /// https://esri.github.io/geometry-api-java/doc/Intersects.html
-    fn intersects(&self, other: &O) -> bool;
+    /// One geometry is within another if it is a subset of the other geometry and their interiors have at least one point in common. Within is the inverse of Contains.
+    /// https://esri.github.io/geometry-api-java/doc/Within.html
+    fn within(&self, other: &O) -> bool;
+
+    /// One geometry contains another if the other geometry is a subset of it and their interiors have at least one point in common.
+    /// Contains is the inverse of Within.
+    /// https://esri.github.io/geometry-api-java/doc/Contains.html
+    fn contains(&self, other: &O) -> bool;
+
+    /// Two geometries overlap if they have the same dimension, and their intersection also has the same dimension but is different from both of them.
+    /// https://esri.github.io/geometry-api-java/doc/Overlaps.html
+    fn overlaps(&self, other: &O) -> bool {
+        false
+    }
+
+    /// Whether every point of other is a point on the interior or boundary of object.
+    /// This is similar to object.contains(other) except that this does not require any interior points of other to lie in the interior of object.
+    fn covers(&self, other: &O) -> bool;
+}
+
+pub trait GeometricOperations<O: Geometry = Self, S: Geometry = Self> {
+    fn union(&self, other: &O) -> Option<impl MultiGeometry<S>>;
+
+    /// shortest great-circle distance over the sphere from any part of this geometry to another
+    fn distance(&self, other: &O) -> f64;
 
     /// any part of this geometry that is within another
     ///
@@ -71,18 +92,18 @@ pub trait GeometricOperations<O: Geometry = Self, S: Geometry = Self> {
     fn intersection(&self, other: &O) -> Option<impl Geometry>;
 
     /// split this geometry into a multi-geometry, at the crossing with the given geometry
-    fn split(&self, other: &O) -> impl MultiGeometry<S>;
+    fn symmetric_difference(&self, other: &O) -> impl MultiGeometry<S>;
 }
 
 pub trait GeometryCollection<G: Geometry, M: MultiGeometry<G> = Self> {
-    /// join geometries into one; errors if any of the geometries are disjoint
-    fn join(&self) -> M;
+    /// join geometries into one
+    fn join_self(&self) -> M;
 
     /// find overlapping regions between geometries, if any
-    fn overlap(&self) -> Option<M>;
+    fn overlap_self(&self) -> Option<M>;
 
-    /// split all geometries so none are overlapping
-    fn symmetric_split(&self) -> M;
+    /// only return non-overlapping regions between geometries
+    fn symmetric_difference_self(&self) -> Option<M>;
 }
 
 #[derive(FromPyObject, IntoPyObject, Debug, Clone, PartialEq)]
@@ -99,131 +120,6 @@ pub enum AnyGeometry {
     SphericalPolygon(crate::sphericalpolygon::SphericalPolygon),
     #[pyo3(transparent)]
     MultiSphericalPolygon(crate::sphericalpolygon::MultiSphericalPolygon),
-}
-
-impl Geometry for AnyGeometry {
-    fn vertices(&self) -> crate::sphericalpoint::MultiSphericalPoint {
-        match self {
-            AnyGeometry::SphericalPoint(point) => point.vertices(),
-            AnyGeometry::MultiSphericalPoint(multipoint) => multipoint.vertices(),
-            AnyGeometry::ArcString(arcstring) => arcstring.vertices(),
-            AnyGeometry::MultiArcString(multiarcstring) => multiarcstring.vertices(),
-            AnyGeometry::SphericalPolygon(polygon) => polygon.vertices(),
-            AnyGeometry::MultiSphericalPolygon(multipolygon) => multipolygon.vertices(),
-        }
-    }
-
-    fn area(&self) -> f64 {
-        match self {
-            AnyGeometry::SphericalPoint(point) => point.area(),
-            AnyGeometry::MultiSphericalPoint(multipoint) => multipoint.area(),
-            AnyGeometry::ArcString(arcstring) => arcstring.area(),
-            AnyGeometry::MultiArcString(multiarcstring) => multiarcstring.area(),
-            AnyGeometry::SphericalPolygon(polygon) => polygon.area(),
-            AnyGeometry::MultiSphericalPolygon(multipolygon) => multipolygon.area(),
-        }
-    }
-
-    fn length(&self) -> f64 {
-        match self {
-            AnyGeometry::SphericalPoint(point) => point.length(),
-            AnyGeometry::MultiSphericalPoint(multipoint) => multipoint.length(),
-            AnyGeometry::ArcString(arcstring) => arcstring.length(),
-            AnyGeometry::MultiArcString(multiarcstring) => multiarcstring.length(),
-            AnyGeometry::SphericalPolygon(polygon) => polygon.length(),
-            AnyGeometry::MultiSphericalPolygon(multipolygon) => multipolygon.length(),
-        }
-    }
-
-    fn representative(&self) -> crate::sphericalpoint::SphericalPoint {
-        match self {
-            AnyGeometry::SphericalPoint(point) => point.representative(),
-            AnyGeometry::MultiSphericalPoint(multipoint) => multipoint.representative(),
-            AnyGeometry::ArcString(arcstring) => arcstring.representative(),
-            AnyGeometry::MultiArcString(multiarcstring) => multiarcstring.representative(),
-            AnyGeometry::SphericalPolygon(polygon) => polygon.representative(),
-            AnyGeometry::MultiSphericalPolygon(multipolygon) => multipolygon.representative(),
-        }
-    }
-
-    fn centroid(&self) -> crate::sphericalpoint::SphericalPoint {
-        match self {
-            AnyGeometry::SphericalPoint(point) => point.centroid(),
-            AnyGeometry::MultiSphericalPoint(multipoint) => multipoint.centroid(),
-            AnyGeometry::ArcString(arcstring) => arcstring.centroid(),
-            AnyGeometry::MultiArcString(multiarcstring) => multiarcstring.centroid(),
-            AnyGeometry::SphericalPolygon(polygon) => polygon.centroid(),
-            AnyGeometry::MultiSphericalPolygon(multipolygon) => multipolygon.centroid(),
-        }
-    }
-
-    fn boundary(&self) -> Option<AnyGeometry> {
-        match self {
-            AnyGeometry::SphericalPoint(point) => point.boundary().map(AnyGeometry::SphericalPoint),
-            AnyGeometry::MultiSphericalPoint(multipoint) => {
-                multipoint.boundary().map(AnyGeometry::MultiSphericalPoint)
-            }
-            AnyGeometry::ArcString(arcstring) => {
-                arcstring.boundary().map(AnyGeometry::MultiSphericalPoint)
-            }
-            AnyGeometry::MultiArcString(multiarcstring) => multiarcstring
-                .boundary()
-                .map(AnyGeometry::MultiSphericalPoint),
-            AnyGeometry::SphericalPolygon(polygon) => {
-                polygon.boundary().map(AnyGeometry::ArcString)
-            }
-            AnyGeometry::MultiSphericalPolygon(multipolygon) => {
-                multipolygon.boundary().map(AnyGeometry::MultiArcString)
-            }
-        }
-    }
-
-    fn convex_hull(&self) -> Option<crate::sphericalpolygon::SphericalPolygon> {
-        match self {
-            AnyGeometry::SphericalPoint(point) => point.convex_hull(),
-            AnyGeometry::MultiSphericalPoint(multipoint) => multipoint.convex_hull(),
-            AnyGeometry::ArcString(arcstring) => arcstring.convex_hull(),
-            AnyGeometry::MultiArcString(multiarcstring) => multiarcstring.convex_hull(),
-            AnyGeometry::SphericalPolygon(polygon) => polygon.convex_hull(),
-            AnyGeometry::MultiSphericalPolygon(multipolygon) => multipolygon.convex_hull(),
-        }
-    }
-}
-
-impl From<crate::sphericalpoint::SphericalPoint> for AnyGeometry {
-    fn from(value: crate::sphericalpoint::SphericalPoint) -> Self {
-        AnyGeometry::SphericalPoint(value)
-    }
-}
-
-impl From<crate::sphericalpoint::MultiSphericalPoint> for AnyGeometry {
-    fn from(value: crate::sphericalpoint::MultiSphericalPoint) -> Self {
-        AnyGeometry::MultiSphericalPoint(value)
-    }
-}
-
-impl From<crate::arcstring::ArcString> for AnyGeometry {
-    fn from(value: crate::arcstring::ArcString) -> Self {
-        AnyGeometry::ArcString(value)
-    }
-}
-
-impl From<crate::arcstring::MultiArcString> for AnyGeometry {
-    fn from(value: crate::arcstring::MultiArcString) -> Self {
-        AnyGeometry::MultiArcString(value)
-    }
-}
-
-impl From<crate::sphericalpolygon::SphericalPolygon> for AnyGeometry {
-    fn from(value: crate::sphericalpolygon::SphericalPolygon) -> Self {
-        AnyGeometry::SphericalPolygon(value)
-    }
-}
-
-impl From<crate::sphericalpolygon::MultiSphericalPolygon> for AnyGeometry {
-    fn from(value: crate::sphericalpolygon::MultiSphericalPolygon) -> Self {
-        AnyGeometry::MultiSphericalPolygon(value)
-    }
 }
 
 /// define angular separation between 3D vectors
