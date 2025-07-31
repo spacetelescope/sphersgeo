@@ -5,16 +5,34 @@ mod geometry;
 mod sphericalpoint;
 mod sphericalpolygon;
 
-extern crate numpy;
-
+#[cfg(feature = "py")]
 use pyo3::prelude::*;
 
+#[cfg(feature = "py")]
+extern crate numpy;
+
+#[cfg(feature = "py")]
 #[pymodule(name = "sphersgeo")]
 mod py_sphersgeo {
+    #[cfg(feature = "py")]
+    #[derive(FromPyObject, IntoPyObject, Debug, Clone, PartialEq)]
+    enum AnyGeometry {
+        #[pyo3(transparent)]
+        SphericalPoint(crate::sphericalpoint::SphericalPoint),
+        #[pyo3(transparent)]
+        MultiSphericalPoint(crate::sphericalpoint::MultiSphericalPoint),
+        #[pyo3(transparent)]
+        ArcString(crate::arcstring::ArcString),
+        #[pyo3(transparent)]
+        MultiArcString(crate::arcstring::MultiArcString),
+        #[pyo3(transparent)]
+        SphericalPolygon(crate::sphericalpolygon::SphericalPolygon),
+        #[pyo3(transparent)]
+        MultiSphericalPolygon(crate::sphericalpolygon::MultiSphericalPolygon),
+    }
+
     use super::*;
-    use crate::geometry::{
-        AnyGeometry, GeometricOperations, GeometricPredicates, Geometry, MultiGeometry,
-    };
+    use crate::geometry::{GeometricOperations, GeometricPredicates, Geometry, MultiGeometry};
     use numpy::{
         ndarray::{Array1, Array2},
         IntoPyArray, PyArray1, PyArray2, PyReadonlyArray1, PyReadonlyArray2,
@@ -65,9 +83,9 @@ mod py_sphersgeo {
             })
         }
 
-        /// from the given coordinates, build an xyz vector representing a point on the sphere
         #[classmethod]
         #[pyo3(name = "from_lonlat")]
+        /// from the given coordinates, build an xyz vector representing a point on the sphere
         fn py_from_lonlat<'py>(
             _: &Bound<'py, PyType>,
             lonlat: PySphericalPointLonLatInputs,
@@ -85,20 +103,20 @@ mod py_sphersgeo {
             Self::from_lonlat(&lonlat)
         }
 
-        /// xyz vector as a 1-dimensional array of 3 floats
         #[getter]
+        /// xyz vector as a 1-dimensional array of 3 floats
         fn get_xyz(&self) -> [f64; 3] {
             self.xyz
         }
 
-        /// convert this point on the sphere to angular coordinates
         #[pyo3(name = "to_lonlat")]
+        /// convert this point on the sphere to angular coordinates
         fn py_to_lonlat(&self) -> [f64; 2] {
             self.to_lonlat()
         }
 
-        /// angle on the sphere between this point and two other points
         #[pyo3(name = "two_arc_angle")]
+        /// angle on the sphere between this point and two other points
         fn py_two_arc_angle(
             &self,
             a: PySphericalPointInputs,
@@ -107,8 +125,8 @@ mod py_sphersgeo {
             Ok(self.two_arc_angle(&Self::py_new(a)?, &Self::py_new(b)?))
         }
 
-        /// whether this point shares a line with two other points
         #[pyo3(name = "collinear")]
+        /// whether this point shares a line with two other points
         fn py_collinear(
             &self,
             a: PySphericalPointInputs,
@@ -117,8 +135,8 @@ mod py_sphersgeo {
             Ok(self.collinear(&Self::py_new(a)?, &Self::py_new(b)?))
         }
 
-        /// create n number of points equally spaced on an arc between this point and another point
         #[pyo3(name = "interpolate_between", signature=(other, n=16))]
+        /// create n number of points equally spaced on an arc between this point and another point
         fn py_interpolate_between(
             &self,
             other: PySphericalPointInputs,
@@ -128,26 +146,26 @@ mod py_sphersgeo {
                 .map_err(PyValueError::new_err)
         }
 
-        /// length of the underlying xyz vector
         #[getter]
+        /// length of the underlying xyz vector
         fn get_vector_length(&self) -> f64 {
             self.vector_length()
         }
 
-        /// dot product of this xyz vector with another xyz vector
         #[pyo3(name = "vector_dot")]
+        /// dot product of this xyz vector with another xyz vector
         fn py_vector_dot(&self, other: PySphericalPointInputs) -> PyResult<f64> {
             Ok(self.vector_dot(&Self::py_new(other)?))
         }
 
-        /// cross product of this xyz vector with another xyz vector
         #[pyo3(name = "vector_cross")]
+        /// cross product of this xyz vector with another xyz vector
         fn py_vector_cross(&self, other: PySphericalPointInputs) -> PyResult<Self> {
             Ok(self.vector_cross(&Self::py_new(other)?))
         }
 
-        /// rotate this xyz vector by theta angle around another xyz vector
         #[pyo3(name = "vector_rotate_around")]
+        /// rotate this xyz vector by theta angle around another xyz vector
         fn py_vector_rotate_around(
             &self,
             other: PySphericalPointInputs,
@@ -394,9 +412,9 @@ mod py_sphersgeo {
             }
         }
 
-        /// from the given coordinates, build xyz vectors representing points on the sphere
         #[classmethod]
         #[pyo3(name = "from_lonlats")]
+        /// from the given coordinates, build xyz vectors representing points on the sphere
         fn py_from_lonlats<'py>(
             _: &Bound<'py, PyType>,
             lonlats: PyMultiSphericalPointLonLatInputs,
@@ -424,20 +442,20 @@ mod py_sphersgeo {
             }
         }
 
-        /// xyz vectors as a 2-dimensional array of Nx3 floats
         #[getter]
+        /// xyz vectors as a 2-dimensional array of Nx3 floats
         fn get_xyzs<'py>(&self, py: Python<'py>) -> Bound<'py, PyArray2<f64>> {
             Array2::<f64>::from(self).into_pyarray(py)
         }
 
-        /// convert to angle coordinates along the sphere
         #[pyo3(name = "to_lonlats")]
+        /// convert to angle coordinates along the sphere
         fn py_to_lonlats<'py>(&self, py: Python<'py>) -> Bound<'py, PyArray2<f64>> {
             Array2::<f64>::from(self.to_lonlats()).into_pyarray(py)
         }
 
-        /// rotate the underlying vector by theta angle around other vectors
         #[pyo3(name = "vectors_rotate_around")]
+        /// rotate the underlying vector by theta angle around other vectors
         fn py_vectors_rotate_around(
             &self,
             other: PyMultiSphericalPointInputs,
@@ -446,8 +464,8 @@ mod py_sphersgeo {
             Ok(self.vectors_rotate_around(&Self::py_new(other)?, theta))
         }
 
-        /// lengths of the underlying xyz vectors
         #[getter]
+        /// lengths of the underlying xyz vectors
         fn get_vectors_lengths<'py>(&self, py: Python<'py>) -> Bound<'py, PyArray1<f64>> {
             Array1::<f64>::from(self.vectors_lengths()).into_pyarray(py)
         }
@@ -487,8 +505,8 @@ mod py_sphersgeo {
             self.convex_hull()
         }
 
-        /// closest angular distance on the sphere between this geometry and another
         #[pyo3(name = "distance")]
+        /// closest angular distance on the sphere between this geometry and another
         fn py_distance(&self, other: AnyGeometry) -> f64 {
             match other {
                 AnyGeometry::SphericalPoint(point) => self.distance(&point),
@@ -708,50 +726,50 @@ mod py_sphersgeo {
             self.points.len() - 1
         }
 
-        /// radians subtended by each arc on the sphere
         #[getter]
+        /// radians subtended by each arc on the sphere
         fn get_lengths<'py>(&self, py: Python<'py>) -> Bound<'py, PyArray1<f64>> {
             Array1::<f64>::from(self.lengths()).into_pyarray(py)
         }
 
-        /// midpoints of each arc
         #[getter]
+        /// midpoints of each arc
         fn get_midpoints(&self) -> MultiSphericalPoint {
             self.midpoints()
         }
 
-        /// "close" this arcstring (connect the last vertex to the first)
         #[setter]
+        /// "close" this arcstring (connect the last vertex to the first)
         fn set_closed(&mut self, closed: bool) {
             self.closed = closed
         }
 
-        /// whether this arcstring is "closed" (the last vertex is connected to the first)
         #[getter]
+        /// whether this arcstring is "closed" (the last vertex is connected to the first)
         fn get_closed(&self) -> bool {
             self.closed
         }
 
-        /// whether this arcstring crosses itself
         #[getter]
+        /// whether this arcstring crosses itself
         fn get_crosses_self(&self) -> bool {
             self.crosses_self()
         }
 
-        /// points at which this arcstring crosses itself
         #[getter]
+        /// points at which this arcstring crosses itself
         fn get_crossings_with_self(&self) -> Option<MultiSphericalPoint> {
             self.crossings_with_self()
         }
 
-        /// if this arcstring's endpoints touch another's
         #[pyo3(name = "adjoins")]
+        /// if this arcstring's endpoints touch another's
         fn py_adjoins(&self, other: PyArcStringInputs) -> PyResult<bool> {
             Ok(self.adjoins(&Self::py_new(other, None)?))
         }
 
-        /// join this arcstring's endpoint(s) to another
         #[pyo3(name = "join")]
+        /// join this arcstring's endpoint(s) to another
         fn py_join(&self, other: PyArcStringInputs) -> PyResult<Option<ArcString>> {
             Ok(self.join(&Self::py_new(other, None)?))
         }
@@ -791,8 +809,8 @@ mod py_sphersgeo {
             self.convex_hull()
         }
 
-        /// closest angular distance on the sphere between this geometry and another
         #[pyo3(name = "distance")]
+        /// closest angular distance on the sphere between this geometry and another
         fn py_distance(&self, other: AnyGeometry) -> f64 {
             match other {
                 AnyGeometry::SphericalPoint(point) => self.distance(&point),
@@ -972,14 +990,14 @@ mod py_sphersgeo {
             }
         }
 
-        /// radians subtended by each arcstring on the sphere
         #[getter]
+        /// radians subtended by each arcstring on the sphere
         fn get_lengths<'py>(&self, py: Python<'py>) -> Bound<'py, PyArray1<f64>> {
             Array1::<f64>::from(self.lengths()).into_pyarray(py)
         }
 
-        /// midpoints of each arc
         #[getter]
+        /// midpoints of each arc
         fn get_midpoints(&self) -> MultiSphericalPoint {
             self.midpoints()
         }
@@ -1019,8 +1037,8 @@ mod py_sphersgeo {
             self.convex_hull()
         }
 
-        /// closest angular distance on the sphere between this geometry and another
         #[pyo3(name = "distance")]
+        /// closest angular distance on the sphere between this geometry and another
         fn py_distance(&self, other: AnyGeometry) -> f64 {
             match other {
                 AnyGeometry::SphericalPoint(point) => self.distance(&point),
@@ -1166,9 +1184,9 @@ mod py_sphersgeo {
 
     #[pymethods]
     impl SphericalPolygon {
-        /// an interior point is required because an arcstring divides a sphere into two regions
         #[new]
         #[pyo3(signature=(boundary, interior_point=None))]
+        /// an interior point is required because an arcstring divides a sphere into two regions
         fn py_new<'py>(
             boundary: PyArcStringInputs<'py>,
             interior_point: Option<PySphericalPointInputs<'py>>,
@@ -1237,8 +1255,8 @@ mod py_sphersgeo {
             self.convex_hull()
         }
 
-        /// closest angular distance on the sphere between this geometry and another
         #[pyo3(name = "distance")]
+        /// closest angular distance on the sphere between this geometry and another
         fn py_distance(&self, other: AnyGeometry) -> f64 {
             match other {
                 AnyGeometry::SphericalPoint(point) => self.distance(&point),
@@ -1596,6 +1614,17 @@ mod py_sphersgeo {
 
         #[pyfunction]
         #[pyo3(name = "arc_distance_over_sphere_radians")]
+        /// radians subtended between two points on the sphere
+        ///
+        /// Notes
+        /// -----
+        /// The length is computed using the following:
+        ///
+        ///     l = arccos(A ⋅ B) / r^2
+        ///
+        /// References
+        /// ----------
+        /// - https://www.mathforengineers.com/math-calculators/angle-between-two-vectors-in-spherical-coordinates.html
         fn py_arc_distance_over_sphere_radians(arc: ([f64; 3], [f64; 3])) -> f64 {
             crate::sphericalpoint::xyzs_distance_over_sphere_radians(&arc.0, &arc.1)
         }
@@ -1612,14 +1641,46 @@ mod py_sphersgeo {
 
         #[pyfunction]
         #[pyo3(name = "xyz_two_arc_angle_radians")]
+        /// given three XYZ vector points on the sphere (`a`, `b`, and `c`), retrieve the angle at `b` formed by arcs `ab` and `bc`
+        ///
+        ///     cos(ca) = cos(bc) * cos(ab) + sin(bc) * sin(ab) * cos(b)
+        ///
+        /// References:
+        /// - Miller, Robert D. Computing the area of a spherical polygon. Graphics Gems IV. p132. 1994. Academic Press. doi:10.5555/180895.180907
+        ///   `pdf <https://www.google.com/books/edition/Graphics_Gems_IV/CCqzMm_-WucC?hl=en&gbpv=1&dq=Graphics%20Gems%20IV.%20p132&pg=PA133&printsec=frontcover>`_
         fn py_xyz_two_arc_angle_radians(a: [f64; 3], b: [f64; 3], c: [f64; 3]) -> f64 {
             crate::sphericalpoint::xyz_two_arc_angle_radians(&a, &b, &c)
         }
 
         #[pyfunction]
         #[pyo3(name = "spherical_triangle_area_steradians")]
+        /// surface area of a triangle on the sphere via Girard's theorum
+        ///
+        ///     θ_1 + θ_2 + θ_3 − π
+        ///
+        /// References
+        /// ----------
+        /// - Klain, D. A. (2019). A probabilistic proof of the spherical excess formula (No. arXiv:1909.04505). arXiv. https://doi.org/10.48550/arXiv.1909.04505
+        /// - Miller, Robert D. Computing the area of a spherical polygon. Graphics Gems IV. 1994. Academic Press. doi:10.5555/180895.180907
+        ///   `pdf <https://www.google.com/books/edition/Graphics_Gems_IV/CCqzMm_-WucC?hl=en&gbpv=1&dq=Graphics%20Gems%20IV.%20p132&pg=PA133&printsec=frontcover>`_
         fn py_spherical_triangle_area(a: [f64; 3], b: [f64; 3], c: [f64; 3]) -> f64 {
-            crate::sphericalpolygon::spherical_triangle_area_steradians(&a, &b, &c)
+            // xyz_two_arc_angle_radians(c, a, b)
+            //     + xyz_two_arc_angle_radians(a, b, c)
+            //     + xyz_two_arc_angle_radians(b, c, a)
+            //     - std::f64::consts::PI
+
+            // redefine Girard's theorum to avoid domain errors
+            let ab = crate::sphericalpoint::xyzs_distance_over_sphere_radians(&a, &b);
+            let bc = crate::sphericalpoint::xyzs_distance_over_sphere_radians(&b, &c);
+            let ca = crate::sphericalpoint::xyzs_distance_over_sphere_radians(&c, &a);
+            let s = (ab + bc + ca) / 2.0;
+
+            4.0 * ((s / 2.0).tan()
+                * ((s - ab) / 2.0).tan()
+                * ((s - bc) / 2.0).tan()
+                * ((s - ca) / 2.0).tan())
+            .sqrt()
+            .atan()
         }
     }
 }

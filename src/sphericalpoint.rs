@@ -1,13 +1,16 @@
 use crate::geometry::{GeometricOperations, GeometricPredicates, Geometry, MultiGeometry};
 use kiddo::{ImmutableKdTree, SquaredEuclidean};
-use numpy::ndarray::{array, Array1, Array2, ArrayView1, Axis};
-use pyo3::prelude::*;
-use rayon::prelude::*;
 use std::{
     fmt::Display,
     iter::Sum,
     ops::{Add, AddAssign, Div, DivAssign, Mul, MulAssign, Neg, Sub, SubAssign},
 };
+
+#[cfg(feature = "py")]
+use pyo3::prelude::*;
+
+#[cfg(feature = "ndarray")]
+use ndarray::{array, Array1, Array2, ArrayView1, Axis};
 
 /// length of the underlying xyz vector
 ///
@@ -144,16 +147,23 @@ fn xyz_rotate_around(a: &[f64; 3], b: &[f64; 3], theta: &f64) -> [f64; 3] {
     let theta_sin = theta.sin();
     let theta_cos = theta.cos();
 
-    let a = array![a[0], a[1], a[2]];
-    let b = array![b[0], b[1], b[2]];
-
-    let rotated = -&b * -&a * &b * (1.0 - theta_cos)
-        + (&a * theta_cos)
-        + array![
-            -b[2] * a[1] + b[1] * a[2],
-            b[2] * a[0] - b[0] * a[2],
-            -b[1] * a[0] - b[0] * a[1],
-        ] * theta_sin;
+    let rotated = xyz_add_xyz(
+        &xyz_add_xyz(
+            &xyz_mul_f64(
+                &xyz_mul_xyz(&xyz_mul_xyz(&xyz_neg(b), &xyz_neg(a)), b),
+                &(1.0 - theta_cos),
+            ),
+            &xyz_mul_f64(a, &theta_cos),
+        ),
+        &xyz_mul_f64(
+            &[
+                -b[2] * a[1] + b[1] * a[2],
+                b[2] * a[0] - b[0] * a[2],
+                -b[1] * a[0] - b[0] * a[1],
+            ],
+            &theta_sin,
+        ),
+    );
 
     [rotated[0], rotated[1], rotated[2]]
 }
@@ -295,7 +305,7 @@ pub fn point_within_kdtree(xyz: &[f64; 3], kdtree: &ImmutableKdTree<f64, 3>) -> 
 }
 
 /// 3D Cartesian vector representing a point on the unit sphere
-#[pyclass]
+#[cfg_attr(feature = "py", pyclass)]
 #[derive(Clone, Debug)]
 pub struct SphericalPoint {
     pub xyz: [f64; 3],
@@ -332,6 +342,7 @@ impl TryFrom<&Vec<f64>> for SphericalPoint {
     }
 }
 
+#[cfg(feature = "ndarray")]
 impl TryFrom<&Array1<f64>> for SphericalPoint {
     type Error = String;
 
@@ -345,6 +356,7 @@ impl TryFrom<&Array1<f64>> for SphericalPoint {
     }
 }
 
+#[cfg(feature = "ndarray")]
 impl<'a> TryFrom<&ArrayView1<'a, f64>> for SphericalPoint {
     type Error = String;
 
@@ -370,6 +382,7 @@ impl<'a> From<&'a SphericalPoint> for &'a [f64; 3] {
     }
 }
 
+#[cfg(feature = "ndarray")]
 impl From<SphericalPoint> for Array1<f64> {
     fn from(point: SphericalPoint) -> Self {
         array![point.xyz[0], point.xyz[1], point.xyz[2]]
@@ -936,7 +949,7 @@ impl GeometricOperations<crate::sphericalpolygon::MultiSphericalPolygon> for Sph
 }
 
 /// xyz vectors representing points on the sphere
-#[pyclass]
+#[cfg_attr(feature = "py", pyclass)]
 #[derive(Clone, Debug)]
 pub struct MultiSphericalPoint {
     pub xyzs: Vec<[f64; 3]>,
@@ -1002,6 +1015,7 @@ impl TryFrom<Vec<SphericalPoint>> for MultiSphericalPoint {
     }
 }
 
+#[cfg(feature = "ndarray")]
 impl TryFrom<Array2<f64>> for MultiSphericalPoint {
     type Error = String;
 
@@ -1051,6 +1065,7 @@ impl TryFrom<&Vec<Vec<f64>>> for MultiSphericalPoint {
     }
 }
 
+#[cfg(feature = "ndarray")]
 impl<'a> TryFrom<&Vec<ArrayView1<'a, f64>>> for MultiSphericalPoint {
     type Error = String;
 
@@ -1068,6 +1083,7 @@ impl<'a> TryFrom<&Vec<ArrayView1<'a, f64>>> for MultiSphericalPoint {
     }
 }
 
+#[cfg(feature = "ndarray")]
 impl TryFrom<Vec<f64>> for MultiSphericalPoint {
     type Error = String;
 
@@ -1078,6 +1094,7 @@ impl TryFrom<Vec<f64>> for MultiSphericalPoint {
     }
 }
 
+#[cfg(feature = "ndarray")]
 impl<'a> TryFrom<&ArrayView1<'a, f64>> for MultiSphericalPoint {
     type Error = String;
 
@@ -1100,6 +1117,7 @@ impl From<MultiSphericalPoint> for Vec<SphericalPoint> {
     }
 }
 
+#[cfg(feature = "ndarray")]
 impl From<&MultiSphericalPoint> for Array2<f64> {
     fn from(points: &MultiSphericalPoint) -> Self {
         let mut xyzs = Array2::uninit((points.len(), 3));
@@ -1283,8 +1301,7 @@ impl Geometry for MultiSphericalPoint {
     }
 
     fn centroid(&self) -> crate::sphericalpoint::SphericalPoint {
-        let mean = Array2::<f64>::from(self).mean_axis(Axis(0)).unwrap();
-        SphericalPoint::from([mean[0], mean[1], mean[2]])
+        SphericalPoint::from(crate::sphericalpoint::xyzs_mean(&self.xyzs))
     }
 
     /// This code implements Andrew's monotone chain algorithm, which is a simple
@@ -1723,7 +1740,7 @@ impl GeometricPredicates<crate::sphericalpolygon::MultiSphericalPolygon> for Mul
     fn within(&self, other: &crate::sphericalpolygon::MultiSphericalPolygon) -> bool {
         // TODO: find a better algorithm than brute-force; perhaps we can keep a kdtree of centroids for multigeometries?
         self.xyzs.iter().all(|xyz| {
-            other.polygons.par_iter().any(|polygon| {
+            other.polygons.iter().any(|polygon| {
                 crate::sphericalpolygon::point_in_polygon_boundary(
                     xyz,
                     &polygon.interior_point.xyz,

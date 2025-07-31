@@ -10,11 +10,6 @@ use crate::{
         MultiSphericalPoint, SphericalPoint,
     },
 };
-use ndarray::{
-    parallel::prelude::{IntoParallelRefIterator, ParallelIterator},
-    Array1, Axis, Zip,
-};
-use pyo3::prelude::*;
 use std::{
     cmp::Ordering,
     fmt::Display,
@@ -22,34 +17,8 @@ use std::{
     ops::{Add, AddAssign},
 };
 
-/// surface area of a triangle on the sphere via Girard's theorum
-///
-///     θ_1 + θ_2 + θ_3 − π
-///
-/// References
-/// ----------
-/// - Klain, D. A. (2019). A probabilistic proof of the spherical excess formula (No. arXiv:1909.04505). arXiv. https://doi.org/10.48550/arXiv.1909.04505
-/// - Miller, Robert D. Computing the area of a spherical polygon. Graphics Gems IV. 1994. Academic Press. doi:10.5555/180895.180907
-///   `pdf <https://www.google.com/books/edition/Graphics_Gems_IV/CCqzMm_-WucC?hl=en&gbpv=1&dq=Graphics%20Gems%20IV.%20p132&pg=PA133&printsec=frontcover>`_
-pub fn spherical_triangle_area_steradians(a: &[f64; 3], b: &[f64; 3], c: &[f64; 3]) -> f64 {
-    // xyz_two_arc_angle_radians(c, a, b)
-    //     + xyz_two_arc_angle_radians(a, b, c)
-    //     + xyz_two_arc_angle_radians(b, c, a)
-    //     - std::f64::consts::PI
-
-    // redefine Girard's theorum to avoid domain errors
-    let ab = xyzs_distance_over_sphere_radians(a, b);
-    let bc = xyzs_distance_over_sphere_radians(b, c);
-    let ca = xyzs_distance_over_sphere_radians(c, a);
-    let s = (ab + bc + ca) / 2.0;
-
-    4.0 * ((s / 2.0).tan()
-        * ((s - ab) / 2.0).tan()
-        * ((s - bc) / 2.0).tan()
-        * ((s - ca) / 2.0).tan())
-    .sqrt()
-    .atan()
-}
+#[cfg(feature = "py")]
+use pyo3::prelude::*;
 
 // use the classical even-crossings ray algorithm for point-in-polygon
 pub fn point_in_polygon_boundary(
@@ -197,7 +166,7 @@ fn interior_point_from_polygon_boundary(boundary: &ArcString) -> Result<Spherica
 /// polygon on the sphere, comprising:
 /// 1. a non-intersecting collection of connected arcs (arcstring) that connects back to its first point (closed)
 /// 2. an interior point to specify which region of the sphere the polygon represents; this is required for non-Euclidian closed geometry
-#[pyclass]
+#[cfg_attr(feature = "py", pyclass)]
 #[derive(Clone, Debug, PartialEq)]
 pub struct SphericalPolygon {
     pub boundary: ArcString,
@@ -269,19 +238,22 @@ impl SphericalPolygon {
         let xyz = center.vector_rotate_around(&perpendicular, radius);
 
         // Then rotate the pen around the center point all 360 degrees
-        let mut spokes =
-            Array1::<f64>::linspace(std::f64::consts::PI * 2.0, 0.0, steps).to_degrees();
+        let mut spokes = crate::arcstring::linspace(std::f64::consts::PI * 2.0, 0.0, steps)
+            .iter()
+            .map(|x| x.to_degrees())
+            .collect::<Vec<f64>>();
 
         // Ensure that the first and last elements are exactly the same.
         // 2π should equal 0, but with rounding error that isn't always the case.
         spokes[0] = 0.0;
 
         // reverse the direction
-        spokes.invert_axis(Axis(0));
+        spokes = spokes.into_iter().rev().collect();
 
-        let vertices = Zip::from(&spokes)
-            .par_map_collect(|spoke| xyz.vector_rotate_around(center, spoke).xyz)
-            .to_vec();
+        let vertices = spokes
+            .iter()
+            .map(|spoke| xyz.vector_rotate_around(center, spoke).xyz)
+            .collect::<Vec<[f64; 3]>>();
 
         Self::try_new(
             ArcString::try_from(MultiSphericalPoint::try_from(vertices).unwrap()).unwrap(),
@@ -932,7 +904,7 @@ impl GeometricOperations<MultiSphericalPolygon> for SphericalPolygon {
     fn intersection(&self, other: &MultiSphericalPolygon) -> Option<MultiSphericalPolygon> {
         other
             .polygons
-            .par_iter()
+            .iter()
             .map(|other_polygon| self.intersection(other_polygon))
             .sum()
     }
@@ -940,13 +912,13 @@ impl GeometricOperations<MultiSphericalPolygon> for SphericalPolygon {
     fn symmetric_difference(&self, other: &MultiSphericalPolygon) -> MultiSphericalPolygon {
         other
             .polygons
-            .par_iter()
+            .iter()
             .map(|other_polygon| self.symmetric_difference(other_polygon))
             .sum()
     }
 }
 
-#[pyclass]
+#[cfg_attr(feature = "py", pyclass)]
 #[derive(Clone, Debug)]
 pub struct MultiSphericalPolygon {
     pub polygons: Vec<SphericalPolygon>,
@@ -1037,7 +1009,7 @@ impl AddAssign<&SphericalPolygon> for MultiSphericalPolygon {
 impl Geometry for MultiSphericalPolygon {
     fn vertices(&self) -> crate::sphericalpoint::MultiSphericalPoint {
         self.polygons
-            .par_iter()
+            .iter()
             .map(|geometry| geometry.vertices())
             .sum()
     }
@@ -1045,7 +1017,7 @@ impl Geometry for MultiSphericalPolygon {
     fn boundary(&self) -> Option<MultiArcString> {
         let arcstrings: Vec<ArcString> = self
             .polygons
-            .par_iter()
+            .iter()
             .filter_map(|polygon| polygon.boundary())
             .collect();
         MultiArcString::try_from(arcstrings).ok()
@@ -1058,7 +1030,7 @@ impl Geometry for MultiSphericalPolygon {
     fn centroid(&self) -> crate::sphericalpoint::SphericalPoint {
         MultiSphericalPoint::try_from(
             self.polygons
-                .par_iter()
+                .iter()
                 .map(|polygon| polygon.centroid().xyz)
                 .collect::<Vec<[f64; 3]>>(),
         )
@@ -1071,7 +1043,7 @@ impl Geometry for MultiSphericalPolygon {
     }
 
     fn area(&self) -> f64 {
-        self.polygons.par_iter().map(|polygon| polygon.area()).sum()
+        self.polygons.iter().map(|polygon| polygon.area()).sum()
     }
 
     fn length(&self) -> f64 {
@@ -1109,9 +1081,7 @@ impl GeometricPredicates<SphericalPoint> for MultiSphericalPolygon {
     }
 
     fn touches(&self, other: &SphericalPoint) -> bool {
-        self.polygons
-            .par_iter()
-            .any(|polygon| polygon.touches(other))
+        self.polygons.iter().any(|polygon| polygon.touches(other))
     }
 
     fn crosses(&self, _: &SphericalPoint) -> bool {
@@ -1123,9 +1093,7 @@ impl GeometricPredicates<SphericalPoint> for MultiSphericalPolygon {
     }
 
     fn contains(&self, other: &SphericalPoint) -> bool {
-        self.polygons
-            .par_iter()
-            .any(|polygon| polygon.contains(other))
+        self.polygons.iter().any(|polygon| polygon.contains(other))
     }
 
     fn covers(&self, other: &SphericalPoint) -> bool {
@@ -1161,14 +1129,12 @@ impl GeometricPredicates<MultiSphericalPoint> for MultiSphericalPolygon {
             || self.crosses(other)
             || self
                 .polygons
-                .par_iter()
+                .iter()
                 .any(|polygon| polygon.intersects(other))
     }
 
     fn touches(&self, other: &MultiSphericalPoint) -> bool {
-        self.polygons
-            .par_iter()
-            .any(|polygon| polygon.touches(other))
+        self.polygons.iter().any(|polygon| polygon.touches(other))
     }
 
     fn crosses(&self, _: &MultiSphericalPoint) -> bool {
@@ -1203,7 +1169,7 @@ impl GeometricOperations<MultiSphericalPoint, SphericalPolygon> for MultiSpheric
 
     fn intersection(&self, other: &MultiSphericalPoint) -> Option<MultiSphericalPoint> {
         self.polygons
-            .par_iter()
+            .iter()
             .map(|polygon| polygon.intersection(other))
             .sum()
     }
@@ -1219,15 +1185,11 @@ impl GeometricPredicates<ArcString> for MultiSphericalPolygon {
     }
 
     fn touches(&self, other: &ArcString) -> bool {
-        self.polygons
-            .par_iter()
-            .any(|polygon| polygon.touches(other))
+        self.polygons.iter().any(|polygon| polygon.touches(other))
     }
 
     fn crosses(&self, other: &ArcString) -> bool {
-        self.polygons
-            .par_iter()
-            .any(|polygon| polygon.crosses(other))
+        self.polygons.iter().any(|polygon| polygon.crosses(other))
     }
 
     fn within(&self, _: &ArcString) -> bool {
@@ -1235,9 +1197,7 @@ impl GeometricPredicates<ArcString> for MultiSphericalPolygon {
     }
 
     fn contains(&self, other: &ArcString) -> bool {
-        self.polygons
-            .par_iter()
-            .any(|polygon| polygon.contains(other))
+        self.polygons.iter().any(|polygon| polygon.contains(other))
     }
 
     fn covers(&self, other: &ArcString) -> bool {
@@ -1260,14 +1220,14 @@ impl GeometricOperations<ArcString, SphericalPolygon> for MultiSphericalPolygon 
 
     fn intersection(&self, other: &ArcString) -> Option<MultiArcString> {
         self.polygons
-            .par_iter()
+            .iter()
             .map(|polygon| polygon.intersection(other))
             .sum()
     }
 
     fn symmetric_difference(&self, other: &ArcString) -> Self {
         self.polygons
-            .par_iter()
+            .iter()
             .map(|polygon| polygon.symmetric_difference(other))
             .sum()
     }
@@ -1279,15 +1239,11 @@ impl GeometricPredicates<MultiArcString> for MultiSphericalPolygon {
     }
 
     fn touches(&self, other: &MultiArcString) -> bool {
-        self.polygons
-            .par_iter()
-            .any(|polygon| polygon.touches(other))
+        self.polygons.iter().any(|polygon| polygon.touches(other))
     }
 
     fn crosses(&self, other: &MultiArcString) -> bool {
-        self.polygons
-            .par_iter()
-            .any(|polygon| polygon.crosses(other))
+        self.polygons.iter().any(|polygon| polygon.crosses(other))
     }
 
     fn within(&self, _: &MultiArcString) -> bool {
@@ -1297,7 +1253,7 @@ impl GeometricPredicates<MultiArcString> for MultiSphericalPolygon {
     fn contains(&self, other: &MultiArcString) -> bool {
         other
             .arcstrings
-            .par_iter()
+            .iter()
             .all(|arcstring| arcstring.within(self))
     }
 
@@ -1321,14 +1277,14 @@ impl GeometricOperations<MultiArcString, SphericalPolygon> for MultiSphericalPol
 
     fn intersection(&self, other: &MultiArcString) -> Option<MultiArcString> {
         self.polygons
-            .par_iter()
+            .iter()
             .map(|polygon| polygon.intersection(other))
             .sum()
     }
 
     fn symmetric_difference(&self, other: &MultiArcString) -> Self {
         self.polygons
-            .par_iter()
+            .iter()
             .map(|polygon| polygon.symmetric_difference(other))
             .sum()
     }
@@ -1337,32 +1293,24 @@ impl GeometricOperations<MultiArcString, SphericalPolygon> for MultiSphericalPol
 impl GeometricPredicates<SphericalPolygon> for MultiSphericalPolygon {
     fn intersects(&self, other: &SphericalPolygon) -> bool {
         self.polygons
-            .par_iter()
+            .iter()
             .any(|polygon| polygon.intersects(other))
     }
 
     fn touches(&self, other: &SphericalPolygon) -> bool {
-        self.polygons
-            .par_iter()
-            .any(|polygon| polygon.touches(other))
+        self.polygons.iter().any(|polygon| polygon.touches(other))
     }
 
     fn crosses(&self, other: &SphericalPolygon) -> bool {
-        self.polygons
-            .par_iter()
-            .any(|polygon| polygon.crosses(other))
+        self.polygons.iter().any(|polygon| polygon.crosses(other))
     }
 
     fn within(&self, other: &SphericalPolygon) -> bool {
-        self.polygons
-            .par_iter()
-            .all(|polygon| polygon.within(other))
+        self.polygons.iter().all(|polygon| polygon.within(other))
     }
 
     fn contains(&self, other: &SphericalPolygon) -> bool {
-        self.polygons
-            .par_iter()
-            .any(|polygon| polygon.contains(other))
+        self.polygons.iter().any(|polygon| polygon.contains(other))
     }
 
     fn overlaps(&self, other: &SphericalPolygon) -> bool {
@@ -1389,14 +1337,14 @@ impl GeometricOperations<SphericalPolygon, SphericalPolygon> for MultiSphericalP
 
     fn intersection(&self, other: &SphericalPolygon) -> Option<Self> {
         self.polygons
-            .par_iter()
+            .iter()
             .map(|polygon| polygon.intersection(other))
             .sum()
     }
 
     fn symmetric_difference(&self, other: &SphericalPolygon) -> Self {
         self.polygons
-            .par_iter()
+            .iter()
             .map(|polygon| polygon.symmetric_difference(other))
             .sum()
     }
@@ -1405,26 +1353,20 @@ impl GeometricOperations<SphericalPolygon, SphericalPolygon> for MultiSphericalP
 impl GeometricPredicates<Self> for MultiSphericalPolygon {
     fn intersects(&self, other: &MultiSphericalPolygon) -> bool {
         self.polygons
-            .par_iter()
+            .iter()
             .any(|polygon| polygon.intersects(other))
     }
 
     fn touches(&self, other: &MultiSphericalPolygon) -> bool {
-        self.polygons
-            .par_iter()
-            .any(|polygon| polygon.touches(other))
+        self.polygons.iter().any(|polygon| polygon.touches(other))
     }
 
     fn crosses(&self, other: &MultiSphericalPolygon) -> bool {
-        self.polygons
-            .par_iter()
-            .any(|polygon| polygon.crosses(other))
+        self.polygons.iter().any(|polygon| polygon.crosses(other))
     }
 
     fn within(&self, other: &MultiSphericalPolygon) -> bool {
-        self.polygons
-            .par_iter()
-            .all(|polygon| polygon.within(other))
+        self.polygons.iter().all(|polygon| polygon.within(other))
     }
 
     fn contains(&self, other: &MultiSphericalPolygon) -> bool {
@@ -1455,14 +1397,14 @@ impl GeometricOperations<Self, SphericalPolygon> for MultiSphericalPolygon {
 
     fn intersection(&self, other: &Self) -> Option<Self> {
         self.polygons
-            .par_iter()
+            .iter()
             .map(|polygon| polygon.intersection(other))
             .sum()
     }
 
     fn symmetric_difference(&self, other: &Self) -> Self {
         self.polygons
-            .par_iter()
+            .iter()
             .map(|polygon| polygon.symmetric_difference(other))
             .sum()
     }

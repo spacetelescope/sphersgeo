@@ -1,5 +1,4 @@
 use kiddo::traits::DistanceMetric;
-use pyo3::prelude::*;
 
 pub trait Geometry {
     fn vertices(&self) -> crate::sphericalpoint::MultiSphericalPoint;
@@ -104,22 +103,6 @@ pub trait GeometryCollection<G: Geometry, M: MultiGeometry<G> = Self> {
 
     /// only return non-overlapping regions between geometries
     fn symmetric_difference_self(&self) -> Option<M>;
-}
-
-#[derive(FromPyObject, IntoPyObject, Debug, Clone, PartialEq)]
-pub enum AnyGeometry {
-    #[pyo3(transparent)]
-    SphericalPoint(crate::sphericalpoint::SphericalPoint),
-    #[pyo3(transparent)]
-    MultiSphericalPoint(crate::sphericalpoint::MultiSphericalPoint),
-    #[pyo3(transparent)]
-    ArcString(crate::arcstring::ArcString),
-    #[pyo3(transparent)]
-    MultiArcString(crate::arcstring::MultiArcString),
-    #[pyo3(transparent)]
-    SphericalPolygon(crate::sphericalpolygon::SphericalPolygon),
-    #[pyo3(transparent)]
-    MultiSphericalPolygon(crate::sphericalpolygon::MultiSphericalPolygon),
 }
 
 /// define angular separation between 3D vectors
