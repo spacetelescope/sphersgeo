@@ -8,7 +8,7 @@ from numpy.typing import NDArray
 class SphericalPoint:
     def __init__(
         self,
-        xyz: tuple[float, float, float] | NDArray[float64] | list[float],
+        xyz: tuple[float, float, float] | list[float] | NDArray[float64],
     ): ...
 
     @classmethod
@@ -20,22 +20,25 @@ class SphericalPoint:
     @property
     def xyz(self) -> Tuple[float, float, float]: ...
 
-    def to_lonlat(self) -> Tuple[float, float]: ...
+    @property
+    def lonlat(self) -> Tuple[float, float]: ...
 
     def two_arc_angle(self, a: SphericalPoint, b: SphericalPoint) -> float: ...
 
     def collinear(self, a: SphericalPoint, b: SphericalPoint) -> bool: ...
 
-    def interpolate_between(
-        self, other: SphericalPoint, n: int
+    def is_clockwise_turn(self, a: SphericalPoint, b: SphericalPoint) -> bool: ...
+
+    def interpolate_points(
+        self, end: SphericalPoint, n: int
     ) -> MultiSphericalPoint: ...
 
     @property
     def vector_length(self) -> float: ...
 
-    def vector_dot(self, other: SphericalPoint) -> float: ...
-
     def vector_cross(self, other: SphericalPoint) -> SphericalPoint: ...
+
+    def vector_dot(self, other: SphericalPoint) -> float: ...
 
     def vector_rotate_around(
         self, other: SphericalPoint, theta: float
@@ -45,10 +48,7 @@ class SphericalPoint:
     def vertices(self) -> MultiSphericalPoint: ...
 
     @property
-    def area(self) -> float: ...
-
-    @property
-    def length(self) -> float: ...
+    def boundary(self) -> None: ...
 
     @property
     def representative(self) -> SphericalPoint: ...
@@ -57,32 +57,15 @@ class SphericalPoint:
     def centroid(self) -> SphericalPoint: ...
 
     @property
-    def boundary(self) -> None: ...
-
-    @property
     def convex_hull(self) -> None: ...
 
-    def distance(
-        self,
-        other: SphericalPoint
-        | MultiSphericalPoint
-        | ArcString
-        | MultiArcString
-        | SphericalPolygon
-        | MultiSphericalPolygon,
-    ) -> float: ...
+    @property
+    def area(self) -> float: ...
 
-    def contains(
-        self,
-        other: SphericalPoint
-        | MultiSphericalPoint
-        | ArcString
-        | MultiArcString
-        | SphericalPolygon
-        | MultiSphericalPolygon,
-    ) -> bool: ...
+    @property
+    def length(self) -> float: ...
 
-    def within(
+    def intersects(
         self,
         other: SphericalPoint
         | MultiSphericalPoint
@@ -102,6 +85,16 @@ class SphericalPoint:
         | MultiSphericalPolygon,
     ) -> bool: ...
 
+    def disjoint(
+        self,
+        other: SphericalPoint
+        | MultiSphericalPoint
+        | ArcString
+        | MultiArcString
+        | SphericalPolygon
+        | MultiSphericalPolygon,
+    ) -> bool: ...
+
     def crosses(
         self,
         other: SphericalPoint
@@ -112,7 +105,7 @@ class SphericalPoint:
         | MultiSphericalPolygon,
     ) -> bool: ...
 
-    def intersects(
+    def within(
         self,
         other: SphericalPoint
         | MultiSphericalPoint
@@ -121,6 +114,50 @@ class SphericalPoint:
         | SphericalPolygon
         | MultiSphericalPolygon,
     ) -> bool: ...
+
+    def contains(
+        self,
+        other: SphericalPoint
+        | MultiSphericalPoint
+        | ArcString
+        | MultiArcString
+        | SphericalPolygon
+        | MultiSphericalPolygon,
+    ) -> bool: ...
+
+    def overlaps(
+        self,
+        other: SphericalPoint
+        | MultiSphericalPoint
+        | ArcString
+        | MultiArcString
+        | SphericalPolygon
+        | MultiSphericalPolygon,
+    ) -> bool: ...
+
+    def covers(
+        self,
+        other: SphericalPoint
+        | MultiSphericalPoint
+        | ArcString
+        | MultiArcString
+        | SphericalPolygon
+        | MultiSphericalPolygon,
+    ) -> bool: ...
+
+    def union(
+        self, other: SphericalPoint | MultiSphericalPoint
+    ) -> MultiSphericalPoint | None: ...
+
+    def distance(
+        self,
+        other: SphericalPoint
+        | MultiSphericalPoint
+        | ArcString
+        | MultiArcString
+        | SphericalPolygon
+        | MultiSphericalPolygon,
+    ) -> float: ...
 
     def intersection(
         self,
@@ -160,7 +197,9 @@ class SphericalPoint:
 class MultiSphericalPoint:
     def __init__(
         self,
-        xyzs: list[tuple[float, float, float]] | NDArray[float] | list[list[float]],
+        xyzs: list[tuple[float, float, float]]
+        | list[SphericalPoint]
+        | NDArray[float64],
     ): ...
 
     @classmethod
@@ -171,7 +210,10 @@ class MultiSphericalPoint:
     @property
     def xyzs(self) -> NDArray[float64]: ...
 
-    def to_lonlats(self) -> NDArray[float64]: ...
+    @property
+    def lonlats(self) -> NDArray[float64]: ...
+
+    def nearest(self, other: SphericalPoint) -> tuple[SphericalPoint, float]: ...
 
     def vectors_rotate_around(
         self, other: MultiSphericalPoint, theta: float
@@ -184,10 +226,7 @@ class MultiSphericalPoint:
     def vertices(self) -> MultiSphericalPoint: ...
 
     @property
-    def area(self) -> float: ...
-
-    @property
-    def length(self) -> float: ...
+    def boundary(self) -> None: ...
 
     @property
     def representative(self) -> SphericalPoint: ...
@@ -196,32 +235,15 @@ class MultiSphericalPoint:
     def centroid(self) -> SphericalPoint: ...
 
     @property
-    def boundary(self) -> None: ...
+    def convex_hull(self) -> SphericalPolygon: ...
 
     @property
-    def convex_hull(self) -> SphericalPolygon | None: ...
+    def area(self) -> float: ...
 
-    def distance(
-        self,
-        other: SphericalPoint
-        | MultiSphericalPoint
-        | ArcString
-        | MultiArcString
-        | SphericalPolygon
-        | MultiSphericalPolygon,
-    ) -> float: ...
+    @property
+    def length(self) -> float: ...
 
-    def contains(
-        self,
-        other: SphericalPoint
-        | MultiSphericalPoint
-        | ArcString
-        | MultiArcString
-        | SphericalPolygon
-        | MultiSphericalPolygon,
-    ) -> bool: ...
-
-    def within(
+    def intersects(
         self,
         other: SphericalPoint
         | MultiSphericalPoint
@@ -241,6 +263,16 @@ class MultiSphericalPoint:
         | MultiSphericalPolygon,
     ) -> bool: ...
 
+    def disjoint(
+        self,
+        other: SphericalPoint
+        | MultiSphericalPoint
+        | ArcString
+        | MultiArcString
+        | SphericalPolygon
+        | MultiSphericalPolygon,
+    ) -> bool: ...
+
     def crosses(
         self,
         other: SphericalPoint
@@ -251,7 +283,7 @@ class MultiSphericalPoint:
         | MultiSphericalPolygon,
     ) -> bool: ...
 
-    def intersects(
+    def within(
         self,
         other: SphericalPoint
         | MultiSphericalPoint
@@ -260,6 +292,50 @@ class MultiSphericalPoint:
         | SphericalPolygon
         | MultiSphericalPolygon,
     ) -> bool: ...
+
+    def contains(
+        self,
+        other: SphericalPoint
+        | MultiSphericalPoint
+        | ArcString
+        | MultiArcString
+        | SphericalPolygon
+        | MultiSphericalPolygon,
+    ) -> bool: ...
+
+    def overlaps(
+        self,
+        other: SphericalPoint
+        | MultiSphericalPoint
+        | ArcString
+        | MultiArcString
+        | SphericalPolygon
+        | MultiSphericalPolygon,
+    ) -> bool: ...
+
+    def covers(
+        self,
+        other: SphericalPoint
+        | MultiSphericalPoint
+        | ArcString
+        | MultiArcString
+        | SphericalPolygon
+        | MultiSphericalPolygon,
+    ) -> bool: ...
+
+    def union(
+        self, other: SphericalPoint | MultiSphericalPoint
+    ) -> MultiSphericalPoint | None: ...
+
+    def distance(
+        self,
+        other: SphericalPoint
+        | MultiSphericalPoint
+        | ArcString
+        | MultiArcString
+        | SphericalPolygon
+        | MultiSphericalPolygon,
+    ) -> float: ...
 
     def intersection(
         self,
@@ -284,8 +360,6 @@ class MultiSphericalPoint:
     @property
     def parts(self) -> List[SphericalPoint]: ...
 
-    def __concat__(self, other: MultiSphericalPoint) -> MultiSphericalPoint: ...
-
     def __len__(self) -> int: ...
 
     def __getitem__(self, index: int) -> SphericalPoint: ...
@@ -294,9 +368,9 @@ class MultiSphericalPoint:
 
     def extend(self, other: MultiSphericalPoint): ...
 
-    def __add__(self, other: MultiSphericalPoint) -> MultiSphericalPoint: ...
-
     def __iadd__(self, other: MultiSphericalPoint): ...
+
+    def __add__(self, other: MultiSphericalPoint) -> MultiSphericalPoint: ...
 
     def __eq__(self, other) -> bool: ...
 
@@ -308,15 +382,14 @@ class MultiSphericalPoint:
 class ArcString:
     def __init__(
         self,
-        points: MultiSphericalPoint
-        | list[tuple[float, float, float]]
-        | list[list[float]]
-        | NDArray[float],
+        points: MultiSphericalPoint,
         closed: bool = False,
     ): ...
 
     @property
     def closed(self) -> bool: ...
+
+    def __len__(self) -> int: ...
 
     @property
     def lengths(self) -> NDArray[float64]: ...
@@ -338,10 +411,7 @@ class ArcString:
     def vertices(self) -> MultiSphericalPoint: ...
 
     @property
-    def area(self) -> float: ...
-
-    @property
-    def length(self) -> float: ...
+    def boundary(self) -> None: ...
 
     @property
     def representative(self) -> SphericalPoint: ...
@@ -350,32 +420,15 @@ class ArcString:
     def centroid(self) -> SphericalPoint: ...
 
     @property
-    def boundary(self) -> MultiSphericalPoint: ...
+    def convex_hull(self) -> SphericalPolygon: ...
 
     @property
-    def convex_hull(self) -> SphericalPolygon | None: ...
+    def area(self) -> float: ...
 
-    def distance(
-        self,
-        other: SphericalPoint
-        | MultiSphericalPoint
-        | ArcString
-        | MultiArcString
-        | SphericalPolygon
-        | MultiSphericalPolygon,
-    ) -> float: ...
+    @property
+    def length(self) -> float: ...
 
-    def contains(
-        self,
-        other: SphericalPoint
-        | MultiSphericalPoint
-        | ArcString
-        | MultiArcString
-        | SphericalPolygon
-        | MultiSphericalPolygon,
-    ) -> bool: ...
-
-    def within(
+    def intersects(
         self,
         other: SphericalPoint
         | MultiSphericalPoint
@@ -395,6 +448,16 @@ class ArcString:
         | MultiSphericalPolygon,
     ) -> bool: ...
 
+    def disjoint(
+        self,
+        other: SphericalPoint
+        | MultiSphericalPoint
+        | ArcString
+        | MultiArcString
+        | SphericalPolygon
+        | MultiSphericalPolygon,
+    ) -> bool: ...
+
     def crosses(
         self,
         other: SphericalPoint
@@ -405,7 +468,7 @@ class ArcString:
         | MultiSphericalPolygon,
     ) -> bool: ...
 
-    def intersects(
+    def within(
         self,
         other: SphericalPoint
         | MultiSphericalPoint
@@ -414,6 +477,48 @@ class ArcString:
         | SphericalPolygon
         | MultiSphericalPolygon,
     ) -> bool: ...
+
+    def contains(
+        self,
+        other: SphericalPoint
+        | MultiSphericalPoint
+        | ArcString
+        | MultiArcString
+        | SphericalPolygon
+        | MultiSphericalPolygon,
+    ) -> bool: ...
+
+    def overlaps(
+        self,
+        other: SphericalPoint
+        | MultiSphericalPoint
+        | ArcString
+        | MultiArcString
+        | SphericalPolygon
+        | MultiSphericalPolygon,
+    ) -> bool: ...
+
+    def covers(
+        self,
+        other: SphericalPoint
+        | MultiSphericalPoint
+        | ArcString
+        | MultiArcString
+        | SphericalPolygon
+        | MultiSphericalPolygon,
+    ) -> bool: ...
+
+    def union(self, other: ArcString | MultiArcString) -> MultiArcString | None: ...
+
+    def distance(
+        self,
+        other: SphericalPoint
+        | MultiSphericalPoint
+        | ArcString
+        | MultiArcString
+        | SphericalPolygon
+        | MultiSphericalPolygon,
+    ) -> float: ...
 
     def intersection(
         self,
@@ -441,27 +546,18 @@ class ArcString:
 
     def __repr__(self) -> str: ...
 
-    def __len__(self) -> int: ...
-
 
 class MultiArcString:
     def __init__(
         self,
-        arcstrings: list[ArcString]
-        | list[MultiSphericalPoint]
-        | list[list[tuple[float, float, float]]]
-        | list[list[list[float]]]
-        | list[NDArray[float]],
+        arcstrings: list[ArcString],
     ): ...
 
     @property
     def vertices(self) -> MultiSphericalPoint: ...
 
     @property
-    def area(self) -> float: ...
-
-    @property
-    def length(self) -> float: ...
+    def boundary(self) -> None: ...
 
     @property
     def representative(self) -> SphericalPoint: ...
@@ -470,32 +566,15 @@ class MultiArcString:
     def centroid(self) -> SphericalPoint: ...
 
     @property
-    def boundary(self) -> MultiSphericalPoint: ...
+    def convex_hull(self) -> SphericalPolygon: ...
 
     @property
-    def convex_hull(self) -> SphericalPolygon | None: ...
+    def area(self) -> float: ...
 
-    def distance(
-        self,
-        other: SphericalPoint
-        | MultiSphericalPoint
-        | ArcString
-        | MultiArcString
-        | SphericalPolygon
-        | MultiSphericalPolygon,
-    ) -> float: ...
+    @property
+    def length(self) -> float: ...
 
-    def contains(
-        self,
-        other: SphericalPoint
-        | MultiSphericalPoint
-        | ArcString
-        | MultiArcString
-        | SphericalPolygon
-        | MultiSphericalPolygon,
-    ) -> bool: ...
-
-    def within(
+    def intersects(
         self,
         other: SphericalPoint
         | MultiSphericalPoint
@@ -515,6 +594,16 @@ class MultiArcString:
         | MultiSphericalPolygon,
     ) -> bool: ...
 
+    def disjoint(
+        self,
+        other: SphericalPoint
+        | MultiSphericalPoint
+        | ArcString
+        | MultiArcString
+        | SphericalPolygon
+        | MultiSphericalPolygon,
+    ) -> bool: ...
+
     def crosses(
         self,
         other: SphericalPoint
@@ -525,7 +614,7 @@ class MultiArcString:
         | MultiSphericalPolygon,
     ) -> bool: ...
 
-    def intersects(
+    def within(
         self,
         other: SphericalPoint
         | MultiSphericalPoint
@@ -534,6 +623,48 @@ class MultiArcString:
         | SphericalPolygon
         | MultiSphericalPolygon,
     ) -> bool: ...
+
+    def contains(
+        self,
+        other: SphericalPoint
+        | MultiSphericalPoint
+        | ArcString
+        | MultiArcString
+        | SphericalPolygon
+        | MultiSphericalPolygon,
+    ) -> bool: ...
+
+    def overlaps(
+        self,
+        other: SphericalPoint
+        | MultiSphericalPoint
+        | ArcString
+        | MultiArcString
+        | SphericalPolygon
+        | MultiSphericalPolygon,
+    ) -> bool: ...
+
+    def covers(
+        self,
+        other: SphericalPoint
+        | MultiSphericalPoint
+        | ArcString
+        | MultiArcString
+        | SphericalPolygon
+        | MultiSphericalPolygon,
+    ) -> bool: ...
+
+    def union(self, other: ArcString | MultiArcString) -> MultiArcString | None: ...
+
+    def distance(
+        self,
+        other: SphericalPoint
+        | MultiSphericalPoint
+        | ArcString
+        | MultiArcString
+        | SphericalPolygon
+        | MultiSphericalPolygon,
+    ) -> float: ...
 
     def intersection(
         self,
@@ -555,27 +686,32 @@ class MultiArcString:
         | MultiSphericalPolygon,
     ) -> AnyGeometry: ...
 
+    @property
+    def parts(self) -> List[ArcString]: ...
+
+    def __len__(self) -> int: ...
+
+    def __getitem__(self, index: int) -> ArcString: ...
+
+    def append(self, other: ArcString): ...
+
+    def extend(self, other: MultiArcString): ...
+
+    def __iadd__(self, other: MultiArcString): ...
+
+    def __add__(self, other: MultiArcString) -> MultiArcString: ...
+
     def __eq__(self, other) -> bool: ...
 
     def __str__(self) -> str: ...
 
     def __repr__(self) -> str: ...
 
-    def __len__(self) -> int: ...
-
 
 class SphericalPolygon:
     def __init__(
         self,
-        exterior: ArcString
-        | MultiSphericalPoint
-        | list[tuple[float, float, float]]
-        | NDArray[float]
-        | list[list[float]],
-        interior_point: None
-        | SphericalPoint
-        | tuple[float, float, float]
-        | NDArray[float] = None,
+        polygon: ArcString | tuple[ArcString, SphericalPoint],
     ): ...
 
     @classmethod
@@ -807,13 +943,26 @@ class MultiSphericalPolygon:
         | MultiSphericalPolygon,
     ) -> AnyGeometry: ...
 
+    @property
+    def parts(self) -> List[SphericalPolygon]: ...
+
+    def __len__(self) -> int: ...
+
+    def __getitem__(self, index: int) -> SphericalPolygon: ...
+
+    def append(self, other: SphericalPolygon): ...
+
+    def extend(self, other: MultiSphericalPolygon): ...
+
+    def __iadd__(self, other: MultiSphericalPolygon): ...
+
+    def __add__(self, other: MultiSphericalPolygon) -> MultiSphericalPolygon: ...
+
     def __eq__(self, other) -> bool: ...
 
     def __str__(self) -> str: ...
 
     def __repr__(self) -> str: ...
-
-    def __len__(self) -> int: ...
 
 
 class AnyGeometry(Enum):

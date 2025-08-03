@@ -244,7 +244,7 @@ where
         let mut removed = vec![];
         for (node_index, node) in self.nodes.to_owned().iter().enumerate() {
             for edge_node_index in node.edges.keys() {
-                if crate::sphericalpoint::xyzs_distance_over_sphere_radians(
+                if crate::sphericalpoint::arc_distance_over_sphere_radians(
                     &node.xyz,
                     &self.nodes[*edge_node_index].xyz,
                 ) < tolerance

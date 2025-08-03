@@ -6,8 +6,7 @@ use crate::{
     },
     sphericalpoint::{
         xyz_add_xyz, xyz_cross, xyz_div_f64, xyz_mul_xyz, xyz_sub_xyz, xyz_sum,
-        xyz_two_arc_angle_radians, xyzs_distance_over_sphere_radians, xyzs_mean, xyzs_sum,
-        MultiSphericalPoint, SphericalPoint,
+        xyz_two_arc_angle_radians, xyzs_mean, xyzs_sum, MultiSphericalPoint, SphericalPoint,
     },
 };
 use std::{
@@ -20,9 +19,38 @@ use std::{
 #[cfg(feature = "py")]
 use pyo3::prelude::*;
 
+/// surface area of a triangle on the sphere via Girard's theorum
+///
+///     θ_1 + θ_2 + θ_3 − π
+///
+/// References
+/// ----------
+/// - Klain, D. A. (2019). A probabilistic proof of the spherical excess formula (No. arXiv:1909.04505). arXiv. https://doi.org/10.48550/arXiv.1909.04505
+/// - Miller, Robert D. Computing the area of a spherical polygon. Graphics Gems IV. 1994. Academic Press. doi:10.5555/180895.180907
+///   `pdf <https://www.google.com/books/edition/Graphics_Gems_IV/CCqzMm_-WucC?hl=en&gbpv=1&dq=Graphics%20Gems%20IV.%20p132&pg=PA133&printsec=frontcover>`_
+fn spherical_triangle_area(a: &[f64; 3], b: &[f64; 3], c: &[f64; 3]) -> f64 {
+    // xyz_two_arc_angle_radians(c, a, b)
+    //     + xyz_two_arc_angle_radians(a, b, c)
+    //     + xyz_two_arc_angle_radians(b, c, a)
+    //     - std::f64::consts::PI
+
+    // redefine Girard's theorum to avoid domain errors
+    let ab = crate::sphericalpoint::arc_distance_over_sphere_radians(a, b);
+    let bc = crate::sphericalpoint::arc_distance_over_sphere_radians(b, c);
+    let ca = crate::sphericalpoint::arc_distance_over_sphere_radians(c, a);
+    let s = (ab + bc + ca) / 2.0;
+
+    4.0 * ((s / 2.0).tan()
+        * ((s - ab) / 2.0).tan()
+        * ((s - bc) / 2.0).tan()
+        * ((s - ca) / 2.0).tan())
+    .sqrt()
+    .atan()
+}
+
 // use the classical even-crossings ray algorithm for point-in-polygon
-pub fn point_in_polygon_boundary(
-    point: &[f64; 3],
+pub fn xyz_in_polygon_boundary(
+    xyz: &[f64; 3],
     polygon_interior_xyz: &[f64; 3],
     polygon_boundary_xyzs: &[[f64; 3]],
 ) -> bool {
@@ -30,7 +58,7 @@ pub fn point_in_polygon_boundary(
     let mut crossings = 0;
     for index in 0..polygon_boundary_xyzs.len() - 1 {
         if xyz_two_arc_crossing(
-            (point, polygon_interior_xyz),
+            (xyz, polygon_interior_xyz),
             (
                 &polygon_boundary_xyzs[index],
                 &polygon_boundary_xyzs[index + 1],
@@ -235,24 +263,21 @@ impl SphericalPolygon {
         }));
 
         // Rotate by radius around the perpendicular vector to get the "pen"
-        let xyz = center.vector_rotate_around(&perpendicular, radius);
+        let pen = center.vector_rotate_around(&perpendicular, radius);
 
         // Then rotate the pen around the center point all 360 degrees
-        let mut spokes = crate::arcstring::linspace(std::f64::consts::PI * 2.0, 0.0, steps)
-            .iter()
-            .map(|x| x.to_degrees())
-            .collect::<Vec<f64>>();
+        let mut spokes = crate::sphericalpoint::linspace(std::f64::consts::PI * 2.0, 0.0, steps);
 
         // Ensure that the first and last elements are exactly the same.
         // 2π should equal 0, but with rounding error that isn't always the case.
-        spokes[0] = 0.0;
+        let num_spokes = spokes.len();
+        spokes[num_spokes - 1] = 0.0;
 
-        // reverse the direction
-        spokes = spokes.into_iter().rev().collect();
-
+        // iterate over spokes in reverse and calculate the vertices
         let vertices = spokes
             .iter()
-            .map(|spoke| xyz.vector_rotate_around(center, spoke).xyz)
+            .rev()
+            .map(|spoke| pen.vector_rotate_around(center, &spoke.to_degrees()).xyz)
             .collect::<Vec<[f64; 3]>>();
 
         Self::try_new(
@@ -348,7 +373,7 @@ impl Geometry for SphericalPolygon {
                 (index + 1..self.boundary.points.len())
                     .filter_map(|other_index| {
                         if index != other_index {
-                            Some(crate::sphericalpoint::xyzs_distance_over_sphere_radians(
+                            Some(crate::sphericalpoint::arc_distance_over_sphere_radians(
                                 &self.boundary.points.xyzs[index],
                                 &self.boundary.points.xyzs[other_index],
                             ))
@@ -384,7 +409,7 @@ impl GeometricPredicates<SphericalPoint> for SphericalPolygon {
 
     fn contains(&self, other: &SphericalPoint) -> bool {
         !self.boundary.contains(other)
-            && point_in_polygon_boundary(
+            && xyz_in_polygon_boundary(
                 &other.xyz,
                 &self.interior_point.xyz,
                 &self.boundary.points.xyzs,
@@ -393,7 +418,7 @@ impl GeometricPredicates<SphericalPoint> for SphericalPolygon {
 
     fn covers(&self, other: &SphericalPoint) -> bool {
         self.boundary.contains(other)
-            || point_in_polygon_boundary(
+            || xyz_in_polygon_boundary(
                 &other.xyz,
                 &self.interior_point.xyz,
                 &self.boundary.points.xyzs,
@@ -428,8 +453,7 @@ impl GeometricOperations<SphericalPoint> for SphericalPolygon {
 impl GeometricPredicates<MultiSphericalPoint> for SphericalPolygon {
     fn intersects(&self, other: &MultiSphericalPoint) -> bool {
         for xyz in &other.xyzs {
-            if point_in_polygon_boundary(xyz, &self.interior_point.xyz, &self.boundary.points.xyzs)
-            {
+            if xyz_in_polygon_boundary(xyz, &self.interior_point.xyz, &self.boundary.points.xyzs) {
                 return true;
             }
         }
@@ -452,8 +476,8 @@ impl GeometricPredicates<MultiSphericalPoint> for SphericalPolygon {
 
     fn contains(&self, other: &MultiSphericalPoint) -> bool {
         for xyz in &other.xyzs {
-            if crate::arcstring::arcstring_contains_point(&self.boundary, xyz)
-                || !point_in_polygon_boundary(
+            if crate::arcstring::xyz_in_arcstring(xyz, &self.boundary)
+                || !xyz_in_polygon_boundary(
                     xyz,
                     &self.interior_point.xyz,
                     &self.boundary.points.xyzs,
@@ -470,8 +494,8 @@ impl GeometricPredicates<MultiSphericalPoint> for SphericalPolygon {
 
     fn covers(&self, other: &MultiSphericalPoint) -> bool {
         for xyz in &other.xyzs {
-            if !crate::arcstring::arcstring_contains_point(&self.boundary, xyz)
-                && !point_in_polygon_boundary(
+            if !crate::arcstring::xyz_in_arcstring(xyz, &self.boundary)
+                && !xyz_in_polygon_boundary(
                     xyz,
                     &self.interior_point.xyz,
                     &self.boundary.points.xyzs,
@@ -506,7 +530,7 @@ impl GeometricOperations<MultiSphericalPoint> for SphericalPolygon {
                 .xyzs
                 .iter()
                 .filter_map(|xyz| {
-                    if point_in_polygon_boundary(
+                    if xyz_in_polygon_boundary(
                         xyz,
                         &self.interior_point.xyz,
                         &self.boundary.points.xyzs,
@@ -608,12 +632,12 @@ impl GeometricOperations<ArcString> for SphericalPolygon {
                     if let Some(crossing_segments) = polygon.intersection(&arcstring) {
                         for crossing_segment in crossing_segments.arcstrings {
                             // an arcstring only splits the polygon if it touches the boundary twice
-                            if crate::arcstring::arcstring_contains_point(
-                                &self.boundary,
+                            if crate::arcstring::xyz_in_arcstring(
                                 &crossing_segment.points.xyzs[0],
-                            ) && crate::arcstring::arcstring_contains_point(
                                 &self.boundary,
+                            ) && crate::arcstring::xyz_in_arcstring(
                                 &crossing_segment.points.xyzs[crossing_segment.points.len() - 1],
+                                &self.boundary,
                             ) {
                                 // this polygon will be split into two
                                 polygon_removal_indices.push(index);

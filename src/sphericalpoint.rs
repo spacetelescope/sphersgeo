@@ -12,6 +12,15 @@ use pyo3::prelude::*;
 #[cfg(feature = "ndarray")]
 use ndarray::{array, Array1, Array2, ArrayView1, Axis};
 
+pub fn linspace(x0: f64, xend: f64, n: usize) -> Vec<f64> {
+    let dx = (xend - x0) / ((n - 1) as f64);
+    let mut x = vec![x0; n];
+    for i in 1..n {
+        x[i] = x[i - 1] + dx;
+    }
+    x
+}
+
 /// length of the underlying xyz vector
 ///
 ///     r = sqrt(x^2 + y^2 + z^2)
@@ -179,20 +188,20 @@ fn xyz_rotate_around(a: &[f64; 3], b: &[f64; 3], theta: &f64) -> [f64; 3] {
 /// References
 /// ----------
 /// - https://www.mathforengineers.com/math-calculators/angle-between-two-vectors-in-spherical-coordinates.html
-pub fn xyzs_distance_over_sphere_radians(a: &[f64; 3], b: &[f64; 3]) -> f64 {
-    if xyz_eq(a, b) {
+pub fn arc_distance_over_sphere_radians(start: &[f64; 3], end: &[f64; 3]) -> f64 {
+    if xyz_eq(start, end) {
         0.0
     } else {
-        let distance = xyz_dot(a, b).acos();
+        let distance = xyz_dot(start, end).acos();
         if !distance.is_nan() {
             distance
         } else {
-            let crossed = xyz_cross(a, b);
+            let crossed = xyz_cross(start, end);
 
             // avoid domain issues of a.dot(b).acos()
             (crossed[0].powi(2) + crossed[1].powi(2) + crossed[2].powi(2))
                 .sqrt()
-                .atan2(xyz_dot(a, b))
+                .atan2(xyz_dot(start, end))
         }
     }
 }
@@ -234,9 +243,9 @@ pub fn xyz_two_arc_angle_radians(a: &[f64; 3], b: &[f64; 3], c: &[f64; 3]) -> f6
     //
     // angle
 
-    let ab = xyzs_distance_over_sphere_radians(a, b);
-    let bc = xyzs_distance_over_sphere_radians(b, c);
-    let ca = xyzs_distance_over_sphere_radians(c, a);
+    let ab = arc_distance_over_sphere_radians(a, b);
+    let bc = arc_distance_over_sphere_radians(b, c);
+    let ca = arc_distance_over_sphere_radians(c, a);
 
     let radians = if ab < tolerance || bc < tolerance || ca < tolerance {
         // if any side of the triangle is negligibly small
@@ -302,6 +311,36 @@ pub fn xyzs_collinear(a: &[f64; 3], b: &[f64; 3], c: &[f64; 3]) -> bool {
 pub fn point_within_kdtree(xyz: &[f64; 3], kdtree: &ImmutableKdTree<f64, 3>) -> bool {
     // take advantage of the kdtree's distance function in 3D space
     kdtree.nearest_one::<SquaredEuclidean>(xyz).distance < 3e-11
+}
+
+pub fn arc_interpolate_points(
+    start: &[f64; 3],
+    end: &[f64; 3],
+    n: usize,
+) -> Result<Vec<[f64; 3]>, String> {
+    let n = if n < 2 { 2 } else { n };
+    let omega = arc_distance_over_sphere_radians(start, end);
+
+    let mut offsets = linspace(0.0, 1.0, n);
+    offsets = if omega == 0.0 {
+        offsets
+    } else {
+        offsets
+            .iter()
+            .map(|offset| (offset * omega).sin() / omega.sin())
+            .collect()
+    };
+
+    Ok(offsets
+        .iter()
+        .zip(offsets.iter().rev())
+        .map(|(offset, inverted_offset)| {
+            xyz_add_xyz(
+                &xyz_mul_f64(start, inverted_offset),
+                &xyz_mul_f64(end, offset),
+            )
+        })
+        .collect())
 }
 
 /// 3D Cartesian vector representing a point on the unit sphere
@@ -544,20 +583,8 @@ impl SphericalPoint {
         xyz_to_lonlat(&self.xyz)
     }
 
-    /// create n number of points equally spaced on an arc between this point and another point
-    pub fn interpolate_between(
-        &self,
-        other: &Self,
-        n: usize,
-    ) -> Result<MultiSphericalPoint, String> {
-        MultiSphericalPoint::try_from(crate::arcstring::interpolate_points_along_arc(
-            (&self.xyz, &other.xyz),
-            n,
-        )?)
-    }
-
-    pub fn two_arc_angle(&self, a: &SphericalPoint, b: &SphericalPoint) -> f64 {
-        xyz_two_arc_angle_radians(&a.xyz, &self.xyz, &b.xyz).to_degrees()
+    pub fn two_arc_angle(&self, start: &SphericalPoint, end: &SphericalPoint) -> f64 {
+        xyz_two_arc_angle_radians(&start.xyz, &self.xyz, &end.xyz).to_degrees()
     }
 
     /// whether this point shares a line with two other points
@@ -565,18 +592,27 @@ impl SphericalPoint {
         xyzs_collinear(&a.xyz, &self.xyz, &b.xyz)
     }
 
-    pub fn clockwise_turn(&self, a: &Self, b: &Self) -> bool {
-        xyz_two_arc_is_clockwise(&a.xyz, &self.xyz, &b.xyz)
+    /// whether the angle formed between this point and two other points is a clockwise turn
+    pub fn is_clockwise_turn(&self, start: &Self, end: &Self) -> bool {
+        xyz_two_arc_is_clockwise(&start.xyz, &self.xyz, &end.xyz)
     }
 
+    /// create n number of points equally spaced on an arc between this point and another point
+    pub fn interpolate_points(&self, end: &Self, n: usize) -> Result<MultiSphericalPoint, String> {
+        MultiSphericalPoint::try_from(arc_interpolate_points(&self.xyz, &end.xyz, n)?)
+    }
+
+    /// length of the underlying xyz vector
     pub fn vector_length(&self) -> f64 {
         xyz_length(&self.xyz)
     }
 
+    /// cross product of this xyz vector with another xyz vector
     pub fn vector_cross(&self, other: &Self) -> Self {
         Self::from(xyz_cross(&self.xyz, &other.xyz))
     }
 
+    /// dot product of this xyz vector with another xyz vector
     pub fn vector_dot(&self, other: &Self) -> f64 {
         xyz_dot(&self.xyz, &other.xyz)
     }
@@ -665,7 +701,7 @@ impl GeometricOperations<Self> for SphericalPoint {
     }
 
     fn distance(&self, other: &Self) -> f64 {
-        xyzs_distance_over_sphere_radians(&self.xyz, &other.xyz).to_degrees()
+        arc_distance_over_sphere_radians(&self.xyz, &other.xyz).to_degrees()
     }
 
     fn intersection(&self, other: &Self) -> Option<SphericalPoint> {
@@ -1151,25 +1187,6 @@ impl MultiSphericalPoint {
         Self::try_from(lonlats.iter().map(lonlat_to_xyz).collect::<Vec<[f64; 3]>>())
     }
 
-    /// retrieve the nearest of these points to the given point, along with the normalized 3D Cartesian distance to that point
-    pub fn nearest(&self, other: &SphericalPoint) -> (SphericalPoint, f64) {
-        // since the kdtree is over normalized vectors, the nearest vector in 3D space is also the nearest in angular distance
-        let nearest = self.kdtree.nearest_one::<SquaredEuclidean>(&[
-            other.xyz[0],
-            other.xyz[1],
-            other.xyz[2],
-        ]);
-
-        (
-            SphericalPoint::from(self.xyzs[nearest.item as usize]),
-            nearest.distance,
-        )
-    }
-
-    fn recreate_kdtree(&mut self) {
-        self.kdtree = ImmutableKdTree::<f64, 3>::from(self.xyzs.as_slice());
-    }
-
     /// convert to angle coordinates along the sphere
     ///
     /// With radius *r*, longitude *l*, and latitude *b*:
@@ -1185,22 +1202,19 @@ impl MultiSphericalPoint {
         self.xyzs.iter().map(xyz_to_lonlat).collect()
     }
 
-    /// lengths of the underlying xyz vectors
-    ///
-    ///     r = sqrt(x^2 + y^2 + z^2)
-    pub fn vectors_lengths(&self) -> Vec<f64> {
-        self.xyzs.iter().map(xyz_length).collect()
-    }
+    /// retrieve the nearest of these points to the given point, along with the normalized 3D Cartesian distance to that point across the unit sphere
+    pub fn nearest(&self, other: &SphericalPoint) -> (SphericalPoint, f64) {
+        // since the kdtree is over normalized vectors, the nearest vector in 3D space is also the nearest in angular distance
+        let nearest = self.kdtree.nearest_one::<SquaredEuclidean>(&[
+            other.xyz[0],
+            other.xyz[1],
+            other.xyz[2],
+        ]);
 
-    pub fn vector_cross(&self, other: &Self) -> Self {
-        Self::try_from(
-            self.xyzs
-                .iter()
-                .zip(other.xyzs.iter())
-                .map(|(a, b)| xyz_cross(a, b))
-                .collect::<Vec<[f64; 3]>>(),
+        (
+            SphericalPoint::from(self.xyzs[nearest.item as usize]),
+            nearest.distance,
         )
-        .unwrap()
     }
 
     /// rotate the underlying vectors by theta angle around other vectors
@@ -1213,6 +1227,17 @@ impl MultiSphericalPoint {
                 .collect::<Vec<[f64; 3]>>(),
         )
         .unwrap()
+    }
+
+    /// lengths of the underlying xyz vectors
+    ///
+    ///     r = sqrt(x^2 + y^2 + z^2)
+    pub fn vectors_lengths(&self) -> Vec<f64> {
+        self.xyzs.iter().map(xyz_length).collect()
+    }
+
+    fn recreate_kdtree(&mut self) {
+        self.kdtree = ImmutableKdTree::<f64, 3>::from(self.xyzs.as_slice());
     }
 }
 
@@ -1584,7 +1609,7 @@ impl GeometricPredicates<crate::arcstring::ArcString> for MultiSphericalPoint {
     fn touches(&self, other: &crate::arcstring::ArcString) -> bool {
         self.xyzs
             .iter()
-            .any(|xyz| crate::arcstring::arcstring_contains_point(other, xyz))
+            .any(|xyz| crate::arcstring::xyz_in_arcstring(xyz, other))
     }
 
     fn crosses(&self, other: &crate::arcstring::ArcString) -> bool {
@@ -1618,7 +1643,7 @@ impl GeometricOperations<crate::arcstring::ArcString, SphericalPoint> for MultiS
             self.xyzs
                 .iter()
                 .filter_map(|xyz| {
-                    if crate::arcstring::arcstring_contains_point(other, xyz) {
+                    if crate::arcstring::xyz_in_arcstring(xyz, other) {
                         Some(*xyz)
                     } else {
                         None
@@ -1741,7 +1766,7 @@ impl GeometricPredicates<crate::sphericalpolygon::MultiSphericalPolygon> for Mul
         // TODO: find a better algorithm than brute-force; perhaps we can keep a kdtree of centroids for multigeometries?
         self.xyzs.iter().all(|xyz| {
             other.polygons.iter().any(|polygon| {
-                crate::sphericalpolygon::point_in_polygon_boundary(
+                crate::sphericalpolygon::xyz_in_polygon_boundary(
                     xyz,
                     &polygon.interior_point.xyz,
                     &polygon.boundary.points.xyzs,
@@ -1776,5 +1801,35 @@ impl GeometricOperations<crate::sphericalpolygon::MultiSphericalPolygon, Spheric
 
     fn symmetric_difference(&self, _: &crate::sphericalpolygon::MultiSphericalPolygon) -> Self {
         self.to_owned()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_xyzs_distance_over_sphere_radians() {
+        let a = [0.0, 0.0, 1.0];
+        let b = [0.0, 0.0, -1.0];
+        let c = [1.0, 1.0, 0.0];
+        let d = [1.0, -1.0, 0.0];
+
+        assert_eq!(
+            arc_distance_over_sphere_radians(&a, &b),
+            xyz_dot(&a, &b).acos()
+        );
+        assert_eq!(
+            arc_distance_over_sphere_radians(&b, &c),
+            xyz_dot(&b, &c).acos()
+        );
+        assert_eq!(
+            arc_distance_over_sphere_radians(&c, &d),
+            xyz_dot(&c, &d).acos()
+        );
+        assert_eq!(
+            arc_distance_over_sphere_radians(&d, &a),
+            xyz_dot(&d, &a).acos()
+        );
     }
 }

@@ -83,8 +83,8 @@ def polygon_from_wcs(
         )
 
     return SphericalPolygon(
-        MultiSphericalPoint.from_lonlat(vertex_points),
-        interior_point=SphericalPoint.from_lonlat(
-            wcs(wcs.array_shape[0] / 2.0, wcs.array_shape[1] / 2.0)
+        (
+            MultiSphericalPoint.from_lonlats(vertex_points),
+            SphericalPoint.from_lonlat(wcs(array_shape[0] / 2.0, array_shape[1] / 2.0)),
         ),
     )

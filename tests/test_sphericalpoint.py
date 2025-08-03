@@ -1,7 +1,6 @@
 import numpy as np
 from numpy.testing import assert_allclose
 from sphersgeo import MultiSphericalPoint, SphericalPoint
-import sphersgeo
 import math
 
 
@@ -74,15 +73,15 @@ def test_from_lonlat():
     a = SphericalPoint.from_lonlat(a_lonlat)
     b = SphericalPoint.from_lonlat(b_lonlat)
 
-    assert_allclose(a.to_lonlat(), a_lonlat)
-    assert_allclose(b.to_lonlat(), b_lonlat)
+    assert_allclose(a.lonlat, a_lonlat)
+    assert_allclose(b.lonlat, b_lonlat)
 
     lons = np.arange(-360.0, 360.0, 1.0)
 
     equator_lat = 0.0
     equators = [SphericalPoint.from_lonlat((lon, equator_lat)) for lon in lons]
     for equator in equators:
-        assert equator.to_lonlat()[1] == 0.0
+        assert equator.lonlat[1] == 0.0
 
     multi_equator = MultiSphericalPoint.from_lonlats(
         np.stack([lons, np.repeat(equator_lat, len(lons))], axis=1)
@@ -127,7 +126,7 @@ def test_from_lonlat():
     )
 
 
-def test_to_lonlat():
+def test_lonlat():
     xyzs = [
         (0.0, 0.0, 1.0),
         (0.0, 0.0, -1.0),
@@ -138,34 +137,22 @@ def test_to_lonlat():
     lonlats = [(0, 90), (0, -90), (45, 0), (315, 0), (np.nan, 0)]
 
     a = SphericalPoint(xyzs[0])
-    assert_allclose(a.to_lonlat(), lonlats[0])
+    assert_allclose(a.lonlat, lonlats[0])
 
     b = SphericalPoint(xyzs[1])
-    assert_allclose(b.to_lonlat(), lonlats[1])
+    assert_allclose(b.lonlat, lonlats[1])
 
     c = SphericalPoint(xyzs[2])
-    assert_allclose(c.to_lonlat(), lonlats[2])
+    assert_allclose(c.lonlat, lonlats[2])
 
     d = SphericalPoint(xyzs[3])
-    assert_allclose(d.to_lonlat(), lonlats[3])
+    assert_allclose(d.lonlat, lonlats[3])
 
     e = SphericalPoint(xyzs[4])
-    assert_allclose(e.to_lonlat(), lonlats[4])
+    assert_allclose(e.lonlat, lonlats[4])
 
     abcde = MultiSphericalPoint(xyzs)
-    assert_allclose(abcde.to_lonlats(), lonlats)
-
-
-def test_arc_distance_over_sphere_radians():
-    a = np.array((0.0, 0.0, 1.0))
-    b = np.array((0.0, 0.0, -1.0))
-    c = np.array((1.0, 1.0, 0.0))
-    d = np.array((1.0, -1.0, 0.0))
-
-    assert sphersgeo.array.arc_distance_over_sphere_radians((a, b)) == np.acos(a.dot(b))
-    assert sphersgeo.array.arc_distance_over_sphere_radians((b, c)) == np.acos(b.dot(c))
-    assert sphersgeo.array.arc_distance_over_sphere_radians((c, d)) == np.acos(c.dot(d))
-    assert sphersgeo.array.arc_distance_over_sphere_radians((d, a)) == np.acos(d.dot(a))
+    assert_allclose(abcde.lonlats, lonlats)
 
 
 def test_distance():
@@ -361,15 +348,15 @@ def test_two_arc_angle():
 
 def test_angle_nearly_coplanar():
     # test from issue #222 + extra values
-    a = SphericalPoint((1.0, 1.0, 1.0)) # [45.0, 35.264389682754654]
-    b = SphericalPoint((1.0, 0.9999999, 1.0)) # [44.99999713521089, 35.26439103322914]
+    a = SphericalPoint((1.0, 1.0, 1.0))  # [45.0, 35.264389682754654]
+    b = SphericalPoint((1.0, 0.9999999, 1.0))  # [44.99999713521089, 35.26439103322914]
     C = MultiSphericalPoint(
         [
-            (0.0, 0.5, 1.0), # [ 90., 63.43494882]
-            (0.0, 0.15, 1.0), # [ 90., 81.46923439]
-            (0.0, 0.001, 1.0), # [ 90., 89.94270424]
-            (-1.0, -1.0, -1.0), # [225., -35.26438968]
-            (-1.0, 0.1, -1.0), # [174.28940686, -44.8574726 ]
+            (0.0, 0.5, 1.0),  # [ 90., 63.43494882]
+            (0.0, 0.15, 1.0),  # [ 90., 81.46923439]
+            (0.0, 0.001, 1.0),  # [ 90., 89.94270424]
+            (-1.0, -1.0, -1.0),  # [225., -35.26438968]
+            (-1.0, 0.1, -1.0),  # [174.28940686, -44.8574726 ]
         ]
     )
     angles = [b.two_arc_angle(a, c) for c in C.parts]

@@ -128,7 +128,7 @@ def test_is_clockwise(lonlats, is_clockwise):
     assert poly.is_clockwise == is_clockwise
 
 
-def test_split():
+def test_symmetric_difference():
     a = SphericalPolygon(
         MultiSphericalPoint.from_lonlats(
             [(20.0, 5.0), (25.0, 5.0), (25.0, 10.0), (20.0, 10.0)]
@@ -140,9 +140,10 @@ def test_split():
         )
     )
 
-    split = a.split(b)
+    symmetric_difference = a.symmetric_difference(b)
 
-    assert split is not None
+    # TODO: add more validation
+    assert symmetric_difference is not None
 
 
 def test_overlap():
@@ -353,7 +354,7 @@ def test_area(lonlats, expected_area):
 def test_centroid(lonlats, expected_centroid_lonlat):
     poly = SphericalPolygon(MultiSphericalPoint.from_lonlats(lonlats))
 
-    assert_almost_equal(poly.centroid.to_lonlat(), expected_centroid_lonlat)
+    assert_almost_equal(poly.centroid.lonlat, expected_centroid_lonlat)
 
 
 @pytest.mark.parametrize(
@@ -495,7 +496,7 @@ def test_convex_hull(lonlats, expected_area, expected_on_boundary):
 
     assert convex_hull.area == expected_area
 
-    boundary_lonlats = convex_hull.boundary.vertices.to_lonlats()
+    boundary_lonlats = convex_hull.boundary.vertices.lonlats
 
     def lonlat_in_lonlats(
         lonlat: tuple[float, float], lonlats: list[tuple[float, float]]

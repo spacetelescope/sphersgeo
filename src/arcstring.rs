@@ -4,9 +4,8 @@ use crate::{
         GeometricOperations, GeometricPredicates, Geometry, GeometryCollection, MultiGeometry,
     },
     sphericalpoint::{
-        point_within_kdtree, xyz_add_xyz, xyz_cross, xyz_div_f64, xyz_dot, xyz_eq, xyz_mul_f64,
-        xyz_neg, xyzs_collinear, xyzs_distance_over_sphere_radians, MultiSphericalPoint,
-        SphericalPoint,
+        arc_distance_over_sphere_radians, point_within_kdtree, xyz_add_xyz, xyz_cross, xyz_div_f64,
+        xyz_dot, xyz_eq, xyz_neg, xyzs_collinear, MultiSphericalPoint, SphericalPoint,
     },
 };
 use std::{
@@ -19,45 +18,7 @@ use std::{
 use pyo3::prelude::*;
 
 #[cfg(feature = "ndarray")]
-use numpy::ndarray::{array, concatenate, s, Array1, Array2, ArrayView2, Axis};
-
-pub fn linspace(x0: f64, xend: f64, n: usize) -> Vec<f64> {
-    let dx = (xend - x0) / ((n - 1) as f64);
-    let mut x = vec![x0; n];
-    for i in 1..n {
-        x[i] = x[i - 1] + dx;
-    }
-    x
-}
-
-pub fn interpolate_points_along_arc(
-    arc: (&[f64; 3], &[f64; 3]),
-    n: usize,
-) -> Result<Vec<[f64; 3]>, String> {
-    let n = if n < 2 { 2 } else { n };
-    let omega = crate::sphericalpoint::xyzs_distance_over_sphere_radians(arc.0, arc.1);
-
-    let mut offsets = linspace(0.0, 1.0, n);
-    offsets = if omega == 0.0 {
-        offsets
-    } else {
-        offsets
-            .iter()
-            .map(|offset| (offset * omega).sin() / omega.sin())
-            .collect()
-    };
-
-    Ok(offsets
-        .iter()
-        .zip(offsets.iter().rev())
-        .map(|(offset, inverted_offset)| {
-            xyz_add_xyz(
-                &xyz_mul_f64(arc.0, inverted_offset),
-                &xyz_mul_f64(arc.1, offset),
-            )
-        })
-        .collect())
-}
+use numpy::ndarray::{concatenate, s, Array2, ArrayView2, Axis};
 
 /// Given xyz vectors of the endpoints of two great circle arcs, find the point at which the arcs cross
 ///
@@ -117,7 +78,7 @@ pub fn arc_crosses_arcstring(arc: (&[f64; 3], &[f64; 3]), arcstring: &ArcString)
     false
 }
 
-pub fn arcstring_contains_point(arcstring: &ArcString, xyz: &[f64; 3]) -> bool {
+pub fn xyz_in_arcstring(xyz: &[f64; 3], arcstring: &ArcString) -> bool {
     let xyzs = &arcstring.points.xyzs;
 
     // check if point is one of the vertices of this linestring
@@ -217,7 +178,7 @@ fn arc_radians_over_sphere_to_point(a: &[f64; 3], b: &[f64; 3], xyz: &[f64; 3]) 
     let g = xyz_cross(a, b);
     let f = xyz_cross(xyz, &g);
     let t = xyz_cross(&g, &f);
-    xyzs_distance_over_sphere_radians(&t, xyz)
+    arc_distance_over_sphere_radians(&t, xyz)
 }
 
 /// series of great circle arcs along the sphere
@@ -331,6 +292,27 @@ impl ArcString {
             instance.closed = closed;
         }
         Ok(instance)
+    }
+
+    pub fn lengths(&self) -> Vec<f64> {
+        let mut lengths = (0..self.points.len() - 1)
+            .map(|index| {
+                arc_distance_over_sphere_radians(
+                    &self.points.xyzs[index],
+                    &self.points.xyzs[index + 1],
+                )
+            })
+            .collect::<Vec<f64>>();
+
+        if self.closed {
+            // if the arcstring is closed, also add the length of the final closing arc
+            lengths.push(arc_distance_over_sphere_radians(
+                &self.points.xyzs[self.points.len() - 1],
+                &self.points.xyzs[0],
+            ));
+        }
+
+        lengths
     }
 
     pub fn midpoints(&self) -> MultiSphericalPoint {
@@ -474,27 +456,6 @@ impl ArcString {
         None
     }
 
-    pub fn lengths(&self) -> Vec<f64> {
-        let mut lengths = (0..self.points.len() - 1)
-            .map(|index| {
-                xyzs_distance_over_sphere_radians(
-                    &self.points.xyzs[index],
-                    &self.points.xyzs[index + 1],
-                )
-            })
-            .collect::<Vec<f64>>();
-
-        if self.closed {
-            // if the arcstring is closed, also add the length of the final closing arc
-            lengths.push(xyzs_distance_over_sphere_radians(
-                &self.points.xyzs[self.points.len() - 1],
-                &self.points.xyzs[0],
-            ));
-        }
-
-        lengths
-    }
-
     /// whether this arcstring shares endpoints with another, ignoring closed arcstrings
     pub fn adjoins(&self, other: &ArcString) -> bool {
         if let Some(boundary) = self.boundary() {
@@ -528,20 +489,29 @@ impl ArcString {
 
 impl PartialEq for ArcString {
     fn eq(&self, other: &Self) -> bool {
-        // either all points are equal in order, or all points are equal in reverse order
-        self.points.len() == other.points.len()
-            && (self
-                .points
-                .xyzs
-                .iter()
-                .zip(other.points.xyzs.iter())
-                .all(|(a, b)| xyz_eq(a, b))
-                || self
-                    .points
-                    .xyzs
-                    .iter()
-                    .zip(other.points.xyzs.iter().rev())
-                    .all(|(a, b)| xyz_eq(a, b)))
+        if self.length() == other.length() {
+            let (less, more) = if self.points.len() < other.points.len() {
+                (self, other)
+            } else {
+                (other, self)
+            };
+
+            for xyz in &less.points.xyzs {
+                if !xyz_in_arcstring(xyz, more) {
+                    return false;
+                }
+            }
+
+            for xyz in &more.points.xyzs {
+                if !xyz_in_arcstring(xyz, less) {
+                    return false;
+                }
+            }
+
+            true
+        } else {
+            false
+        }
     }
 }
 
@@ -605,7 +575,7 @@ impl GeometricPredicates<SphericalPoint> for ArcString {
     }
 
     fn touches(&self, other: &SphericalPoint) -> bool {
-        arcstring_contains_point(self, &other.xyz)
+        xyz_in_arcstring(&other.xyz, self)
     }
 
     fn crosses(&self, _: &SphericalPoint) -> bool {
@@ -714,7 +684,7 @@ impl GeometricPredicates<MultiSphericalPoint> for ArcString {
 
     fn covers(&self, other: &MultiSphericalPoint) -> bool {
         for xyz in &other.xyzs {
-            if arcstring_contains_point(self, xyz) {
+            if xyz_in_arcstring(xyz, self) {
                 return true;
             }
         }
@@ -774,12 +744,12 @@ impl GeometricPredicates<Self> for ArcString {
                 .points
                 .xyzs
                 .iter()
-                .any(|xyz| arcstring_contains_point(self, xyz))
+                .any(|xyz| xyz_in_arcstring(xyz, self))
             || self
                 .points
                 .xyzs
                 .iter()
-                .any(|xyz| arcstring_contains_point(other, xyz))
+                .any(|xyz| xyz_in_arcstring(xyz, other))
     }
 
     fn crosses(&self, other: &Self) -> bool {
@@ -800,7 +770,7 @@ impl GeometricPredicates<Self> for ArcString {
                         0
                     }],
                 ),
-                &other,
+                other,
             ) {
                 return true;
             }
@@ -813,7 +783,7 @@ impl GeometricPredicates<Self> for ArcString {
         self.points
             .xyzs
             .iter()
-            .all(|xyz| arcstring_contains_point(other, xyz))
+            .all(|xyz| xyz_in_arcstring(xyz, other))
     }
 
     fn contains(&self, other: &Self) -> bool {
@@ -825,7 +795,7 @@ impl GeometricPredicates<Self> for ArcString {
             for arc_index in 0..self.points.len() - if self.closed { 0 } else { 1 } {
                 let arc = (
                     self.points.xyzs[arc_index],
-                    self.points.xyzs[if arc_index <= self.points.len() - 1 {
+                    self.points.xyzs[if arc_index < self.points.len() {
                         arc_index + 1
                     } else {
                         0
@@ -833,9 +803,7 @@ impl GeometricPredicates<Self> for ArcString {
                 );
 
                 // TODO: handle case where an arcstring has both endpoints on the other arcstring, but cuts a corner...
-                if arcstring_contains_point(other, &arc.0)
-                    && arcstring_contains_point(other, &arc.1)
-                {
+                if xyz_in_arcstring(&arc.0, other) && xyz_in_arcstring(&arc.1, other) {
                     return true;
                 }
             }
@@ -1120,22 +1088,6 @@ impl From<MultiArcString> for Vec<MultiSphericalPoint> {
 impl From<MultiArcString> for Vec<ArcString> {
     fn from(arcstrings: MultiArcString) -> Self {
         arcstrings.arcstrings
-    }
-}
-
-impl MultiArcString {
-    pub fn midpoints(&self) -> MultiSphericalPoint {
-        self.arcstrings
-            .iter()
-            .map(|arcstring| arcstring.midpoints())
-            .sum()
-    }
-
-    pub fn lengths(&self) -> Vec<f64> {
-        self.arcstrings
-            .iter()
-            .map(|arcstring| arcstring.length())
-            .collect()
     }
 }
 

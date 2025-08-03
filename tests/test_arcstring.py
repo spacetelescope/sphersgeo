@@ -2,7 +2,6 @@ import numpy as np
 import pytest
 from numpy.testing import assert_allclose
 from sphersgeo import ArcString, MultiArcString, MultiSphericalPoint, SphericalPoint
-import sphersgeo
 
 
 def test_init():
@@ -118,28 +117,30 @@ def test_contains():
         (-30.0, 110.0),
     ],
 )
-def test_interpolate_along_arc(a, b):
+def test_interpolate_points(a, b):
     tolerance = 1e-10
 
     a = SphericalPoint.from_lonlat(a)
     b = SphericalPoint.from_lonlat(b)
     ab = ArcString([a, b])
 
-    interpolated_points = MultiSphericalPoint(
-        sphersgeo.array.interpolate_points_along_arc((a.xyz, b.xyz), n=10)
-    ).parts
+    interpolated_points = a.interpolate_points(b, n=10).parts
 
     assert interpolated_points[0] == a
     assert interpolated_points[-1] == b
 
-    interpolated_arc = ArcString(interpolated_points)
-
     for point in interpolated_points[1:-1]:
         assert ab.contains(point)
 
+    interpolated_arc = ArcString(interpolated_points)
+
+    assert_allclose(ab.length, interpolated_arc.length, atol=tolerance)
+
     distances = interpolated_arc.lengths
 
-    assert_allclose(distances, ab.length / len(interpolated_arc), atol=tolerance)
+    assert_allclose(
+        distances, interpolated_arc.length / len(interpolated_arc), atol=tolerance
+    )
 
 
 def test_adjoins_join():
@@ -156,13 +157,13 @@ def test_adjoins_join():
     assert not segment4.adjoins(segment1)
 
     joined12 = segment1.join(segment2)
-    print(joined12.vertices.to_lonlats())
+    print(joined12.vertices.lonlats)
 
     joined34 = segment3.join(segment4)
-    print(joined34.vertices.to_lonlats())
+    print(joined34.vertices.lonlats)
 
     joined1234 = joined12.join(joined34)
-    print(joined1234.vertices.to_lonlats())
+    print(joined1234.vertices.lonlats)
 
 
 def test_intersection():
@@ -179,7 +180,7 @@ def test_intersection():
     EF = ArcString([E, F])
     assert AB.intersects(CD)
     assert not AB.intersects(EF)
-    assert_allclose(AB.intersection(CD).to_lonlats(), [(358.316743, -1.708471)])
+    assert_allclose(AB.intersection(CD).lonlats, [(358.316743, -1.708471)])
 
     # intersection with later part
     ABE = ArcString([A, B, E])
@@ -189,7 +190,7 @@ def test_intersection():
     # multi-part geometry intersection
     AB_EF = MultiArcString([AB, EF])
     assert AB_EF.intersects(CD)
-    assert_allclose(AB_EF.intersection(CD).to_lonlats(), [(358.316743, -1.708471)])
+    assert_allclose(AB_EF.intersection(CD).lonlats, [(358.316743, -1.708471)])
 
     # ensure non-intersection of non-parallel pre-terminated arcs
     CE = ArcString([C, E])
@@ -261,13 +262,13 @@ def test_crosses_self():
     # simple self-crossing
     ABCD = ArcString([A, B, C, D])
     assert ABCD.crosses_self
-    assert_allclose(ABCD.crossings_with_self.to_lonlats(), [(358.316743, -1.708471)])
+    assert_allclose(ABCD.crossings_with_self.lonlats, [(358.316743, -1.708471)])
 
     # longer self-crossing
     ABCDFE = ArcString([A, B, C, D, F, E])
     assert ABCDFE.crosses_self
     len(ABCDFE.crossings_with_self) == 1
-    assert_allclose(ABCDFE.crossings_with_self.to_lonlats(), [(358.316743, -1.708471)])
+    assert_allclose(ABCDFE.crossings_with_self.lonlats, [(358.316743, -1.708471)])
 
     # double self-crossing
     ABCDFEc = ArcString([A, B, C, D, F, E], closed=True)
