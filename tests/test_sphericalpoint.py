@@ -70,8 +70,8 @@ def test_from_lonlat():
     a_lonlat = (60.0, 0.0)
     b_lonlat = (60.0, 30.0)
 
-    a = SphericalPoint.from_lonlat(a_lonlat)
-    b = SphericalPoint.from_lonlat(b_lonlat)
+    a = SphericalPoint(a_lonlat)
+    b = SphericalPoint(b_lonlat)
 
     assert_allclose(a.lonlat, a_lonlat)
     assert_allclose(b.lonlat, b_lonlat)
@@ -79,11 +79,11 @@ def test_from_lonlat():
     lons = np.arange(-360.0, 360.0, 1.0)
 
     equator_lat = 0.0
-    equators = [SphericalPoint.from_lonlat((lon, equator_lat)) for lon in lons]
+    equators = [SphericalPoint((lon, equator_lat)) for lon in lons]
     for equator in equators:
         assert equator.lonlat[1] == 0.0
 
-    multi_equator = MultiSphericalPoint.from_lonlats(
+    multi_equator = MultiSphericalPoint(
         np.stack([lons, np.repeat(equator_lat, len(lons))], axis=1)
     )
 
@@ -92,11 +92,11 @@ def test_from_lonlat():
     assert_allclose(multi_equator.xyzs[:, 2], 0.0)
 
     north_pole_lat = 90.0
-    north_poles = [SphericalPoint.from_lonlat((lon, north_pole_lat)) for lon in lons]
+    north_poles = [SphericalPoint((lon, north_pole_lat)) for lon in lons]
     for north_pole in north_poles:
         assert_allclose(north_pole.xyz, [0.0, 0.0, 1.0], atol=tolerance)
 
-    multi_north_pole = MultiSphericalPoint.from_lonlats(
+    multi_north_pole = MultiSphericalPoint(
         np.stack([lons, np.repeat(north_pole_lat, len(lons))], axis=1)
     )
 
@@ -109,11 +109,11 @@ def test_from_lonlat():
     )
 
     south_pole_lat = -90.0
-    south_poles = [SphericalPoint.from_lonlat((lon, south_pole_lat)) for lon in lons]
+    south_poles = [SphericalPoint((lon, south_pole_lat)) for lon in lons]
     for south_pole in south_poles:
         assert_allclose(south_pole.xyz, [0.0, 0.0, -1.0], atol=tolerance)
 
-    multi_south_pole = MultiSphericalPoint.from_lonlats(
+    multi_south_pole = MultiSphericalPoint(
         np.stack([lons, np.repeat(south_pole_lat, len(lons))], axis=1)
     )
 
@@ -191,16 +191,16 @@ def test_distance():
     assert bc.distance(bc) == 0.0
     assert cd.distance(cd) == 0.0
 
-    A = SphericalPoint.from_lonlat((90.0, 0.0))
-    B = SphericalPoint.from_lonlat((-90.0, 0.0))
+    A = SphericalPoint((90.0, 0.0))
+    B = SphericalPoint((-90.0, 0.0))
     assert A.distance(B) == 180.0
 
-    A = SphericalPoint.from_lonlat((135.0, 0.0))
-    B = SphericalPoint.from_lonlat((-90.0, 0.0))
+    A = SphericalPoint((135.0, 0.0))
+    B = SphericalPoint((-90.0, 0.0))
     assert A.distance(B) == np.rad2deg((3.0 / 4.0) * np.pi)
 
-    A = SphericalPoint.from_lonlat((0.0, 0.0))
-    B = SphericalPoint.from_lonlat((0.0, 90.0))
+    A = SphericalPoint((0.0, 0.0))
+    B = SphericalPoint((0.0, 90.0))
     assert A.distance(B) == np.rad2deg(np.pi / 2.0)
 
 
@@ -319,9 +319,9 @@ def test_two_arc_angle():
     assert B.two_arc_angle(C, A) == 0.0
 
     # defined from lonlat
-    A = SphericalPoint.from_lonlat((60.0, 45.0))
-    B = SphericalPoint.from_lonlat((0.0, 90.0))
-    C = SphericalPoint.from_lonlat((30.0, -3.0))
+    A = SphericalPoint((60.0, 45.0))
+    B = SphericalPoint((0.0, 90.0))
+    C = SphericalPoint((30.0, -3.0))
     assert_allclose(B.two_arc_angle(A, C), 30.0)
     assert_allclose(B.two_arc_angle(C, A), 30.0)
 
@@ -370,17 +370,17 @@ def test_angle_nearly_coplanar():
 
 def test_collinear():
     # equatorial
-    A = SphericalPoint.from_lonlat((20.0, 0.0))
-    B = SphericalPoint.from_lonlat((0.0, 0.0))
-    C = SphericalPoint.from_lonlat((-20.0, 0.0))
+    A = SphericalPoint((20.0, 0.0))
+    B = SphericalPoint((0.0, 0.0))
+    C = SphericalPoint((-20.0, 0.0))
     assert A.collinear(B, C)
     assert B.collinear(A, C)
     assert C.collinear(A, B)
 
     # meridianal
-    A = SphericalPoint.from_lonlat((0.0, 20.0))
-    B = SphericalPoint.from_lonlat((0.0, 0.0))
-    C = SphericalPoint.from_lonlat((0.0, -20.0))
+    A = SphericalPoint((0.0, 20.0))
+    B = SphericalPoint((0.0, 0.0))
+    C = SphericalPoint((0.0, -20.0))
     assert A.collinear(B, C)
     assert B.collinear(A, C)
     assert C.collinear(A, B)

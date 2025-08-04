@@ -120,7 +120,7 @@ fn lonlat_to_xyz(lonlat: &[f64; 2]) -> [f64; 3] {
     [lon_cos * lat_cos, lon_sin * lat_cos, lat_sin]
 }
 
-/// convert this point on the sphere to angular coordinates
+/// convert 3D Cartesian point on the sphere to angular coordinates
 ///
 /// With radius *r*, longitude *l*, and latitude *b*:
 ///
@@ -368,15 +368,29 @@ impl From<&(f64, f64, f64)> for SphericalPoint {
     }
 }
 
+impl From<&[f64; 2]> for SphericalPoint {
+    fn from(lonlat: &[f64; 2]) -> Self {
+        Self::from(lonlat_to_xyz(lonlat))
+    }
+}
+
+impl From<&(f64, f64)> for SphericalPoint {
+    fn from(xyz: &(f64, f64)) -> Self {
+        Self::from(lonlat_to_xyz(&[xyz.0, xyz.1]))
+    }
+}
+
 impl TryFrom<&Vec<f64>> for SphericalPoint {
     type Error = String;
 
-    fn try_from(xyz: &Vec<f64>) -> Result<Self, Self::Error> {
-        let length = xyz.len();
-        if length != 3 {
-            Err(format!("3D vector should have length 3, not {length}"))
+    fn try_from(point: &Vec<f64>) -> Result<Self, Self::Error> {
+        let length = point.len();
+        if length == 3 {
+            Ok(Self::from([point[0], point[1], point[2]]))
+        } else if length == 2 {
+            Ok(Self::from(&[point[0], point[1]]))
         } else {
-            Ok(Self::from([xyz[0], xyz[1], xyz[2]]))
+            Err(format!("3D vector should have length 3, not {length}"))
         }
     }
 }
@@ -385,12 +399,14 @@ impl TryFrom<&Vec<f64>> for SphericalPoint {
 impl TryFrom<&Array1<f64>> for SphericalPoint {
     type Error = String;
 
-    fn try_from(xyz: &Array1<f64>) -> Result<Self, Self::Error> {
-        let length = xyz.len();
-        if length != 3 {
-            Err(format!("3D vector should have length 3, not {length}"))
+    fn try_from(point: &Array1<f64>) -> Result<Self, Self::Error> {
+        let length = point.len();
+        if length == 3 {
+            Ok(Self::from([point[0], point[1], point[2]]))
+        } else if length == 2 {
+            Ok(Self::from(&[point[0], point[1]]))
         } else {
-            Ok(Self::from([xyz[0], xyz[1], xyz[2]]))
+            Err(format!("3D vector should have length 3, not {length}"))
         }
     }
 }
@@ -399,38 +415,21 @@ impl TryFrom<&Array1<f64>> for SphericalPoint {
 impl<'a> TryFrom<&ArrayView1<'a, f64>> for SphericalPoint {
     type Error = String;
 
-    fn try_from(xyz: &ArrayView1<'a, f64>) -> Result<Self, Self::Error> {
-        let length = xyz.len();
-        if length != 3 {
-            Err(format!("3D vector should have length 3, not {length}"))
+    fn try_from(point: &ArrayView1<'a, f64>) -> Result<Self, Self::Error> {
+        let length = point.len();
+        if length == 3 {
+            Ok(Self::from([point[0], point[1], point[2]]))
+        } else if length == 2 {
+            Ok(Self::from(&[point[0], point[1]]))
         } else {
-            Ok(Self::from([xyz[0], xyz[1], xyz[2]]))
+            Err(format!("3D vector should have length 3, not {length}"))
         }
     }
 }
 
-impl From<SphericalPoint> for [f64; 3] {
-    fn from(point: SphericalPoint) -> Self {
-        point.xyz
-    }
-}
-
-impl<'a> From<&'a SphericalPoint> for &'a [f64; 3] {
+impl<'a> From<&'a SphericalPoint> for [f64; 2] {
     fn from(point: &'a SphericalPoint) -> Self {
-        &point.xyz
-    }
-}
-
-#[cfg(feature = "ndarray")]
-impl From<SphericalPoint> for Array1<f64> {
-    fn from(point: SphericalPoint) -> Self {
-        array![point.xyz[0], point.xyz[1], point.xyz[2]]
-    }
-}
-
-impl From<SphericalPoint> for Vec<f64> {
-    fn from(point: SphericalPoint) -> Self {
-        point.xyz.to_vec()
+        xyz_to_lonlat(&point.xyz)
     }
 }
 
@@ -573,14 +572,6 @@ impl Neg for &SphericalPoint {
 impl SphericalPoint {
     pub fn new(x: f64, y: f64, z: f64) -> Self {
         Self::from([x, y, z])
-    }
-
-    pub fn from_lonlat(lonlat: &[f64; 2]) -> Self {
-        Self::from(lonlat_to_xyz(lonlat))
-    }
-
-    pub fn to_lonlat(&self) -> [f64; 2] {
-        xyz_to_lonlat(&self.xyz)
     }
 
     pub fn two_arc_angle(&self, start: &SphericalPoint, end: &SphericalPoint) -> f64 {
@@ -1016,6 +1007,18 @@ impl TryFrom<Vec<[f64; 3]>> for MultiSphericalPoint {
     }
 }
 
+impl TryFrom<&Vec<[f64; 2]>> for MultiSphericalPoint {
+    type Error = String;
+
+    fn try_from(lonlats: &Vec<[f64; 2]>) -> Result<Self, Self::Error> {
+        if lonlats.is_empty() {
+            Err(String::from("no points provided"))
+        } else {
+            Self::try_from(lonlats.iter().map(lonlat_to_xyz).collect::<Vec<[f64; 3]>>())
+        }
+    }
+}
+
 impl From<&Vec<MultiSphericalPoint>> for MultiSphericalPoint {
     fn from(multipoints: &Vec<MultiSphericalPoint>) -> Self {
         let mut points = multipoints[0].xyzs.to_owned();
@@ -1055,19 +1058,28 @@ impl TryFrom<Vec<SphericalPoint>> for MultiSphericalPoint {
 impl TryFrom<Array2<f64>> for MultiSphericalPoint {
     type Error = String;
 
-    fn try_from(xyzs: Array2<f64>) -> Result<Self, Self::Error> {
-        let columns = xyzs.shape()[1];
-        if columns != 3 {
-            Err(format!(
-                "array of 3D vectors should have shape Nx3, not Nx{columns}",
-            ))
-        } else {
+    fn try_from(points: Array2<f64>) -> Result<Self, Self::Error> {
+        let columns = points.shape()[1];
+        if columns == 3 {
             Self::try_from(
-                xyzs.rows()
+                points
+                    .rows()
                     .into_iter()
                     .map(|xyz| [xyz[0], xyz[1], xyz[2]])
                     .collect::<Vec<[f64; 3]>>(),
             )
+        } else if columns == 2 {
+            Self::try_from(
+                points
+                    .rows()
+                    .into_iter()
+                    .map(|lonlat| lonlat_to_xyz(&[lonlat[0], lonlat[1]]))
+                    .collect::<Vec<[f64; 3]>>(),
+            )
+        } else {
+            Err(format!(
+                "array of 3D vectors should have shape Nx3, not Nx{columns}",
+            ))
         }
     }
 }
@@ -1084,17 +1096,32 @@ impl TryFrom<&Vec<(f64, f64, f64)>> for MultiSphericalPoint {
     }
 }
 
+impl TryFrom<&Vec<(f64, f64)>> for MultiSphericalPoint {
+    type Error = String;
+
+    fn try_from(lonlats: &Vec<(f64, f64)>) -> Result<Self, String> {
+        Self::try_from(
+            lonlats
+                .iter()
+                .map(|lonlat| lonlat_to_xyz(&[lonlat.0, lonlat.1]))
+                .collect::<Vec<[f64; 3]>>(),
+        )
+    }
+}
+
 impl TryFrom<&Vec<Vec<f64>>> for MultiSphericalPoint {
     type Error = String;
 
-    fn try_from(list: &Vec<Vec<f64>>) -> Result<Self, Self::Error> {
+    fn try_from(points: &Vec<Vec<f64>>) -> Result<Self, Self::Error> {
         let mut xyzs = vec![];
-        for point in list {
+        for point in points {
             let length = point.len();
-            if length != 3 {
-                return Err(format!("3D vector should have length 3, not {length}",));
-            } else {
+            if length == 3 {
                 xyzs.push([point[0], point[1], point[2]]);
+            } else if length == 2 {
+                xyzs.push(lonlat_to_xyz(&[point[0], point[1]]));
+            } else {
+                return Err(format!("3D vector should have length 3, not {length}"));
             }
         }
         Self::try_from(xyzs)
@@ -1105,41 +1132,19 @@ impl TryFrom<&Vec<Vec<f64>>> for MultiSphericalPoint {
 impl<'a> TryFrom<&Vec<ArrayView1<'a, f64>>> for MultiSphericalPoint {
     type Error = String;
 
-    fn try_from(list: &Vec<ArrayView1<'a, f64>>) -> Result<Self, Self::Error> {
+    fn try_from(points: &Vec<ArrayView1<'a, f64>>) -> Result<Self, Self::Error> {
         let mut xyzs = vec![];
-        for point in list {
+        for point in points {
             let length = point.len();
-            if length != 3 {
-                return Err(format!("3D vector should have length 3, not {length}",));
-            } else {
+            if length == 3 {
                 xyzs.push([point[0], point[1], point[2]]);
+            } else if length == 2 {
+                xyzs.push(lonlat_to_xyz(&[point[0], point[1]]));
+            } else {
+                return Err(format!("3D vector should have length 3, not {length}",));
             }
         }
         Self::try_from(xyzs)
-    }
-}
-
-#[cfg(feature = "ndarray")]
-impl TryFrom<Vec<f64>> for MultiSphericalPoint {
-    type Error = String;
-
-    fn try_from(list: Vec<f64>) -> Result<Self, Self::Error> {
-        Self::try_from(
-            Array2::from_shape_vec((list.len() / 3, 3), list).map_err(|err| format!("{err:?}"))?,
-        )
-    }
-}
-
-#[cfg(feature = "ndarray")]
-impl<'a> TryFrom<&ArrayView1<'a, f64>> for MultiSphericalPoint {
-    type Error = String;
-
-    fn try_from(xyz: &ArrayView1<'a, f64>) -> Result<Self, Self::Error> {
-        Self::try_from(
-            xyz.to_shape((xyz.len() / 3, 3))
-                .map_err(|err| format!("{err:?}"))?
-                .to_owned(),
-        )
     }
 }
 
@@ -1165,9 +1170,9 @@ impl From<&MultiSphericalPoint> for Array2<f64> {
     }
 }
 
-impl From<MultiSphericalPoint> for Vec<[f64; 3]> {
-    fn from(points: MultiSphericalPoint) -> Self {
-        points.xyzs
+impl From<&MultiSphericalPoint> for Vec<[f64; 2]> {
+    fn from(points: &MultiSphericalPoint) -> Self {
+        points.xyzs.iter().map(xyz_to_lonlat).collect()
     }
 }
 
@@ -1199,7 +1204,7 @@ impl MultiSphericalPoint {
     /// ----------
     /// - Miller, Robert D. Computing the area of a spherical polygon. Graphics Gems IV. 1994. Academic Press. doi:10.5555/180895.180907
     pub fn to_lonlats(&self) -> Vec<[f64; 2]> {
-        self.xyzs.iter().map(xyz_to_lonlat).collect()
+        self.into()
     }
 
     /// retrieve the nearest of these points to the given point, along with the normalized 3D Cartesian distance to that point across the unit sphere

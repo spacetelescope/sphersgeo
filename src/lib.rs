@@ -49,17 +49,11 @@ mod py_sphersgeo {
     #[allow(clippy::large_enum_variant)]
     enum PySphericalPointInputs<'py> {
         // NOTE: AnyGeometry MUST be the first option in this enum, otherwise it will attempt to match another pattern
-        AnyGeometry(AnyGeometry),
-        Array([f64; 3]),
-        Tuple((f64, f64, f64)),
-        NumpyArray(PyReadonlyArray1<'py, f64>),
-        List(Vec<f64>),
-    }
-
-    #[derive(FromPyObject)]
-    enum PySphericalPointLonLatInputs<'py> {
-        Array([f64; 2]),
-        Tuple((f64, f64)),
+        Geometry(AnyGeometry),
+        XYZArray([f64; 3]),
+        XYZTuple((f64, f64, f64)),
+        LonLatArray([f64; 2]),
+        LonLatTuple((f64, f64)),
         NumpyArray(PyReadonlyArray1<'py, f64>),
         List(Vec<f64>),
     }
@@ -67,16 +61,19 @@ mod py_sphersgeo {
     #[pymethods]
     impl SphericalPoint {
         #[new]
-        fn py_new(xyz: PySphericalPointInputs) -> PyResult<Self> {
-            Ok(match xyz {
-                PySphericalPointInputs::AnyGeometry(geometry) => match geometry {
+        /// from the given coordinates, build an xyz vector representing a point on the sphere
+        fn py_new(point: PySphericalPointInputs) -> PyResult<Self> {
+            Ok(match point {
+                PySphericalPointInputs::Geometry(geometry) => match geometry {
                     AnyGeometry::SphericalPoint(point) => Ok(point),
                     _ => Err(PyValueError::new_err(format!(
                         "cannot derive point from {geometry:?}",
                     ))),
                 }?,
-                PySphericalPointInputs::Array(xyz) => Self::from(xyz),
-                PySphericalPointInputs::Tuple(xyz) => Self::from(&xyz),
+                PySphericalPointInputs::XYZArray(xyz) => Self::from(xyz),
+                PySphericalPointInputs::XYZTuple(xyz) => Self::from(&xyz),
+                PySphericalPointInputs::LonLatArray(lonlat) => Self::from(&lonlat),
+                PySphericalPointInputs::LonLatTuple(lonlat) => Self::from(&[lonlat.0, lonlat.1]),
                 PySphericalPointInputs::NumpyArray(xyz) => {
                     Self::try_from(&xyz.as_array()).map_err(PyValueError::new_err)?
                 }
@@ -84,26 +81,6 @@ mod py_sphersgeo {
                     Self::try_from(&xyz).map_err(PyValueError::new_err)?
                 }
             })
-        }
-
-        #[classmethod]
-        #[pyo3(name = "from_lonlat")]
-        /// from the given coordinates, build an xyz vector representing a point on the sphere
-        fn py_from_lonlat<'py>(
-            _: &Bound<'py, PyType>,
-            lonlat: PySphericalPointLonLatInputs,
-        ) -> Self {
-            let lonlat = match lonlat {
-                PySphericalPointLonLatInputs::Array(lonlat) => lonlat,
-                PySphericalPointLonLatInputs::NumpyArray(lonlat) => {
-                    let lonlat = lonlat.as_array();
-                    [lonlat[0], lonlat[1]]
-                }
-                PySphericalPointLonLatInputs::Tuple((lon, lat)) => [lon, lat],
-                PySphericalPointLonLatInputs::List(list) => [list[0], list[1]],
-            };
-
-            Self::from_lonlat(&lonlat)
         }
 
         #[getter]
@@ -115,7 +92,7 @@ mod py_sphersgeo {
         #[getter]
         /// convert this point on the sphere to angular coordinates
         fn get_lonlat(&self) -> [f64; 2] {
-            self.to_lonlat()
+            self.into()
         }
 
         #[pyo3(name = "two_arc_angle")]
@@ -438,18 +415,12 @@ mod py_sphersgeo {
     #[allow(clippy::large_enum_variant)]
     enum PyMultiSphericalPointInputs<'py> {
         // NOTE: AnyGeometry MUST be the first option in this enum, otherwise it will attempt to match another pattern
-        AnyGeometry(AnyGeometry),
+        Geometry(AnyGeometry),
         ListOfPoints(Vec<SphericalPoint>),
-        ListOfArrays(Vec<[f64; 3]>),
-        ListOfTuples(Vec<(f64, f64, f64)>),
-        NumpyArray(PyReadonlyArray2<'py, f64>),
-        NestedList(Vec<Vec<f64>>),
-    }
-
-    #[derive(FromPyObject)]
-    enum PyMultiSphericalPointLonLatInputs<'py> {
-        ListOfArrays(Vec<[f64; 2]>),
-        ListOfTuples(Vec<(f64, f64)>),
+        ListOfXYZArrays(Vec<[f64; 3]>),
+        ListOfXYZTuples(Vec<(f64, f64, f64)>),
+        ListOfLonLatArrays(Vec<[f64; 2]>),
+        ListOfLonLatTuples(Vec<(f64, f64)>),
         NumpyArray(PyReadonlyArray2<'py, f64>),
         NestedList(Vec<Vec<f64>>),
     }
@@ -457,9 +428,10 @@ mod py_sphersgeo {
     #[pymethods]
     impl MultiSphericalPoint {
         #[new]
-        fn py_new(xyzs: PyMultiSphericalPointInputs) -> PyResult<Self> {
-            match xyzs {
-                PyMultiSphericalPointInputs::AnyGeometry(geometry) => match geometry {
+        /// from the given coordinates, build xyz vectors representing points on the sphere
+        fn py_new(points: PyMultiSphericalPointInputs) -> PyResult<Self> {
+            match points {
+                PyMultiSphericalPointInputs::Geometry(geometry) => match geometry {
                     AnyGeometry::MultiSphericalPoint(multipoint) => Ok(multipoint),
                     _ => Err(PyValueError::new_err(format!(
                         "cannot derive multipoint from {geometry:?}",
@@ -468,11 +440,17 @@ mod py_sphersgeo {
                 PyMultiSphericalPointInputs::ListOfPoints(points) => {
                     Self::try_from(points).map_err(PyValueError::new_err)
                 }
-                PyMultiSphericalPointInputs::ListOfArrays(xyzs) => {
+                PyMultiSphericalPointInputs::ListOfXYZArrays(xyzs) => {
                     Self::try_from(xyzs).map_err(PyValueError::new_err)
                 }
-                PyMultiSphericalPointInputs::ListOfTuples(xyzs) => {
+                PyMultiSphericalPointInputs::ListOfXYZTuples(xyzs) => {
                     Self::try_from(&xyzs).map_err(PyValueError::new_err)
+                }
+                PyMultiSphericalPointInputs::ListOfLonLatArrays(lonlats) => {
+                    Self::try_from(&lonlats).map_err(PyValueError::new_err)
+                }
+                PyMultiSphericalPointInputs::ListOfLonLatTuples(lonlats) => {
+                    Self::try_from(&lonlats).map_err(PyValueError::new_err)
                 }
                 PyMultiSphericalPointInputs::NumpyArray(xyzs) => {
                     Self::try_from(xyzs.as_array().to_owned()).map_err(PyValueError::new_err)
@@ -480,36 +458,6 @@ mod py_sphersgeo {
                 PyMultiSphericalPointInputs::NestedList(xyzs) => {
                     Self::try_from(&xyzs).map_err(PyValueError::new_err)
                 }
-            }
-        }
-
-        #[classmethod]
-        #[pyo3(name = "from_lonlats")]
-        /// from the given coordinates, build xyz vectors representing points on the sphere
-        fn py_from_lonlats<'py>(
-            _: &Bound<'py, PyType>,
-            lonlats: PyMultiSphericalPointLonLatInputs,
-        ) -> PyResult<Self> {
-            let lonlats = match lonlats {
-                PyMultiSphericalPointLonLatInputs::ListOfArrays(lonlats) => lonlats,
-                PyMultiSphericalPointLonLatInputs::ListOfTuples(lonlats) => {
-                    lonlats.iter().map(|lonlat| [lonlat.0, lonlat.1]).collect()
-                }
-                PyMultiSphericalPointLonLatInputs::NumpyArray(lonlats) => lonlats
-                    .as_array()
-                    .rows()
-                    .into_iter()
-                    .map(|lonlat| [lonlat[0], lonlat[1]])
-                    .collect(),
-                PyMultiSphericalPointLonLatInputs::NestedList(lonlats) => lonlats
-                    .iter()
-                    .map(|lonlat| [lonlat[0], lonlat[1]])
-                    .collect(),
-            };
-
-            match Self::try_from_lonlats(&lonlats) {
-                Ok(result) => Ok(result),
-                Err(err) => Err(PyValueError::new_err(err)),
             }
         }
 
@@ -522,7 +470,8 @@ mod py_sphersgeo {
         #[getter]
         /// convert to angle coordinates along the sphere
         fn get_lonlats<'py>(&self, py: Python<'py>) -> Bound<'py, PyArray2<f64>> {
-            Array2::<f64>::from(self.to_lonlats()).into_pyarray(py)
+            let lonlats: Vec<[f64; 2]> = self.into();
+            Array2::<f64>::from(lonlats).into_pyarray(py)
         }
 
         #[pyo3(name = "nearest")]
@@ -819,7 +768,7 @@ mod py_sphersgeo {
     #[allow(clippy::large_enum_variant)]
     enum PyArcStringInputs<'py> {
         // NOTE: AnyGeometry MUST be the first option in this enum, otherwise it will attempt to match another pattern
-        AnyGeometry(AnyGeometry),
+        Geometry(AnyGeometry),
         MultiPointInput(PyMultiSphericalPointInputs<'py>),
     }
 
@@ -829,7 +778,7 @@ mod py_sphersgeo {
         #[pyo3(signature=(arcstring, closed=None))]
         fn py_new(arcstring: PyArcStringInputs, closed: Option<bool>) -> PyResult<Self> {
             match arcstring {
-                PyArcStringInputs::AnyGeometry(geometry) => {
+                PyArcStringInputs::Geometry(geometry) => {
                     let mut instance = match geometry {
                         AnyGeometry::MultiSphericalPoint(multipoint) => {
                             ArcString::try_from(multipoint).map_err(PyValueError::new_err)
@@ -1144,7 +1093,7 @@ mod py_sphersgeo {
     #[allow(clippy::large_enum_variant)]
     enum PyMultiArcStringInputs<'py> {
         // NOTE: AnyGeometry MUST be the first option in this enum, otherwise it will attempt to match another pattern
-        AnyGeometry(AnyGeometry),
+        Geometry(AnyGeometry),
         ListOfArcStrings(Vec<PyArcStringInputs<'py>>),
     }
 
@@ -1153,7 +1102,7 @@ mod py_sphersgeo {
         #[new]
         fn py_new(arcstrings: PyMultiArcStringInputs) -> PyResult<Self> {
             match arcstrings {
-                PyMultiArcStringInputs::AnyGeometry(geometry) => {
+                PyMultiArcStringInputs::Geometry(geometry) => {
                     match geometry {
                         AnyGeometry::MultiSphericalPoint(multipoint) => Self::try_from(vec![
                             ArcString::try_from(multipoint).map_err(PyValueError::new_err)?,
@@ -1461,7 +1410,7 @@ mod py_sphersgeo {
     #[allow(clippy::large_enum_variant)]
     enum PySphericalPolygonInputs<'py> {
         // NOTE: AnyGeometry MUST be the first option in this enum, otherwise it will attempt to match another pattern
-        AnyGeometry(AnyGeometry),
+        Geometry(AnyGeometry),
         ArcStringInput(PyArcStringInputs<'py>),
         ArcStringInputWithInteriorPoint(PyArcStringInputs<'py>, PySphericalPointInputs<'py>),
     }
@@ -1472,7 +1421,7 @@ mod py_sphersgeo {
         /// an interior point is required because an arcstring divides a sphere into two regions
         fn py_new<'py>(polygon: PySphericalPolygonInputs<'py>) -> PyResult<Self> {
             match polygon {
-                PySphericalPolygonInputs::AnyGeometry(geometry) => match geometry {
+                PySphericalPolygonInputs::Geometry(geometry) => match geometry {
                     AnyGeometry::MultiSphericalPoint(points) => Self::try_new(
                         ArcString::try_new(points, Some(true)).map_err(PyValueError::new_err)?,
                         None,
@@ -1761,7 +1710,7 @@ mod py_sphersgeo {
     #[allow(clippy::large_enum_variant)]
     enum PyMultiSphericalPolygonInputs<'py> {
         // NOTE: AnyGeometry MUST be the first option in this enum, otherwise it will attempt to match another pattern
-        AnyGeometry(AnyGeometry),
+        Geometry(AnyGeometry),
         ListOfPolygons(Vec<PySphericalPolygonInputs<'py>>),
     }
 
@@ -1770,7 +1719,7 @@ mod py_sphersgeo {
         #[new]
         fn py_new(polygons: PyMultiSphericalPolygonInputs) -> PyResult<Self> {
             let polygons = match polygons {
-                PyMultiSphericalPolygonInputs::AnyGeometry(geometry) => match geometry {
+                PyMultiSphericalPolygonInputs::Geometry(geometry) => match geometry {
                     AnyGeometry::MultiArcString(boundaries) => {
                         let mut polygons = vec![];
                         for boundary in boundaries.arcstrings {

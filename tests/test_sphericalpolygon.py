@@ -79,7 +79,7 @@ def test_from_cone():
         lon = random.randrange(-180, 180)
         lat = random.randrange(20, 90)
         polygon = SphericalPolygon.from_cone(
-            SphericalPoint.from_lonlat((lon, lat)),
+            SphericalPoint((lon, lat)),
             8,
             steps=64,
         )
@@ -90,7 +90,7 @@ def test_from_cone():
 @pytest.mark.parametrize("lat", (0, 30, 60, 90))
 def test_cone_area(lon, lat):
     polygon = SphericalPolygon.from_cone(
-        SphericalPoint.from_lonlat((lon, lat)), radius=10, steps=64
+        SphericalPoint((lon, lat)), radius=10, steps=64
     )
     assert len(polygon.vertices.xyzs) == 63
     assert_almost_equal(polygon.area, 312, decimal=0)
@@ -124,18 +124,18 @@ def test_cone_area(lon, lat):
     ],
 )
 def test_is_clockwise(lonlats, is_clockwise):
-    poly = SphericalPolygon(MultiSphericalPoint.from_lonlats(lonlats))
+    poly = SphericalPolygon(MultiSphericalPoint(lonlats))
     assert poly.is_clockwise == is_clockwise
 
 
 def test_symmetric_difference():
     a = SphericalPolygon(
-        MultiSphericalPoint.from_lonlats(
+        MultiSphericalPoint(
             [(20.0, 5.0), (25.0, 5.0), (25.0, 10.0), (20.0, 10.0)]
         )
     )
     b = SphericalPolygon(
-        MultiSphericalPoint.from_lonlats(
+        MultiSphericalPoint(
             [(5.0, 5.0), (25.0, 5.0), (25.0, 15.0), (5.0, 15.0)]
         )
     )
@@ -154,7 +154,7 @@ def test_overlap():
         lonlats[:, 0] += offset
         lonlats[:, 1] += y_eps
         poly = SphericalPolygon(
-            MultiSphericalPoint.from_lonlats(lonlats),
+            MultiSphericalPoint(lonlats),
         )
         return poly
 
@@ -200,7 +200,7 @@ def test_from_wcs(test_point, rotation, bounding_box, pixel_shape):
     polygon = polygon_from_wcs(wcsobj)
 
     assert polygon.area > 0
-    assert polygon.contains(SphericalPoint.from_lonlat(test_point))
+    assert polygon.contains(SphericalPoint(test_point))
 
 
 def test_point_in_poly():
@@ -289,7 +289,7 @@ def test_point_in_poly():
     ],
 )
 def test_area(lonlats, expected_area):
-    poly = SphericalPolygon(MultiSphericalPoint.from_lonlats(lonlats))
+    poly = SphericalPolygon(MultiSphericalPoint(lonlats))
 
     assert_almost_equal(poly.area, expected_area)
 
@@ -352,7 +352,7 @@ def test_area(lonlats, expected_area):
     ],
 )
 def test_centroid(lonlats, expected_centroid_lonlat):
-    poly = SphericalPolygon(MultiSphericalPoint.from_lonlats(lonlats))
+    poly = SphericalPolygon(MultiSphericalPoint(lonlats))
 
     assert_almost_equal(poly.centroid.lonlat, expected_centroid_lonlat)
 
@@ -490,7 +490,7 @@ def test_centroid(lonlats, expected_centroid_lonlat):
     ],
 )
 def test_convex_hull(lonlats, expected_area, expected_on_boundary):
-    points = MultiSphericalPoint.from_lonlats(lonlats)
+    points = MultiSphericalPoint(lonlats)
 
     convex_hull = points.convex_hull
 
