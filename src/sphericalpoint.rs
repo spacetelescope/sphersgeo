@@ -1150,11 +1150,7 @@ impl<'a> TryFrom<&Vec<ArrayView1<'a, f64>>> for MultiSphericalPoint {
 
 impl From<MultiSphericalPoint> for Vec<SphericalPoint> {
     fn from(points: MultiSphericalPoint) -> Self {
-        points
-            .xyzs
-            .into_iter()
-            .map(|xyz| SphericalPoint { xyz })
-            .collect()
+        points.xyzs.into_iter().map(SphericalPoint::from).collect()
     }
 }
 

@@ -1055,8 +1055,8 @@ impl TryFrom<Vec<ArcString>> for MultiArcString {
 impl From<Vec<MultiSphericalPoint>> for MultiArcString {
     fn from(points: Vec<MultiSphericalPoint>) -> Self {
         let arcstrings: Vec<ArcString> = points
-            .iter()
-            .map(|points| ArcString::try_from(points.to_owned()).unwrap())
+            .into_iter()
+            .map(|points| ArcString::try_from(points).unwrap())
             .collect();
         Self::try_from(arcstrings).unwrap()
     }
@@ -1644,7 +1644,8 @@ impl GeometricOperations<crate::sphericalpolygon::MultiSphericalPolygon, ArcStri
 
 impl GeometryCollection<ArcString> for MultiArcString {
     fn join_self(&self) -> Self {
-        let mut graph = EdgeGraph::<ArcString>::from(self);
+        let mut graph =
+            EdgeGraph::<ArcString>::from(self.arcstrings.iter().collect::<Vec<&ArcString>>());
         graph.split_edges();
         graph.remove_multisourced_edges();
         graph.remove_degenerate_edges();
@@ -1653,7 +1654,8 @@ impl GeometryCollection<ArcString> for MultiArcString {
     }
 
     fn overlap_self(&self) -> Option<Self> {
-        let mut graph = EdgeGraph::<ArcString>::from(self);
+        let mut graph =
+            EdgeGraph::<ArcString>::from(self.arcstrings.iter().collect::<Vec<&ArcString>>());
         graph.split_edges();
         graph.remove_unisourced_edges();
         graph.remove_degenerate_edges();
@@ -1662,7 +1664,8 @@ impl GeometryCollection<ArcString> for MultiArcString {
     }
 
     fn symmetric_difference_self(&self) -> Option<Self> {
-        let mut split_graph = EdgeGraph::<ArcString>::from(self);
+        let mut split_graph =
+            EdgeGraph::<ArcString>::from(self.arcstrings.iter().collect::<Vec<&ArcString>>());
         split_graph.split_edges();
 
         let mut overlap_graph = split_graph.to_owned();

@@ -8,14 +8,11 @@ from numpy.typing import NDArray
 class SphericalPoint:
     def __init__(
         self,
-        xyz: tuple[float, float, float] | list[float] | NDArray[float64],
+        point: tuple[float, float, float]
+        | NDArray[float64]
+        | tuple[float, float]
+        | list[float],
     ): ...
-
-    @classmethod
-    def from_lonlat(
-        cls,
-        lonlat: tuple[float, float] | NDArray[float64] | list[float],
-    ) -> SphericalPoint: ...
 
     @property
     def xyz(self) -> Tuple[float, float, float]: ...
@@ -197,15 +194,11 @@ class SphericalPoint:
 class MultiSphericalPoint:
     def __init__(
         self,
-        xyzs: list[tuple[float, float, float]]
+        points: list[tuple[float, float, float]]
         | list[SphericalPoint]
+        | tuple[float, float]
         | NDArray[float64],
     ): ...
-
-    @classmethod
-    def from_lonlats(
-        cls, lonlats: tuple[float, float] | NDArray[float64] | list[list[float]]
-    ) -> MultiSphericalPoint: ...
 
     @property
     def xyzs(self) -> NDArray[float64]: ...

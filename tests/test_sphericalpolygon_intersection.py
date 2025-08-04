@@ -72,30 +72,22 @@ def test_intersects():
 def test_intersects_simple():
     lon1 = np.array([-10, 10, 10, -10, -10], dtype=float)
     lat1 = np.array([30, 30, 0, 0, 30], dtype=float)
-    poly1 = SphericalPolygon(
-        MultiSphericalPoint(np.stack((lon1, lat1), axis=1))
-    )
+    poly1 = SphericalPolygon(MultiSphericalPoint(np.stack((lon1, lat1), axis=1)))
 
     ra2 = np.array([-5, 15, 15, -5, -5], dtype=float)
     dec2 = np.array([20, 20, -10, -10, 20], dtype=float)
-    poly2 = SphericalPolygon(
-        MultiSphericalPoint(np.stack((ra2, dec2), axis=1))
-    )
+    poly2 = SphericalPolygon(MultiSphericalPoint(np.stack((ra2, dec2), axis=1)))
 
     assert poly1.intersects(poly2)
 
     # Make sure it isn't order-dependent
     lon1 = lon1[::-1]
     lat1 = lat1[::-1]
-    poly1 = SphericalPolygon(
-        MultiSphericalPoint(np.stack((lon1, lat1), axis=1))
-    )
+    poly1 = SphericalPolygon(MultiSphericalPoint(np.stack((lon1, lat1), axis=1)))
 
     ra2 = ra2[::-1]
     dec2 = dec2[::-1]
-    poly2 = SphericalPolygon(
-        MultiSphericalPoint(np.stack((ra2, dec2), axis=1))
-    )
+    poly2 = SphericalPolygon(MultiSphericalPoint(np.stack((ra2, dec2), axis=1)))
 
     assert poly1.intersects(poly2)
 
@@ -103,30 +95,22 @@ def test_intersects_simple():
 def test_intersects_poly_fully_contained():
     lon1 = np.array([-10, 10, 10, -10, -10], dtype=float)
     lat1 = np.array([30, 30, 0, 0, 30], dtype=float)
-    poly1 = SphericalPolygon(
-        MultiSphericalPoint(np.stack((lon1, lat1), axis=1))
-    )
+    poly1 = SphericalPolygon(MultiSphericalPoint(np.stack((lon1, lat1), axis=1)))
 
     lon2 = np.array([-5, 5, 5, -5, -5], dtype=float)
     lat2 = np.array([20, 20, 10, 10, 20], dtype=float)
-    poly2 = SphericalPolygon(
-        MultiSphericalPoint(np.stack((lon2, lat2), axis=1))
-    )
+    poly2 = SphericalPolygon(MultiSphericalPoint(np.stack((lon2, lat2), axis=1)))
 
     assert poly1.intersects(poly2)
 
     # Make sure it isn't order-dependent
     lon1 = lon1[::-1]
     lat1 = lat1[::-1]
-    poly1 = SphericalPolygon(
-        MultiSphericalPoint(np.stack((lon1, lat1), axis=1))
-    )
+    poly1 = SphericalPolygon(MultiSphericalPoint(np.stack((lon1, lat1), axis=1)))
 
     lon2 = lon2[::-1]
     lat2 = lat2[::-1]
-    poly2 = SphericalPolygon(
-        MultiSphericalPoint(np.stack((lon2, lat2), axis=1))
-    )
+    poly2 = SphericalPolygon(MultiSphericalPoint(np.stack((lon2, lat2), axis=1)))
 
     assert poly1.intersects(poly2)
 
@@ -134,30 +118,22 @@ def test_intersects_poly_fully_contained():
 def test_hard_intersects_poly():
     lon1 = np.array([-10, 10, 10, -10, -10], dtype=float)
     lat1 = np.array([30, 30, 0, 0, 30], dtype=float)
-    poly1 = SphericalPolygon(
-        MultiSphericalPoint(np.stack((lon1, lat1), axis=1))
-    )
+    poly1 = SphericalPolygon(MultiSphericalPoint(np.stack((lon1, lat1), axis=1)))
 
     lon2 = np.array([-20, 20, 20, -20, -20], dtype=float)
     lat2 = np.array([20, 20, 10, 10, 20], dtype=float)
-    poly2 = SphericalPolygon(
-        MultiSphericalPoint(np.stack((lon2, lat2), axis=1))
-    )
+    poly2 = SphericalPolygon(MultiSphericalPoint(np.stack((lon2, lat2), axis=1)))
 
     assert poly1.intersects(poly2)
 
     # Make sure it isn't order-dependent
     lon1 = lon1[::-1]
     lat1 = lat1[::-1]
-    poly1 = SphericalPolygon(
-        MultiSphericalPoint(np.stack((lon1, lat1), axis=1))
-    )
+    poly1 = SphericalPolygon(MultiSphericalPoint(np.stack((lon1, lat1), axis=1)))
 
     lon2 = lon2[::-1]
     lat2 = lat2[::-1]
-    poly2 = SphericalPolygon(
-        MultiSphericalPoint(np.stack((lon2, lat2), axis=1))
-    )
+    poly2 = SphericalPolygon(MultiSphericalPoint(np.stack((lon2, lat2), axis=1)))
 
     assert poly1.intersects(poly2)
 
@@ -165,30 +141,22 @@ def test_hard_intersects_poly():
 def test_not_intersects_poly():
     lon1 = np.array([-10, 10, 10, -10, -10], dtype=float)
     lat1 = np.array([30, 30, 5, 5, 30], dtype=float)
-    poly1 = SphericalPolygon(
-        MultiSphericalPoint(np.stack((lon1, lat1), axis=1))
-    )
+    poly1 = SphericalPolygon(MultiSphericalPoint(np.stack((lon1, lat1), axis=1)))
 
     lon2 = np.array([-20, 20, 20, -20, -20], dtype=float)
     lat2 = np.array([-20, -20, -10, -10, -20], dtype=float)
-    poly2 = SphericalPolygon(
-        MultiSphericalPoint(np.stack((lon2, lat2), axis=1))
-    )
+    poly2 = SphericalPolygon(MultiSphericalPoint(np.stack((lon2, lat2), axis=1)))
 
     assert not poly1.intersects(poly2)
 
     # Make sure it isn't order-dependent
     lon1 = lon1[::-1]
     lat1 = lat1[::-1]
-    poly1 = SphericalPolygon(
-        MultiSphericalPoint(np.stack((lon1, lat1), axis=1))
-    )
+    poly1 = SphericalPolygon(MultiSphericalPoint(np.stack((lon1, lat1), axis=1)))
 
     lon2 = lon2[::-1]
     lat2 = lat2[::-1]
-    poly2 = SphericalPolygon(
-        MultiSphericalPoint(np.stack((lon2, lat2), axis=1))
-    )
+    poly2 = SphericalPolygon(MultiSphericalPoint(np.stack((lon2, lat2), axis=1)))
 
     assert not poly1.intersects(poly2)
 
@@ -534,10 +502,16 @@ def test_intersection_crash_similar_poly():
     pts3 = np.sort(p3.vertices.xyzs[:-1], axis=0)
     assert_allclose(pts1, pts3, rtol=0, atol=1e-15)
 
-def test_complement():
+
+def test_complement_regression():
+    """https://github.com/spacetelescope/spherical_geometry/issues/278"""
+
     p1 = SphericalPolygon.from_cone((90, 0), 100)
     p2 = SphericalPolygon.from_cone((270, 0), 100)
 
-    print(p1.contains((0, 0))) # true
-    print(p2.contains((0, 0))) # true
-    print(p1.intersection(p2).contains_lonlat(0, 0)) # erroneously false 
+    assert p1.contains((0, 0))
+    assert p2.contains((0, 0))
+
+    p12 = p1.intersection(p2)
+
+    assert p12.contains((0, 0))

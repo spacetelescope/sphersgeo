@@ -607,7 +607,10 @@ impl GeometricOperations<ArcString> for SphericalPolygon {
             arcstrings.push(other.to_owned());
         } else if other.crosses(self) {
             // split arcstring by the polygon boundary
-            for arcstring in other.symmetric_difference(self).arcstrings {
+            let mut graph = EdgeGraph::<ArcString>::from(vec![&self.boundary, other]);
+            graph.split_edges();
+
+            for arcstring in Vec::<ArcString>::from(graph) {
                 // only include arcstrings inside the polygon
                 if arcstring.within(self) {
                     arcstrings.push(arcstring);
@@ -1459,14 +1462,9 @@ impl GeometryCollection<SphericalPolygon> for MultiSphericalPolygon {
         let mut split_graph = EdgeGraph::<SphericalPolygon>::from(self);
         split_graph.split_edges();
         split_graph.assign_polygons_to_edges();
+        split_graph.remove_multisourced_edges();
+        split_graph.remove_degenerate_edges();
 
-        let mut overlap_graph = split_graph.to_owned();
-        overlap_graph.remove_unisourced_edges();
-        overlap_graph.remove_degenerate_edges();
-
-        let mut polygons = Vec::<SphericalPolygon>::from(split_graph);
-        polygons.extend(Vec::<SphericalPolygon>::from(overlap_graph));
-
-        Self::try_from(polygons).ok()
+        Self::try_from(Vec::<SphericalPolygon>::from(split_graph)).ok()
     }
 }

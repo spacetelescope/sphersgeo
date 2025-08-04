@@ -65,16 +65,6 @@ impl<'a> From<Vec<&'a crate::sphericalpolygon::SphericalPolygon>>
     }
 }
 
-impl<'a> From<&'a crate::arcstring::MultiArcString> for EdgeGraph<'a, crate::arcstring::ArcString> {
-    fn from(arcstrings: &'a crate::arcstring::MultiArcString) -> Self {
-        let mut graph = Self::default();
-        for arcstring in arcstrings.arcstrings.iter() {
-            graph.push(arcstring);
-        }
-        graph
-    }
-}
-
 impl<'a> From<Vec<&'a crate::arcstring::ArcString>> for EdgeGraph<'a, crate::arcstring::ArcString> {
     fn from(arcstrings: Vec<&'a crate::arcstring::ArcString>) -> Self {
         let mut graph = Self::default();
@@ -359,10 +349,10 @@ where
 impl<'a> EdgeGraph<'a, crate::sphericalpolygon::SphericalPolygon> {
     /// assign each edge to intersecting polygon(s)
     pub fn assign_polygons_to_edges(&mut self) {
-        let mut pending_source_updates: HashMap<usize, Vec<usize>> = HashMap::new();
+        let mut edges_new_sources: HashMap<usize, HashMap<usize, Vec<usize>>> = HashMap::new();
         for (node_index, node) in self.nodes.iter().enumerate() {
-            for (edge_node_index, sources) in &node.edges {
-                let arcstring = crate::arcstring::ArcString::try_from(
+            for (edge_node_index, sources) in node.edges.iter() {
+                let edge_arc = crate::arcstring::ArcString::try_from(
                     crate::sphericalpoint::MultiSphericalPoint::try_from(vec![
                         node.xyz,
                         self.nodes[*edge_node_index].xyz,
@@ -372,22 +362,36 @@ impl<'a> EdgeGraph<'a, crate::sphericalpolygon::SphericalPolygon> {
                 .unwrap();
 
                 for (polygon_index, polygon) in self.geometries.iter().enumerate() {
-                    if !sources.contains(&polygon_index) && polygon.intersects(&arcstring) {
-                        pending_source_updates
-                            .entry(node_index)
-                            .or_insert_with(|| sources.to_owned());
-
-                        pending_source_updates
-                            .get_mut(&node_index)
-                            .unwrap()
-                            .push(polygon_index);
+                    if !sources.contains(&polygon_index) && polygon.covers(&edge_arc) {
+                        if !edges_new_sources.contains_key(&node_index) {
+                            edges_new_sources.insert(node_index, HashMap::new());
+                        }
+                        if let Some(pending_source_update) = edges_new_sources.get_mut(&node_index)
+                        {
+                            if !pending_source_update.contains_key(edge_node_index) {
+                                pending_source_update.insert(*edge_node_index, vec![]);
+                            }
+                            if let Some(edge) = pending_source_update.get_mut(&edge_node_index) {
+                                edge.push(polygon_index);
+                            }
+                        }
                     }
                 }
             }
         }
 
-        for source_update in pending_source_updates {
-            todo!()
+        for (node_index, edges) in edges_new_sources.iter_mut() {
+            if let Some(node) = self.nodes.get_mut(*node_index) {
+                for (edge_index, edge_sources) in edges.iter_mut() {
+                    if let Some(edge) = node.edges.get_mut(edge_index) {
+                        for source_index in edge_sources {
+                            if !edge.contains(source_index) {
+                                edge.push(*source_index);
+                            }
+                        }
+                    }
+                }
+            }
         }
     }
 }
@@ -457,24 +461,114 @@ impl<'a> From<EdgeGraph<'a, crate::sphericalpolygon::SphericalPolygon>>
 {
     fn from(graph: EdgeGraph<'a, crate::sphericalpolygon::SphericalPolygon>) -> Self {
         let mut polygons = vec![];
-        let mut claimed_nodes = vec![];
 
         // depth-first search over edges
         for (node_index, node) in graph.nodes.iter().enumerate() {
-            if !claimed_nodes.contains(&node_index) {
-                // start a list of points that may potentially form a closed polygon boundary
-                for (edge_node_index, edge_sources) in &node.edges {
-                    polygons.extend(trace_polygons(
-                        &graph.nodes,
-                        &mut claimed_nodes,
-                        &vec![node_index, *edge_node_index],
-                        edge_sources,
-                    ));
-                }
+            // start a list of points that may potentially form a closed polygon boundary
+            for (edge_node_index, edge_sources) in &node.edges {
+                polygons.extend(trace_polygons(
+                    &graph.nodes,
+                    &vec![node_index, *edge_node_index],
+                    edge_sources,
+                ));
             }
         }
 
         polygons
+    }
+}
+
+/// recursive function to trace closed polygon boundaries from the graph of nodes
+fn trace_polygons(
+    nodes: &Vec<Node>,
+    polygon_node_indices: &Vec<usize>,
+    edge_sources: &Vec<usize>,
+) -> Vec<crate::sphericalpolygon::SphericalPolygon> {
+    if nodes.is_empty() {
+        vec![]
+    } else {
+        if polygon_node_indices.len() < 2 {
+            panic!("cannot infer polygons with less than 2 polygon node indices");
+        }
+
+        let mut polygon_node_indices = polygon_node_indices.to_owned();
+
+        let working_node_index = polygon_node_indices[polygon_node_indices.len() - 1];
+        let working_node = &nodes[working_node_index];
+
+        let previous_node_index = polygon_node_indices[polygon_node_indices.len() - 2];
+        let previous_node = &nodes[previous_node_index];
+
+        polygon_node_indices.push(working_node_index);
+
+        // to prevent crosses, compare the angles between this edge and the next candidate edges,
+        // and choose between one of the two extremes (smallest and largest angles)
+        let edge_angles = working_node
+            .edges
+            .iter()
+            .map(|(edge_node_index, edge_sources)| {
+                (
+                    (edge_node_index, edge_sources),
+                    crate::sphericalpoint::xyz_two_arc_angle_radians(
+                        &previous_node.xyz,
+                        &working_node.xyz,
+                        &nodes[*edge_node_index].xyz,
+                    ),
+                )
+            })
+            .collect::<Vec<((&usize, &Vec<usize>), f64)>>();
+
+        if edge_angles.len() > 1 {
+            let left_node = edge_angles
+                .iter()
+                .min_by(|(_, edge_angle_a), (_, edge_angle_b)| {
+                    edge_angle_a.partial_cmp(edge_angle_b).unwrap()
+                })
+                .unwrap()
+                .0;
+            let right_node = edge_angles
+                .iter()
+                .min_by(|(_, edge_angle_a), (_, edge_angle_b)| {
+                    edge_angle_a.partial_cmp(edge_angle_b).unwrap()
+                })
+                .unwrap()
+                .0;
+
+            polygon_node_indices.push(
+                *if left_node
+                    .1
+                    .iter()
+                    .any(|source| edge_sources.contains(source))
+                {
+                    left_node
+                } else {
+                    right_node
+                }
+                .0,
+            );
+
+            trace_polygons(nodes, &polygon_node_indices, edge_sources)
+        } else {
+            // if the traced polygon is closed...
+            if polygon_node_indices[0] == polygon_node_indices[polygon_node_indices.len() - 1] {
+                vec![crate::sphericalpolygon::SphericalPolygon::try_new(
+                    crate::arcstring::ArcString::try_from(
+                        crate::sphericalpoint::MultiSphericalPoint::try_from(
+                            polygon_node_indices
+                                .iter()
+                                .map(|node_index| nodes[*node_index].xyz)
+                                .collect::<Vec<[f64; 3]>>(),
+                        )
+                        .unwrap(),
+                    )
+                    .unwrap(),
+                    None,
+                )
+                .unwrap()]
+            } else {
+                vec![]
+            }
+        }
     }
 }
 
@@ -535,110 +629,80 @@ impl<'a> GeometryGraph<'a, crate::arcstring::ArcString>
 }
 
 impl<'a> From<EdgeGraph<'a, crate::arcstring::ArcString>> for Vec<crate::arcstring::ArcString> {
-    fn from(value: EdgeGraph<'a, crate::arcstring::ArcString>) -> Self {
-        todo!()
-    }
-}
+    fn from(graph: EdgeGraph<'a, crate::arcstring::ArcString>) -> Self {
+        let mut arcstrings = vec![];
 
-fn trace_polygons(
-    nodes: &Vec<Node>,
-    claimed_node_indices: &mut Vec<usize>,
-    polygon_node_indices: &Vec<usize>,
-    edge_sources: &Vec<usize>,
-) -> Vec<crate::sphericalpolygon::SphericalPolygon> {
-    if nodes.is_empty() {
-        vec![]
-    } else {
-        if polygon_node_indices.len() < 2 {
-            panic!("must have at least 2 nodes populated in polygon node indices");
-        }
+        // depth-first traversal over node edges
+        let mut visited_node_indices: Vec<usize> = vec![];
+        for node_index in 0..graph.nodes.len() - 1 {
+            let node_indices =
+                trace_arcstrings(&graph.nodes, &node_index, &mut visited_node_indices);
 
-        let mut polygon_node_indices = polygon_node_indices.to_owned();
-
-        let working_node_index = polygon_node_indices[polygon_node_indices.len() - 1];
-        let working_node = &nodes[working_node_index];
-
-        let previous_node_index = polygon_node_indices[polygon_node_indices.len() - 2];
-        let previous_node = &nodes[previous_node_index];
-
-        polygon_node_indices.push(working_node_index);
-
-        // to prevent crosses, compare the angles between this edge and the next candidate edges,
-        // and choose between one of the two extremes (smallest and largest angles)
-        let edge_angles = working_node
-            .edges
-            .iter()
-            .filter_map(|(edge_node_index, edge_sources)| {
-                if !claimed_node_indices.contains(edge_node_index) {
-                    Some((
-                        (edge_node_index, edge_sources),
-                        crate::sphericalpoint::xyz_two_arc_angle_radians(
-                            &previous_node.xyz,
-                            &working_node.xyz,
-                            &nodes[*edge_node_index].xyz,
-                        ),
-                    ))
-                } else {
-                    None
-                }
-            })
-            .collect::<Vec<((&usize, &Vec<usize>), f64)>>();
-
-        if edge_angles.len() > 1 {
-            let left_node = edge_angles
-                .iter()
-                .min_by(|(_, edge_angle_a), (_, edge_angle_b)| {
-                    edge_angle_a.partial_cmp(edge_angle_b).unwrap()
-                })
-                .unwrap()
-                .0;
-            let right_node = edge_angles
-                .iter()
-                .min_by(|(_, edge_angle_a), (_, edge_angle_b)| {
-                    edge_angle_a.partial_cmp(edge_angle_b).unwrap()
-                })
-                .unwrap()
-                .0;
-
-            polygon_node_indices.push(
-                *if left_node
-                    .1
-                    .iter()
-                    .any(|source| edge_sources.contains(source))
-                {
-                    left_node
-                } else {
-                    right_node
-                }
-                .0,
-            );
-
-            trace_polygons(
-                nodes,
-                claimed_node_indices,
-                &polygon_node_indices,
-                edge_sources,
-            )
-        } else {
-            // if the traced polygon is closed...
-            if polygon_node_indices[0] == polygon_node_indices[polygon_node_indices.len() - 1] {
-                vec![crate::sphericalpolygon::SphericalPolygon::try_new(
+            if !node_indices.is_empty() {
+                arcstrings.push(
                     crate::arcstring::ArcString::try_from(
                         crate::sphericalpoint::MultiSphericalPoint::try_from(
-                            polygon_node_indices
+                            node_indices
                                 .iter()
-                                .map(|node_index| nodes[*node_index].xyz)
+                                .map(|node_index| graph.nodes[*node_index].xyz)
                                 .collect::<Vec<[f64; 3]>>(),
                         )
                         .unwrap(),
                     )
                     .unwrap(),
-                    None,
                 )
-                .unwrap()]
-            } else {
-                vec![]
+            }
+        }
+
+        arcstrings
+    }
+}
+
+/// recursive function to trace arcstrings from the graph of nodes, stopping at forks
+fn trace_arcstrings(
+    nodes: &Vec<Node>,
+    node_index: &usize,
+    visited_node_indices: &mut Vec<usize>,
+) -> Vec<usize> {
+    let mut node_indices = vec![];
+
+    if !visited_node_indices.contains(node_index) {
+        if let Some(node) = nodes.get(*node_index) {
+            visited_node_indices.push(*node_index);
+
+            // skip end or fork nodes
+            if node.edges.len() <= 2 {
+                let mut parts = vec![];
+                for edge_node_index in node.edges.keys() {
+                    if !visited_node_indices.contains(edge_node_index) {
+                        if let Some(edge_node) = nodes.get(*edge_node_index) {
+                            if edge_node.edges.len() == 2 {
+                                // continue from a middle node
+                                parts.push(trace_arcstrings(
+                                    nodes,
+                                    edge_node_index,
+                                    visited_node_indices,
+                                ));
+                            } else if edge_node.edges.len() == 1 || edge_node.edges.len() >= 3 {
+                                // stop at an end or fork node
+                                parts.push(vec![*node_index, *edge_node_index]);
+                                visited_node_indices.push(*edge_node_index);
+                            }
+                        }
+                    }
+                }
+
+                if node.edges.len() == 2 {
+                    // if branched from a middle node, flip one branch and join them
+                    node_indices.extend(parts[0].to_owned().into_iter().rev());
+                    // add the other part, excluding the current node
+                    node_indices.extend(parts[1].split_off(1));
+                } else {
+                    node_indices.extend(parts[0].to_owned());
+                }
             }
         }
     }
+
+    node_indices
 }
