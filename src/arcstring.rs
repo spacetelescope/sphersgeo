@@ -474,7 +474,6 @@ impl ArcString {
         } else {
             let mut graph = EdgeGraph::<Self>::from(vec![self, other]);
             graph.split_edges();
-            graph.remove_multisourced_edges();
             graph.remove_degenerate_edges();
 
             let arcstrings: Vec<ArcString> = Vec::<ArcString>::from(graph);

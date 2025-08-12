@@ -594,35 +594,43 @@ impl<'a> GeometryGraph<'a, crate::arcstring::ArcString>
             self.geometries.len() - 1
         };
 
-        for xyz_index in 0..node_indices.len() - if arcstring.closed { 0 } else { 1 } {
+        for xyz_index in 0..node_indices.len() {
             let node = self.nodes.get_mut(node_indices[xyz_index]).unwrap();
 
             if xyz_index > 0 || arcstring.closed {
                 let prev_node_index = node_indices[if xyz_index > 0 {
                     xyz_index - 1
                 } else {
+                    // link back to last node if arcstring is closed
                     node_indices.len() - 1
                 }];
-                if let Some(edge) = node.edges.get_mut(&prev_node_index) {
-                    if !edge.contains(&geometry_index) {
-                        edge.push(geometry_index);
+
+                // check if edge to previous node already exists
+                if let Some(edge_to_prev) = node.edges.get_mut(&prev_node_index) {
+                    if !edge_to_prev.contains(&geometry_index) {
+                        edge_to_prev.push(geometry_index);
                     }
                 } else {
                     node.edges.insert(prev_node_index, vec![geometry_index]);
                 }
             }
 
-            let next_node_index = node_indices[if xyz_index < node_indices.len() - 1 {
-                xyz_index + 1
-            } else {
-                0
-            }];
-            if let Some(edge) = node.edges.get_mut(&next_node_index) {
-                if !edge.contains(&geometry_index) {
-                    edge.push(geometry_index);
+            if xyz_index < node_indices.len() - 1 || arcstring.closed {
+                let next_node_index = node_indices[if xyz_index < node_indices.len() - 1 {
+                    xyz_index + 1
+                } else {
+                    // link forward to first node if arcstring is closed
+                    0
+                }];
+
+                // check if edge to next node already exists
+                if let Some(edge_to_next) = node.edges.get_mut(&next_node_index) {
+                    if !edge_to_next.contains(&geometry_index) {
+                        edge_to_next.push(geometry_index);
+                    }
+                } else {
+                    node.edges.insert(next_node_index, vec![geometry_index]);
                 }
-            } else {
-                node.edges.insert(next_node_index, vec![geometry_index]);
             }
         }
     }
@@ -630,55 +638,62 @@ impl<'a> GeometryGraph<'a, crate::arcstring::ArcString>
 
 impl<'a> From<EdgeGraph<'a, crate::arcstring::ArcString>> for Vec<crate::arcstring::ArcString> {
     fn from(graph: EdgeGraph<'a, crate::arcstring::ArcString>) -> Self {
-        let mut arcstrings = vec![];
+        let mut arcstrings: Vec<Vec<usize>> = vec![];
 
         // depth-first traversal over node edges
-        let mut visited_node_indices: Vec<usize> = vec![];
-        for node_index in 0..graph.nodes.len() - 1 {
-            let node_indices =
-                trace_arcstrings(&graph.nodes, &node_index, &mut visited_node_indices);
+        for node_index in 0..graph.nodes.len() {
+            if arcstrings
+                .iter()
+                .any(|node_indices| node_indices.contains(&node_index))
+            {
+                continue;
+            }
+
+            let node_indices = trace_arcstring(&graph.nodes, &node_index, &mut vec![]);
 
             if !node_indices.is_empty() {
-                arcstrings.push(
-                    crate::arcstring::ArcString::try_from(
-                        crate::sphericalpoint::MultiSphericalPoint::try_from(
-                            node_indices
-                                .iter()
-                                .map(|node_index| graph.nodes[*node_index].xyz)
-                                .collect::<Vec<[f64; 3]>>(),
-                        )
-                        .unwrap(),
-                    )
-                    .unwrap(),
-                )
+                arcstrings.push(node_indices)
             }
         }
 
         arcstrings
+            .iter()
+            .map(|node_indices| {
+                crate::arcstring::ArcString::try_from(
+                    crate::sphericalpoint::MultiSphericalPoint::try_from(
+                        node_indices
+                            .iter()
+                            .map(|node_index| graph.nodes[*node_index].xyz)
+                            .collect::<Vec<[f64; 3]>>(),
+                    )
+                    .unwrap(),
+                )
+                .unwrap()
+            })
+            .collect()
     }
 }
 
-/// recursive function to trace arcstrings from the graph of nodes, stopping at forks
-fn trace_arcstrings(
+/// trace an arcstring from the given start point on a graph of nodes, stopping at forks
+fn trace_arcstring(
     nodes: &Vec<Node>,
     node_index: &usize,
     visited_node_indices: &mut Vec<usize>,
 ) -> Vec<usize> {
-    let mut node_indices = vec![];
-
     if !visited_node_indices.contains(node_index) {
         if let Some(node) = nodes.get(*node_index) {
-            visited_node_indices.push(*node_index);
-
             // skip end or fork nodes
             if node.edges.len() <= 2 {
+                visited_node_indices.push(*node_index);
                 let mut parts = vec![];
                 for edge_node_index in node.edges.keys() {
                     if !visited_node_indices.contains(edge_node_index) {
                         if let Some(edge_node) = nodes.get(*edge_node_index) {
                             if edge_node.edges.len() == 2 {
+                                parts.push(vec![*node_index, *edge_node_index]);
+
                                 // continue from a middle node
-                                parts.push(trace_arcstrings(
+                                parts.push(trace_arcstring(
                                     nodes,
                                     edge_node_index,
                                     visited_node_indices,
@@ -686,23 +701,33 @@ fn trace_arcstrings(
                             } else if edge_node.edges.len() == 1 || edge_node.edges.len() >= 3 {
                                 // stop at an end or fork node
                                 parts.push(vec![*node_index, *edge_node_index]);
-                                visited_node_indices.push(*edge_node_index);
                             }
                         }
                     }
                 }
 
-                if node.edges.len() == 2 {
-                    // if branched from a middle node, flip one branch and join them
-                    node_indices.extend(parts[0].to_owned().into_iter().rev());
-                    // add the other part, excluding the current node
-                    node_indices.extend(parts[1].split_off(1));
-                } else {
-                    node_indices.extend(parts[0].to_owned());
+                if let Some(mut arcstring_node_indices) = parts.pop() {
+                    while let Some(mut segment) = parts.pop() {
+                        // figure out if we need to flip either segment (or both)
+                        if arcstring_node_indices[arcstring_node_indices.len() - 1]
+                            == segment[segment.len() - 1]
+                        {
+                            segment.reverse();
+                        } else if arcstring_node_indices[0] == segment[0] {
+                            arcstring_node_indices.reverse();
+                        } else if arcstring_node_indices[0] == segment[segment.len() - 1] {
+                            segment.reverse();
+                            arcstring_node_indices.reverse();
+                        }
+
+                        arcstring_node_indices.extend(segment.split_off(1));
+                    }
+
+                    return arcstring_node_indices;
                 }
             }
         }
     }
 
-    node_indices
+    vec![]
 }

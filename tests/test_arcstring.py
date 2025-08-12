@@ -88,9 +88,7 @@ def test_midpoint():
 
 
 def test_contains():
-    diagonal_arc = ArcString(
-        MultiSphericalPoint([(-30.0, -30.0), (30.0, 30.0)]).xyzs
-    )
+    diagonal_arc = ArcString(MultiSphericalPoint([(-30.0, -30.0), (30.0, 30.0)]).xyzs)
     assert diagonal_arc.contains(SphericalPoint((0, 0)))
 
     vertical_arc = ArcString(
@@ -103,9 +101,7 @@ def test_contains():
         MultiSphericalPoint([(0.0, 60.0), (30.0, 60.0)]).xyzs,
     )
     for longitude in np.arange(1.0, 29.0, 1.0):
-        assert not horizontal_arc.contains(
-            SphericalPoint((longitude, 60.0))
-        )
+        assert not horizontal_arc.contains(SphericalPoint((longitude, 60.0)))
 
 
 @pytest.mark.parametrize("a", [(0.0, 0.0), (60.0, 0.0), (23.44, 79.9999)])
@@ -146,24 +142,36 @@ def test_interpolate_points(a, b):
 def test_adjoins_join():
     segment1 = ArcString(MultiSphericalPoint([(20.0, 5.0), (25.0, 5.0)]))
     segment2 = ArcString(MultiSphericalPoint([(25.0, 5.0), (25.0, 6.0)]))
-    segment3 = ArcString(
+    segment3 = ArcString(MultiSphericalPoint([(25.0, 5.0), (25.0, 6.0), (25.0, 7.0)]))
+    segment4 = ArcString(MultiSphericalPoint([(25.0, 6.0), (25.0, 7.0)]))
+
+    reference12 = ArcString(
+        MultiSphericalPoint([(20.0, 5.0), (25.0, 5.0), (25.0, 6.0)])
+    )
+    reference34 = ArcString(
         MultiSphericalPoint([(25.0, 5.0), (25.0, 6.0), (25.0, 7.0)])
     )
-    segment4 = ArcString(MultiSphericalPoint([(25.0, 6.0), (25.0, 7.0)]))
+    reference1234 = ArcString(
+        MultiSphericalPoint(
+            [
+                (20.0, 5.0),
+                (25.0, 5.0),
+                (25.0, 6.0),
+                (25.0, 7.0),
+            ]
+        )
+    )
 
     assert segment1.adjoins(segment2)
     assert segment2.adjoins(segment3)
     assert segment3.adjoins(segment1)
     assert not segment4.adjoins(segment1)
 
-    joined12 = segment1.join(segment2)
-    print(joined12.vertices.lonlats)
-
-    joined34 = segment3.join(segment4)
-    print(joined34.vertices.lonlats)
-
-    joined1234 = joined12.join(joined34)
-    print(joined1234.vertices.lonlats)
+    assert segment1.join(segment2) == reference12
+    assert segment2.join(segment1) == reference12
+    assert segment3.join(segment4) == reference34
+    assert segment4.join(segment3) == reference34
+    assert reference12.join(reference34) == reference1234
 
 
 def test_intersection():
@@ -209,9 +217,7 @@ def test_intersection():
 
 def test_closed_not_crosses_self():
     a = ArcString(
-        MultiSphericalPoint(
-            [(20.0, 5.0), (25.0, 5.0), (25.0, 10.0), (20.0, 10.0)]
-        ),
+        MultiSphericalPoint([(20.0, 5.0), (25.0, 5.0), (25.0, 10.0), (20.0, 10.0)]),
         closed=True,
     )
     b = ArcString(
