@@ -298,11 +298,12 @@ def test_add():
 
 def test_two_arc_angle():
     # right angle
-    A = (1.0, 0.0, 0.0)
+    A = SphericalPoint((1.0, 0.0, 0.0))
     B = SphericalPoint((0.0, 1.0, 0.0))
-    C = (0.0, 0.0, 1.0)
+    C = SphericalPoint((0.0, 0.0, 1.0))
+    assert A.two_arc_angle(B, C) == np.rad2deg(np.pi / 2)
     assert B.two_arc_angle(A, C) == np.rad2deg(np.pi / 2)
-    assert B.two_arc_angle(C, A) == np.rad2deg(np.pi / 2)
+    assert C.two_arc_angle(A, B) == np.rad2deg(np.pi / 2)
 
     # antipodes
     A = SphericalPoint((1.0, 1.0, 1.0))
@@ -324,6 +325,12 @@ def test_two_arc_angle():
     C = SphericalPoint((30.0, -3.0))
     assert_allclose(B.two_arc_angle(A, C), 30.0)
     assert_allclose(B.two_arc_angle(C, A), 30.0)
+
+    # equatorial
+    A = SphericalPoint((0.0, 0.0))
+    B = SphericalPoint((15.0, 0.0))
+    C = SphericalPoint((30.0, 0.0))
+    assert B.two_arc_angle(A, C) == 180
 
     A = SphericalPoint((0.0, 0.0, 0.0))
     B = SphericalPoint((0.0, 0.0, 0.0))

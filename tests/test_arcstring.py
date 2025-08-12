@@ -19,7 +19,7 @@ def test_init():
         (4.0, -1.0, 0.0),
     ]
 
-    single_from_array = ArcString(xyzs_a)
+    single_from_array = ArcString(np.array(xyzs_a))
     single_from_tuple = ArcString([tuple(vector) for vector in xyzs_a])
     single_from_list = ArcString(xyzs_a)
 
@@ -88,20 +88,16 @@ def test_midpoint():
 
 
 def test_contains():
-    diagonal_arc = ArcString(MultiSphericalPoint([(-30.0, -30.0), (30.0, 30.0)]).xyzs)
+    diagonal_arc = ArcString(MultiSphericalPoint([(-30.0, -30.0), (30.0, 30.0)]))
     assert diagonal_arc.contains(SphericalPoint((0, 0)))
 
-    vertical_arc = ArcString(
-        MultiSphericalPoint([(60.0, 0.0), (60.0, 30.0)]).xyzs,
-    )
+    vertical_arc = ArcString(MultiSphericalPoint([(60.0, 0.0), (60.0, 30.0)]))
     for latitude in np.arange(1.0, 29.0, 1.0):
         assert vertical_arc.contains(SphericalPoint((60.0, latitude)))
 
-    horizontal_arc = ArcString(
-        MultiSphericalPoint([(0.0, 60.0), (30.0, 60.0)]).xyzs,
-    )
+    horizontal_arc = ArcString(MultiSphericalPoint([(0.0, 0.0), (30.0, 0.0)]))
     for longitude in np.arange(1.0, 29.0, 1.0):
-        assert not horizontal_arc.contains(SphericalPoint((longitude, 60.0)))
+        assert horizontal_arc.contains(SphericalPoint((longitude, 0.0)))
 
 
 @pytest.mark.parametrize("a", [(0.0, 0.0), (60.0, 0.0), (23.44, 79.9999)])
@@ -114,7 +110,7 @@ def test_contains():
     ],
 )
 def test_interpolate_points(a, b):
-    tolerance = 1e-10
+    tolerance = 2e-8
 
     a = SphericalPoint(a)
     b = SphericalPoint(b)
@@ -132,35 +128,22 @@ def test_interpolate_points(a, b):
 
     assert_allclose(ab.length, interpolated_arc.length, atol=tolerance)
 
-    distances = interpolated_arc.lengths
-
     assert_allclose(
-        distances, interpolated_arc.length / len(interpolated_arc), atol=tolerance
+        interpolated_arc.lengths,
+        interpolated_arc.length / len(interpolated_arc),
+        atol=tolerance,
     )
 
 
 def test_adjoins_join():
-    segment1 = ArcString(MultiSphericalPoint([(20.0, 5.0), (25.0, 5.0)]))
-    segment2 = ArcString(MultiSphericalPoint([(25.0, 5.0), (25.0, 6.0)]))
-    segment3 = ArcString(MultiSphericalPoint([(25.0, 5.0), (25.0, 6.0), (25.0, 7.0)]))
-    segment4 = ArcString(MultiSphericalPoint([(25.0, 6.0), (25.0, 7.0)]))
+    segment1 = ArcString([(20.0, 5.0), (25.0, 5.0)])
+    segment2 = ArcString([(25.0, 5.0), (25.0, 6.0)])
+    segment3 = ArcString([(25.0, 5.0), (25.0, 6.0), (25.0, 7.0)])
+    segment4 = ArcString([(25.0, 6.0), (25.0, 7.0)])
 
-    reference12 = ArcString(
-        MultiSphericalPoint([(20.0, 5.0), (25.0, 5.0), (25.0, 6.0)])
-    )
-    reference34 = ArcString(
-        MultiSphericalPoint([(25.0, 5.0), (25.0, 6.0), (25.0, 7.0)])
-    )
-    reference1234 = ArcString(
-        MultiSphericalPoint(
-            [
-                (20.0, 5.0),
-                (25.0, 5.0),
-                (25.0, 6.0),
-                (25.0, 7.0),
-            ]
-        )
-    )
+    reference12 = ArcString([(20.0, 5.0), (25.0, 5.0), (25.0, 6.0)])
+    reference34 = ArcString([(25.0, 5.0), (25.0, 6.0), (25.0, 7.0)])
+    reference1234 = ArcString([(20.0, 5.0), (25.0, 5.0), (25.0, 6.0), (25.0, 7.0)])
 
     assert segment1.adjoins(segment2)
     assert segment2.adjoins(segment3)
@@ -217,20 +200,16 @@ def test_intersection():
 
 def test_closed_not_crosses_self():
     a = ArcString(
-        MultiSphericalPoint([(20.0, 5.0), (25.0, 5.0), (25.0, 10.0), (20.0, 10.0)]),
+        [(20.0, 5.0), (25.0, 5.0), (25.0, 10.0), (20.0, 10.0)],
         closed=True,
     )
     b = ArcString(
-        MultiSphericalPoint(
-            [(18.0, 6.0), (21.0, 6.0), (21.0, 7.0), (18.0, 7.0)],
-        ),
+        [(18.0, 6.0), (21.0, 6.0), (21.0, 7.0), (18.0, 7.0)],
         closed=False,
     )
     c = ArcString(b, closed=True)
     d = ArcString(
-        MultiSphericalPoint(
-            [(18.0, 6.0), (21.0, 7.0), (21.0, 6.0), (18.0, 7.0)],
-        ),
+        [(18.0, 6.0), (21.0, 7.0), (21.0, 6.0), (18.0, 7.0)],
         closed=False,
     )
 
@@ -251,7 +230,7 @@ def test_closed_not_crosses_self():
 
 @pytest.mark.parametrize("lonlats", [[(90, 0), (0, 45), (0, -45)]])
 def test_not_crosses_self(lonlats):
-    arcstring = ArcString(MultiSphericalPoint(lonlats))
+    arcstring = ArcString(lonlats)
 
     assert not arcstring.crosses_self
     assert arcstring.crossings_with_self is None

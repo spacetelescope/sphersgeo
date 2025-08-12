@@ -177,6 +177,13 @@ fn xyz_rotate_around(a: &[f64; 3], b: &[f64; 3], theta: &f64) -> [f64; 3] {
     [rotated[0], rotated[1], rotated[2]]
 }
 
+fn haversine_distance_over_sphere_radians(a: &[f64; 2], b: &[f64; 2]) -> f64 {
+    2.0 * (((b[1] - a[1]) / 2.0).sin().powi(2)
+        + a[1].cos() * b[1].cos() * ((b[0] - a[0]) / 2.0).sin().powi(2))
+    .sqrt()
+    .asin()
+}
+
 /// radians subtended between two points on the sphere
 ///
 /// Notes
@@ -188,20 +195,20 @@ fn xyz_rotate_around(a: &[f64; 3], b: &[f64; 3], theta: &f64) -> [f64; 3] {
 /// References
 /// ----------
 /// - https://www.mathforengineers.com/math-calculators/angle-between-two-vectors-in-spherical-coordinates.html
-pub fn arc_distance_over_sphere_radians(start: &[f64; 3], end: &[f64; 3]) -> f64 {
-    if xyz_eq(start, end) {
+pub fn arc_distance_over_sphere_radians(a: &[f64; 3], b: &[f64; 3]) -> f64 {
+    if xyz_eq(a, b) {
         0.0
     } else {
-        let distance = xyz_dot(start, end).acos();
-        if !distance.is_nan() {
-            distance
-        } else {
-            let crossed = xyz_cross(start, end);
-
+        let dotted = xyz_dot(a, b);
+        let distance = dotted.acos();
+        if distance.is_nan() {
+            let crossed = xyz_cross(a, b);
             // avoid domain issues of a.dot(b).acos()
-            (crossed[0].powi(2) + crossed[1].powi(2) + crossed[2].powi(2))
+            xyz_sum(&xyz_mul_xyz(&crossed, &crossed))
                 .sqrt()
-                .atan2(xyz_dot(start, end))
+                .atan2(dotted)
+        } else {
+            distance
         }
     }
 }
@@ -214,55 +221,51 @@ pub fn arc_distance_over_sphere_radians(start: &[f64; 3], end: &[f64; 3]) -> f64
 /// - Miller, Robert D. Computing the area of a spherical polygon. Graphics Gems IV. p132. 1994. Academic Press. doi:10.5555/180895.180907
 ///   `pdf <https://www.google.com/books/edition/Graphics_Gems_IV/CCqzMm_-WucC?hl=en&gbpv=1&dq=Graphics%20Gems%20IV.%20p132&pg=PA133&printsec=frontcover>`_
 pub fn xyz_two_arc_angle_radians(a: &[f64; 3], b: &[f64; 3], c: &[f64; 3]) -> f64 {
-    let tolerance = 3e-11;
+    let tolerance = 2e-8;
 
-    // let abx = cross_vector(&a, &b);
-    // let bcx = cross_vector(&b, &c);
-
-    // let angle = if vector_arc_length(a, c) < tolerance
-    //     // || vector_length(&abx.view()) < tolerance
-    //     // || vector_length(&bcx.view()) < tolerance
+    // let abx = xyz_cross(&a, &b);
+    // let bcx = xyz_cross(&b, &c);
+    //
+    // if arc_distance_over_sphere_radians(a, c) < tolerance
+    //     || xyz_length(&abx) < tolerance
+    //     || xyz_length(&bcx) < tolerance
     // {
     //     0.0
     // } else {
-    //     let x = normalize_vector(&cross_vector(&abx.view(), &bcx.view()).view());
-
-    //     let diff = (b * x).sum();
-    //     let inner = (abx * bcx).sum();
-    //     let mut angle = inner.acos();
-
-    //     if angle.is_nan() {
-    //         std::f64::consts::PI
-    //     } else {
-    //         if diff < 0.0 {
-    //             angle = (2.0 * std::f64::consts::PI) - angle;
-    //         }
-    //         angle
-    //     }
-    // };
+    //     let x = xyz_cross(&abx, &bcx);
     //
-    // angle
+    //     let diff = xyz_sum(&xyz_mul_xyz(b, &x));
+    //     let radians = xyz_sum(&xyz_mul_xyz(&abx, &bcx)).acos();
+    //
+    //     if radians.is_nan() {
+    //         std::f64::consts::PI
+    //     } else if diff < 0.0 {
+    //         (2.0 * std::f64::consts::PI) - radians
+    //     } else {
+    //         radians
+    //     }
+    // }
 
     let ab = arc_distance_over_sphere_radians(a, b);
     let bc = arc_distance_over_sphere_radians(b, c);
     let ca = arc_distance_over_sphere_radians(c, a);
 
-    let radians = if ab < tolerance || bc < tolerance || ca < tolerance {
+    if ab < tolerance || bc < tolerance || ca < tolerance {
         // if any side of the triangle is negligibly small
         0.0
     } else {
-        ((ca.cos() - (bc.cos() * ab.cos())) / (bc.sin() * ab.sin())).acos()
-    };
+        let radians = ((ca.cos() - (bc.cos() * ab.cos())) / (bc.sin() * ab.sin())).acos();
 
-    // check if B is directly between A and B
-    if radians.is_nan() {
-        if (ab + bc - ca) < tolerance {
-            std::f64::consts::PI
+        // check if B is directly between A and B
+        if radians.is_nan() {
+            if (ab + bc - ca) < tolerance {
+                std::f64::consts::PI
+            } else {
+                0.0
+            }
         } else {
-            0.0
+            radians
         }
-    } else {
-        radians
     }
 }
 
@@ -279,32 +282,18 @@ pub fn xyzs_collinear(a: &[f64; 3], b: &[f64; 3], c: &[f64; 3]) -> bool {
     if xyz_eq(a, b) || xyz_eq(b, c) {
         true
     } else {
-        // let area = spherical_triangle_area(a, b, c);
-        // area.is_nan() || area < tolerance
+        let tolerance = 2e-8;
 
         let abc = xyz_two_arc_angle_radians(a, b, c);
         let cab = xyz_two_arc_angle_radians(c, a, b);
         let bca = xyz_two_arc_angle_radians(b, c, a);
 
-        let tolerance = 3e-11;
         abc < tolerance
             || cab < tolerance
             || bca < tolerance
             || (abc - std::f64::consts::PI).abs() < tolerance
             || (cab - std::f64::consts::PI).abs() < tolerance
             || (bca - std::f64::consts::PI).abs() < tolerance
-
-        // let left = arc_length(&a, &p);
-        // let right = arc_length(&p, &b);
-        // let total = arc_length(&a, &b);
-
-        // let tolerance = 3e-11;
-        // if left + right - total < tolerance {
-        //     // ensure angle is flat
-        //     if angle(&a, &point.xyz.view(), &b, false) - std::f64::consts::PI < tolerance {
-        //         return true;
-        //     }
-        // }
     }
 }
 
@@ -314,12 +303,12 @@ pub fn point_within_kdtree(xyz: &[f64; 3], kdtree: &ImmutableKdTree<f64, 3>) -> 
 }
 
 pub fn arc_interpolate_points(
-    start: &[f64; 3],
-    end: &[f64; 3],
+    a: &[f64; 3],
+    b: &[f64; 3],
     n: usize,
 ) -> Result<Vec<[f64; 3]>, String> {
     let n = if n < 2 { 2 } else { n };
-    let omega = arc_distance_over_sphere_radians(start, end);
+    let omega = arc_distance_over_sphere_radians(a, b);
 
     let mut offsets = linspace(0.0, 1.0, n);
     offsets = if omega == 0.0 {
@@ -335,10 +324,7 @@ pub fn arc_interpolate_points(
         .iter()
         .zip(offsets.iter().rev())
         .map(|(offset, inverted_offset)| {
-            xyz_add_xyz(
-                &xyz_mul_f64(start, inverted_offset),
-                &xyz_mul_f64(end, offset),
-            )
+            xyz_add_xyz(&xyz_mul_f64(a, inverted_offset), &xyz_mul_f64(b, offset))
         })
         .collect())
 }

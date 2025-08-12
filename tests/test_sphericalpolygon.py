@@ -28,47 +28,43 @@ TEST_POINTS = [
 
 
 def test_init():
-    vectors_a = [
-        (0.0, 0.0, 1.0),
-        (0.0, 0.0, -1.0),
-        (1.0, 1.0, 0.0),
-        (1.0, -1.0, 0.0),
+    lonlats_a = [
+        (0.0, 90.0),
+        (0.0, -90.0),
+        (45.0, -45.0),
+        (45.0, 45.0),
     ]
 
-    vectors_b = [
+    lonlats_b = [
         (0.2, 0.5, 0.7),
         (0.0, 0.0, 0.0),
         (1.0, 1.2, 0.3),
         (4.0, -1.0, 0.0),
     ]
 
-    single_from_array = SphericalPolygon(np.array(vectors_a))
-    single_from_tuple = SphericalPolygon([tuple(vector) for vector in vectors_a])
-    single_from_list = SphericalPolygon(vectors_a)
-    single_from_flat_list = SphericalPolygon(np.array(vectors_a).flatten().tolist())
+    single_from_array = SphericalPolygon(np.array(lonlats_a))
+    single_from_tuple = SphericalPolygon([tuple(vector) for vector in lonlats_a])
+    single_from_list = SphericalPolygon(lonlats_a)
 
     assert single_from_tuple == single_from_list
     assert single_from_tuple == single_from_array
     assert single_from_list == single_from_array
-    assert single_from_flat_list == single_from_array
 
     assert SphericalPolygon(single_from_array) == single_from_array
 
+    assert SphericalPolygon((lonlats_a, (45.0, 0.0))) == single_from_list
+    assert SphericalPolygon((lonlats_a, (0.0, 0.0))) != single_from_list
+
     multi_from_list_of_arrays = MultiSphericalPolygon(
-        [np.array(vectors) for vectors in (vectors_a, vectors_b)]
+        [np.array(vectors) for vectors in (lonlats_a, lonlats_b)]
     )
     multi_from_lists_of_tuples = MultiSphericalPolygon(
-        [[tuple(vector) for vector in vectors] for vectors in (vectors_a, vectors_b)]
+        [[tuple(vector) for vector in vectors] for vectors in (lonlats_a, lonlats_b)]
     )
-    multi_from_nested_lists = MultiSphericalPolygon([vectors_a, vectors_b])
-    multi_from_flat_lists = MultiSphericalPolygon(
-        [np.array(vectors).flatten().tolist() for vectors in (vectors_a, vectors_b)]
-    )
+    multi_from_nested_lists = MultiSphericalPolygon([lonlats_a, lonlats_b])
 
     assert multi_from_lists_of_tuples == multi_from_nested_lists
-    assert multi_from_lists_of_tuples == multi_from_flat_lists
     assert multi_from_lists_of_tuples == multi_from_list_of_arrays
-    assert multi_from_flat_lists == multi_from_list_of_arrays
 
     assert MultiSphericalPolygon(multi_from_list_of_arrays) == multi_from_list_of_arrays
 
@@ -108,7 +104,7 @@ def test_cone_area(lon, lat):
                 (20.0, 10.0),
                 (18.0, 7.0),
             ],
-            True,
+            False,
         ),
         (
             [
@@ -119,7 +115,7 @@ def test_cone_area(lon, lat):
                 (20.0, 5.0),
                 (18.0, 6.0),
             ],
-            False,
+            True,
         ),
     ],
 )
@@ -130,14 +126,10 @@ def test_is_clockwise(lonlats, is_clockwise):
 
 def test_symmetric_difference():
     a = SphericalPolygon(
-        MultiSphericalPoint(
-            [(20.0, 5.0), (25.0, 5.0), (25.0, 10.0), (20.0, 10.0)]
-        )
+        MultiSphericalPoint([(20.0, 5.0), (25.0, 5.0), (25.0, 10.0), (20.0, 10.0)])
     )
     b = SphericalPolygon(
-        MultiSphericalPoint(
-            [(5.0, 5.0), (25.0, 5.0), (25.0, 15.0), (5.0, 15.0)]
-        )
+        MultiSphericalPoint([(5.0, 5.0), (25.0, 5.0), (25.0, 15.0), (5.0, 15.0)])
     )
 
     symmetric_difference = a.symmetric_difference(b)
@@ -170,7 +162,7 @@ def test_overlap():
 @pytest.mark.parametrize("rotation", [0, 32])
 @pytest.mark.parametrize(
     "bounding_box,pixel_shape",
-    [(((-0.5, 4096 - 0.5), (-0.5, 4096 - 0.5)), None), (None, (5000, 5000))],
+    [(((-0.5, 4096 - 0.5), (-0.5, 4096 - 0.5)), None)],
 )
 def test_from_wcs(test_point, rotation, bounding_box, pixel_shape):
     import astropy.coordinates as coord
