@@ -151,12 +151,11 @@ fn xyz_to_lonlat(xyz: &[f64; 3]) -> [f64; 2] {
 }
 
 /// rotate xyz vector by theta angle around another xyz vector
-fn xyz_rotate_around(a: &[f64; 3], b: &[f64; 3], theta: &f64) -> [f64; 3] {
-    let theta = theta.to_radians();
+fn xyz_rotate_around_radians(a: &[f64; 3], b: &[f64; 3], theta: &f64) -> [f64; 3] {
     let theta_sin = theta.sin();
     let theta_cos = theta.cos();
 
-    let rotated = xyz_add_xyz(
+    xyz_add_xyz(
         &xyz_add_xyz(
             &xyz_mul_f64(
                 &xyz_mul_xyz(&xyz_mul_xyz(&xyz_neg(b), &xyz_neg(a)), b),
@@ -172,9 +171,7 @@ fn xyz_rotate_around(a: &[f64; 3], b: &[f64; 3], theta: &f64) -> [f64; 3] {
             ],
             &theta_sin,
         ),
-    );
-
-    [rotated[0], rotated[1], rotated[2]]
+    )
 }
 
 fn haversine_distance_over_sphere_radians(a: &[f64; 2], b: &[f64; 2]) -> f64 {
@@ -596,7 +593,11 @@ impl SphericalPoint {
 
     /// rotate this xyz vector by theta angle around another xyz vector
     pub fn vector_rotate_around(&self, other: &Self, theta: &f64) -> Self {
-        Self::from(xyz_rotate_around(&self.xyz, &other.xyz, theta))
+        Self::from(xyz_rotate_around_radians(
+            &self.xyz,
+            &other.xyz,
+            &theta.to_radians(),
+        ))
     }
 }
 
@@ -1202,18 +1203,6 @@ impl MultiSphericalPoint {
             SphericalPoint::from(self.xyzs[nearest.item as usize]),
             nearest.distance,
         )
-    }
-
-    /// rotate the underlying vectors by theta angle around other vectors
-    pub fn vectors_rotate_around(&self, other: &Self, theta: f64) -> Self {
-        Self::try_from(
-            self.xyzs
-                .iter()
-                .zip(other.xyzs.iter())
-                .map(|(a, b)| xyz_rotate_around(a, b, &theta))
-                .collect::<Vec<[f64; 3]>>(),
-        )
-        .unwrap()
     }
 
     /// lengths of the underlying xyz vectors

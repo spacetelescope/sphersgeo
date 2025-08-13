@@ -247,26 +247,23 @@ impl SphericalPolygon {
     pub fn from_cone(center: &SphericalPoint, radius: &f64, steps: usize) -> Self {
         // Get an arbitrary perpendicular vector.  This be be obtained
         // by crossing the center point with any unit vector that is not itself.
-        let mindex = center
+        let min_index = center
             .xyz
             .iter()
             .enumerate()
-            .min_by(|(_, a), (_, b)| a.partial_cmp(b).unwrap_or(Ordering::Equal))
+            .min_by(|(_, a), (_, b)| a.abs().partial_cmp(&b.abs()).unwrap_or(Ordering::Equal))
             .unwrap()
             .0;
-        let perpendicular = center.vector_cross(&SphericalPoint::from(if mindex == 0 {
-            [1., 0., 0.]
-        } else if mindex == 1 {
-            [0., 1., 0.]
-        } else {
-            [0., 0., 1.]
-        }));
+        let mut unit_vector = [0., 0., 0.];
+        unit_vector[min_index] = 1.;
+
+        let perpendicular = center.vector_cross(&SphericalPoint::from(unit_vector));
 
         // Rotate by radius around the perpendicular vector to get the "pen"
         let pen = center.vector_rotate_around(&perpendicular, radius);
 
         // Then rotate the pen around the center point all 360 degrees
-        let mut spokes = crate::sphericalpoint::linspace(std::f64::consts::PI * 2.0, 0.0, steps);
+        let mut spokes = crate::sphericalpoint::linspace(0.0, std::f64::consts::PI * 2.0, steps);
 
         // Ensure that the first and last elements are exactly the same.
         // 2π should equal 0, but with rounding error that isn't always the case.
@@ -331,7 +328,7 @@ impl Geometry for SphericalPolygon {
     /// https://www.math.csi.cuny.edu/abhijit/623/spherical-triangle.pdf
     fn area(&self) -> f64 {
         // calculate the interior angles of the polygon comprised of the given points
-        let angles = (0..self.boundary.points.len() - 3)
+        let angles_radians = (0..self.boundary.points.len() - 3)
             .map(|index| {
                 let triangle = vec![
                     self.boundary.points.xyzs[index],
@@ -362,8 +359,10 @@ impl Geometry for SphericalPolygon {
             })
             .collect::<Vec<f64>>();
 
-        // sum the interior angles and subtract to get the spherical excess (area)
-        angles.iter().sum::<f64>() - ((angles.len() - 2) as f64 * std::f64::consts::PI.to_degrees())
+        // sum the interior angles and subtract a flat angle (pi) to get the spherical excess (area)
+        (angles_radians.iter().sum::<f64>()
+            - ((angles_radians.len() - 2) as f64 * std::f64::consts::PI))
+            .to_degrees()
     }
 
     fn length(&self) -> f64 {
@@ -869,7 +868,6 @@ impl GeometricOperations<Self> for SphericalPolygon {
                 segment_removal_indices.sort_unstable();
                 segment_removal_indices.reverse();
                 segment_removal_indices.dedup();
-                println!("{segment_removal_indices:?}");
                 for segment_index in segment_removal_indices {
                     segments.swap_remove(segment_index);
                 }

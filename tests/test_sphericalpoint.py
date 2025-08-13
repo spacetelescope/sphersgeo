@@ -1,7 +1,8 @@
+import math
+
 import numpy as np
 from numpy.testing import assert_allclose
 from sphersgeo import MultiSphericalPoint, SphericalPoint
-import math
 
 
 def haversine_distance(a: tuple[float, float], b: tuple[float, float]) -> float:

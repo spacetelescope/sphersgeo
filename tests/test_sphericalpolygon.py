@@ -1,16 +1,15 @@
 import math
-import random
 from pathlib import Path
 
 import numpy as np
 import pytest
-from sphersgeo import (
-    SphericalPolygon,
-    SphericalPoint,
-    MultiSphericalPolygon,
-    MultiSphericalPoint,
-)
 from numpy.testing import assert_almost_equal
+from sphersgeo import (
+    MultiSphericalPoint,
+    MultiSphericalPolygon,
+    SphericalPoint,
+    SphericalPolygon,
+)
 
 DATA_DIRECTORY = Path(__file__).parent / "data"
 
@@ -69,25 +68,11 @@ def test_init():
     assert MultiSphericalPolygon(multi_from_list_of_arrays) == multi_from_list_of_arrays
 
 
-def test_from_cone():
-    random.seed(0)
-    for i in range(50):
-        lon = random.randrange(-180, 180)
-        lat = random.randrange(20, 90)
-        polygon = SphericalPolygon.from_cone(
-            SphericalPoint((lon, lat)),
-            8,
-            steps=64,
-        )
-        assert polygon.area > 0
-
-
 @pytest.mark.parametrize("lon", (0, 120, 240))
 @pytest.mark.parametrize("lat", (0, 30, 60, 90))
-def test_cone_area(lon, lat):
-    polygon = SphericalPolygon.from_cone(
-        SphericalPoint((lon, lat)), radius=10, steps=64
-    )
+def test_from_cone(lon, lat):
+    polygon = SphericalPolygon.from_cone((lon, lat), radius=10, steps=64)
+
     assert len(polygon.vertices.xyzs) == 63
     assert_almost_equal(polygon.area, 312, decimal=0)
 
@@ -120,17 +105,13 @@ def test_cone_area(lon, lat):
     ],
 )
 def test_is_clockwise(lonlats, is_clockwise):
-    poly = SphericalPolygon(MultiSphericalPoint(lonlats))
+    poly = SphericalPolygon(lonlats)
     assert poly.is_clockwise == is_clockwise
 
 
 def test_symmetric_difference():
-    a = SphericalPolygon(
-        MultiSphericalPoint([(20.0, 5.0), (25.0, 5.0), (25.0, 10.0), (20.0, 10.0)])
-    )
-    b = SphericalPolygon(
-        MultiSphericalPoint([(5.0, 5.0), (25.0, 5.0), (25.0, 15.0), (5.0, 15.0)])
-    )
+    a = SphericalPolygon([(20.0, 5.0), (25.0, 5.0), (25.0, 10.0), (20.0, 10.0)])
+    b = SphericalPolygon([(5.0, 5.0), (25.0, 5.0), (25.0, 15.0), (5.0, 15.0)])
 
     symmetric_difference = a.symmetric_difference(b)
 
@@ -145,9 +126,7 @@ def test_overlap():
         lonlats = np.array([(0.0, 0.0), (0.0, 10.0), (10.0, 10.0), (10.0, 0.0)])
         lonlats[:, 0] += offset
         lonlats[:, 1] += y_eps
-        poly = SphericalPolygon(
-            MultiSphericalPoint(lonlats),
-        )
+        poly = SphericalPolygon(lonlats)
         return poly
 
     first_poly = build_polygon(0.0)
@@ -281,9 +260,7 @@ def test_point_in_poly():
     ],
 )
 def test_area(lonlats, expected_area):
-    poly = SphericalPolygon(MultiSphericalPoint(lonlats))
-
-    assert_almost_equal(poly.area, expected_area)
+    assert_almost_equal(SphericalPolygon(lonlats).area, expected_area)
 
 
 @pytest.mark.parametrize(
@@ -344,7 +321,7 @@ def test_area(lonlats, expected_area):
     ],
 )
 def test_centroid(lonlats, expected_centroid_lonlat):
-    poly = SphericalPolygon(MultiSphericalPoint(lonlats))
+    poly = SphericalPolygon(lonlats)
 
     assert_almost_equal(poly.centroid.lonlat, expected_centroid_lonlat)
 

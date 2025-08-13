@@ -15,7 +15,6 @@ from numpy.testing import assert_array_almost_equal
 # LOCAL
 from sphersgeo import SphericalPolygon
 
-
 GRAPH_MODE = False
 
 
@@ -29,8 +28,8 @@ class union_test:
         @functools.wraps(func)
         def run(*args, **kwargs):
             if GRAPH_MODE:
-                from mpl_toolkits.basemap import Basemap
                 from matplotlib import pyplot as plt
+                from mpl_toolkits.basemap import Basemap
 
             polys = func(*args, **kwargs)
 
@@ -92,8 +91,8 @@ def test2():
 
 @pytest.mark.filterwarnings("ignore:CPERROR.*")
 def test5():
-    from astropy.io import fits
     from astropy import wcs as pywcs
+    from astropy.io import fits
 
     with fits.open(os.path.join(ROOT_DIR, "2chipA.fits.gz")) as A:
         wcs = pywcs.WCS(A[1].header, fobj=A)
@@ -105,8 +104,8 @@ def test5():
 
 
 def test6():
-    from astropy.io import fits
     from astropy import wcs as pywcs
+    from astropy.io import fits
 
     with fits.open(os.path.join(ROOT_DIR, "2chipC.fits.gz")) as A:
         wcs = pywcs.WCS(A[1].header, fobj=A)
@@ -120,8 +119,8 @@ def test6():
 @pytest.mark.filterwarnings("ignore:CPERROR.*")
 @union_test(0, 90)
 def test7():
-    from astropy.io import fits
     from astropy import wcs as pywcs
+    from astropy.io import fits
 
     with fits.open(os.path.join(ROOT_DIR, "2chipA.fits.gz")) as A:
         wcs = pywcs.WCS(A[1].header, fobj=A)

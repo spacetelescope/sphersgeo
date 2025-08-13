@@ -208,10 +208,6 @@ class MultiSphericalPoint:
 
     def nearest(self, other: SphericalPoint) -> tuple[SphericalPoint, float]: ...
 
-    def vectors_rotate_around(
-        self, other: MultiSphericalPoint, theta: float
-    ) -> MultiSphericalPoint: ...
-
     @property
     def vectors_lengths(self) -> NDArray[float64]: ...
 

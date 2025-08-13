@@ -480,16 +480,6 @@ mod py_sphersgeo {
             Ok(self.nearest(&SphericalPoint::py_new(other)?))
         }
 
-        #[pyo3(name = "vectors_rotate_around")]
-        /// rotate the underlying vector by theta angle around other vectors
-        fn py_vectors_rotate_around(
-            &self,
-            other: PyMultiSphericalPointInputs,
-            theta: f64,
-        ) -> PyResult<Self> {
-            Ok(self.vectors_rotate_around(&Self::py_new(other)?, theta))
-        }
-
         #[getter]
         /// lengths of the underlying xyz vectors
         fn get_vectors_lengths<'py>(&self, py: Python<'py>) -> Bound<'py, PyArray1<f64>> {
