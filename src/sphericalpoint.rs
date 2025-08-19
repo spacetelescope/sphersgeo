@@ -1,4 +1,4 @@
-use crate::geometry::{GeometricOperations, GeometricPredicates, Geometry, MultiGeometry};
+use crate::geometry::{GeometricOperations, GeometricRelationships, Geometry, MultiGeometry};
 use kiddo::{ImmutableKdTree, SquaredEuclidean};
 use std::{
     fmt::Display,
@@ -599,6 +599,14 @@ impl SphericalPoint {
             &theta.to_radians(),
         ))
     }
+
+    /// arc to another point
+    pub fn to(&self, other: &Self) -> crate::arcstring::ArcString {
+        crate::arcstring::ArcString {
+            points: MultiSphericalPoint::try_from(vec![self.xyz, other.xyz]).unwrap(),
+            closed: false,
+        }
+    }
 }
 
 impl Display for SphericalPoint {
@@ -608,7 +616,7 @@ impl Display for SphericalPoint {
 }
 
 impl PartialEq for SphericalPoint {
-    fn eq(&self, other: &SphericalPoint) -> bool {
+    fn eq(&self, other: &Self) -> bool {
         xyz_eq(&self.xyz, &other.xyz)
     }
 }
@@ -643,33 +651,21 @@ impl Geometry for SphericalPoint {
     }
 }
 
-impl GeometricPredicates<Self> for SphericalPoint {
-    fn intersects(&self, other: &Self) -> bool {
+impl GeometricRelationships<Self> for SphericalPoint {
+    fn equals(&self, other: &Self) -> bool {
         self == other
+    }
+
+    fn intersects(&self, other: &Self) -> bool {
+        self.equals(other)
     }
 
     fn touches(&self, other: &Self) -> bool {
-        self == other
-    }
-
-    fn crosses(&self, _: &Self) -> bool {
-        false
-    }
-
-    fn within(&self, _: &Self) -> bool {
-        false
-    }
-
-    fn contains(&self, _: &Self) -> bool {
-        false
-    }
-
-    fn overlaps(&self, other: &Self) -> bool {
-        self == other
+        self.equals(other)
     }
 
     fn covers(&self, other: &Self) -> bool {
-        self == other
+        self.equals(other)
     }
 }
 
@@ -683,7 +679,7 @@ impl GeometricOperations<Self> for SphericalPoint {
     }
 
     fn intersection(&self, other: &Self) -> Option<SphericalPoint> {
-        if self == other {
+        if self.touches(other) {
             Some(self.to_owned())
         } else {
             None
@@ -695,7 +691,11 @@ impl GeometricOperations<Self> for SphericalPoint {
     }
 }
 
-impl GeometricPredicates<MultiSphericalPoint> for SphericalPoint {
+impl GeometricRelationships<MultiSphericalPoint> for SphericalPoint {
+    fn equals(&self, other: &MultiSphericalPoint) -> bool {
+        other.equals(self)
+    }
+
     fn intersects(&self, other: &MultiSphericalPoint) -> bool {
         self.within(other)
     }
@@ -704,16 +704,8 @@ impl GeometricPredicates<MultiSphericalPoint> for SphericalPoint {
         self.within(other)
     }
 
-    fn crosses(&self, _: &MultiSphericalPoint) -> bool {
-        false
-    }
-
     fn within(&self, other: &MultiSphericalPoint) -> bool {
         other.contains(self)
-    }
-
-    fn contains(&self, _: &MultiSphericalPoint) -> bool {
-        false
     }
 
     fn overlaps(&self, other: &MultiSphericalPoint) -> bool {
@@ -721,11 +713,7 @@ impl GeometricPredicates<MultiSphericalPoint> for SphericalPoint {
     }
 
     fn covers(&self, other: &MultiSphericalPoint) -> bool {
-        if other.len() == 1 {
-            xyz_eq(&self.xyz, &other.xyzs[0])
-        } else {
-            false
-        }
+        self.within(other)
     }
 }
 
@@ -751,33 +739,17 @@ impl GeometricOperations<MultiSphericalPoint> for SphericalPoint {
     }
 }
 
-impl GeometricPredicates<crate::arcstring::ArcString> for SphericalPoint {
+impl GeometricRelationships<crate::arcstring::ArcString> for SphericalPoint {
     fn intersects(&self, other: &crate::arcstring::ArcString) -> bool {
         self.within(other)
     }
 
     fn touches(&self, other: &crate::arcstring::ArcString) -> bool {
-        if let Some(boundary) = other.boundary() {
-            self.touches(&boundary)
-        } else {
-            false
-        }
-    }
-
-    fn crosses(&self, _: &crate::arcstring::ArcString) -> bool {
-        false
+        other.touches(self)
     }
 
     fn within(&self, other: &crate::arcstring::ArcString) -> bool {
         other.contains(self)
-    }
-
-    fn contains(&self, _: &crate::arcstring::ArcString) -> bool {
-        false
-    }
-
-    fn covers(&self, _: &crate::arcstring::ArcString) -> bool {
-        false
     }
 }
 
@@ -803,29 +775,17 @@ impl GeometricOperations<crate::arcstring::ArcString> for SphericalPoint {
     }
 }
 
-impl GeometricPredicates<crate::arcstring::MultiArcString> for SphericalPoint {
+impl GeometricRelationships<crate::arcstring::MultiArcString> for SphericalPoint {
     fn intersects(&self, other: &crate::arcstring::MultiArcString) -> bool {
         self.within(other)
     }
 
     fn touches(&self, other: &crate::arcstring::MultiArcString) -> bool {
-        self.within(other)
-    }
-
-    fn crosses(&self, _: &crate::arcstring::MultiArcString) -> bool {
-        false
+        other.touches(self)
     }
 
     fn within(&self, other: &crate::arcstring::MultiArcString) -> bool {
         other.contains(self)
-    }
-
-    fn contains(&self, _: &crate::arcstring::MultiArcString) -> bool {
-        false
-    }
-
-    fn covers(&self, _: &crate::arcstring::MultiArcString) -> bool {
-        false
     }
 }
 
@@ -851,29 +811,17 @@ impl GeometricOperations<crate::arcstring::MultiArcString> for SphericalPoint {
     }
 }
 
-impl GeometricPredicates<crate::sphericalpolygon::SphericalPolygon> for SphericalPoint {
+impl GeometricRelationships<crate::sphericalpolygon::SphericalPolygon> for SphericalPoint {
     fn intersects(&self, other: &crate::sphericalpolygon::SphericalPolygon) -> bool {
         self.within(other)
     }
 
     fn touches(&self, other: &crate::sphericalpolygon::SphericalPolygon) -> bool {
-        self.touches(&other.boundary)
-    }
-
-    fn crosses(&self, _: &crate::sphericalpolygon::SphericalPolygon) -> bool {
-        false
+        other.touches(self)
     }
 
     fn within(&self, other: &crate::sphericalpolygon::SphericalPolygon) -> bool {
         other.contains(self)
-    }
-
-    fn contains(&self, _: &crate::sphericalpolygon::SphericalPolygon) -> bool {
-        false
-    }
-
-    fn covers(&self, _: &crate::sphericalpolygon::SphericalPolygon) -> bool {
-        false
     }
 }
 
@@ -905,29 +853,17 @@ impl GeometricOperations<crate::sphericalpolygon::SphericalPolygon> for Spherica
     }
 }
 
-impl GeometricPredicates<crate::sphericalpolygon::MultiSphericalPolygon> for SphericalPoint {
+impl GeometricRelationships<crate::sphericalpolygon::MultiSphericalPolygon> for SphericalPoint {
     fn intersects(&self, other: &crate::sphericalpolygon::MultiSphericalPolygon) -> bool {
         self.within(other)
     }
 
     fn touches(&self, other: &crate::sphericalpolygon::MultiSphericalPolygon) -> bool {
-        self.touches(&other.boundary().unwrap())
-    }
-
-    fn crosses(&self, _: &crate::sphericalpolygon::MultiSphericalPolygon) -> bool {
-        false
+        other.touches(self)
     }
 
     fn within(&self, other: &crate::sphericalpolygon::MultiSphericalPolygon) -> bool {
         other.contains(self)
-    }
-
-    fn contains(&self, _: &crate::sphericalpolygon::MultiSphericalPolygon) -> bool {
-        false
-    }
-
-    fn covers(&self, _: &crate::sphericalpolygon::MultiSphericalPolygon) -> bool {
-        false
     }
 }
 
@@ -1231,28 +1167,16 @@ impl Display for MultiSphericalPoint {
 }
 
 impl PartialEq for MultiSphericalPoint {
-    fn eq(&self, other: &MultiSphericalPoint) -> bool {
+    fn eq(&self, other: &Self) -> bool {
         let (less, more) = if self.len() < other.len() {
             (self, other)
         } else {
             (other, self)
         };
 
-        for more_xyz in &less.xyzs {
-            let mut found = false;
-            for less_xyz in &more.xyzs {
-                if xyz_eq(more_xyz, less_xyz) {
-                    found = true;
-                    break;
-                }
-            }
-
-            if !found {
-                return false;
-            }
-        }
-
-        true
+        more.xyzs
+            .iter()
+            .all(|xyz| point_within_kdtree(xyz, &less.kdtree))
     }
 }
 
@@ -1426,21 +1350,17 @@ impl MultiGeometry<SphericalPoint> for MultiSphericalPoint {
     }
 }
 
-impl GeometricPredicates<SphericalPoint> for MultiSphericalPoint {
+impl GeometricRelationships<SphericalPoint> for MultiSphericalPoint {
+    fn equals(&self, other: &SphericalPoint) -> bool {
+        self.xyzs.iter().all(|xyz| xyz_eq(xyz, &other.xyz))
+    }
+
     fn intersects(&self, other: &SphericalPoint) -> bool {
         self.contains(other)
     }
 
     fn touches(&self, other: &SphericalPoint) -> bool {
         self.contains(other)
-    }
-
-    fn crosses(&self, _: &SphericalPoint) -> bool {
-        false
-    }
-
-    fn within(&self, _: &SphericalPoint) -> bool {
-        false
     }
 
     fn contains(&self, other: &SphericalPoint) -> bool {
@@ -1478,7 +1398,11 @@ impl GeometricOperations<SphericalPoint, SphericalPoint> for MultiSphericalPoint
     }
 }
 
-impl GeometricPredicates<Self> for MultiSphericalPoint {
+impl GeometricRelationships<Self> for MultiSphericalPoint {
+    fn equals(&self, other: &Self) -> bool {
+        self == other
+    }
+
     fn intersects(&self, other: &Self) -> bool {
         self.touches(other)
     }
@@ -1495,26 +1419,19 @@ impl GeometricPredicates<Self> for MultiSphericalPoint {
             .any(|xyz| point_within_kdtree(xyz, &more.kdtree))
     }
 
-    fn crosses(&self, other: &Self) -> bool {
-        self.touches(other) && !self.within(other) && !self.contains(other)
-    }
-
     fn within(&self, other: &Self) -> bool {
-        if self.len() < other.len() {
-            self.xyzs
-                .iter()
-                .all(|xyz| point_within_kdtree(xyz, &other.kdtree))
-        } else {
-            false
-        }
+        other.contains(self)
     }
 
     fn contains(&self, other: &Self) -> bool {
-        other.within(self)
+        other
+            .xyzs
+            .iter()
+            .all(|xyz| point_within_kdtree(xyz, &self.kdtree))
     }
 
     fn overlaps(&self, other: &Self) -> bool {
-        self.touches(other)
+        self.touches(other) && self != other
     }
 
     fn covers(&self, other: &Self) -> bool {
@@ -1577,15 +1494,15 @@ impl GeometricOperations<Self, SphericalPoint> for MultiSphericalPoint {
     }
 }
 
-impl GeometricPredicates<crate::arcstring::ArcString> for MultiSphericalPoint {
+impl GeometricRelationships<crate::arcstring::ArcString> for MultiSphericalPoint {
     fn intersects(&self, other: &crate::arcstring::ArcString) -> bool {
-        self.touches(other)
-    }
-
-    fn touches(&self, other: &crate::arcstring::ArcString) -> bool {
         self.xyzs
             .iter()
             .any(|xyz| crate::arcstring::xyz_in_arcstring(xyz, other))
+    }
+
+    fn touches(&self, other: &crate::arcstring::ArcString) -> bool {
+        other.touches(self)
     }
 
     fn crosses(&self, other: &crate::arcstring::ArcString) -> bool {
@@ -1594,14 +1511,6 @@ impl GeometricPredicates<crate::arcstring::ArcString> for MultiSphericalPoint {
 
     fn within(&self, other: &crate::arcstring::ArcString) -> bool {
         other.contains(self)
-    }
-
-    fn contains(&self, _: &crate::arcstring::ArcString) -> bool {
-        false
-    }
-
-    fn covers(&self, _: &crate::arcstring::ArcString) -> bool {
-        false
     }
 }
 
@@ -1635,7 +1544,7 @@ impl GeometricOperations<crate::arcstring::ArcString, SphericalPoint> for MultiS
     }
 }
 
-impl GeometricPredicates<crate::arcstring::MultiArcString> for MultiSphericalPoint {
+impl GeometricRelationships<crate::arcstring::MultiArcString> for MultiSphericalPoint {
     fn intersects(&self, other: &crate::arcstring::MultiArcString) -> bool {
         self.touches(other)
     }
@@ -1644,20 +1553,8 @@ impl GeometricPredicates<crate::arcstring::MultiArcString> for MultiSphericalPoi
         other.touches(self)
     }
 
-    fn crosses(&self, _: &crate::arcstring::MultiArcString) -> bool {
-        false
-    }
-
     fn within(&self, other: &crate::arcstring::MultiArcString) -> bool {
         other.contains(self)
-    }
-
-    fn contains(&self, other: &crate::arcstring::MultiArcString) -> bool {
-        other.within(self)
-    }
-
-    fn covers(&self, _: &crate::arcstring::MultiArcString) -> bool {
-        false
     }
 }
 
@@ -1679,7 +1576,7 @@ impl GeometricOperations<crate::arcstring::MultiArcString, SphericalPoint> for M
     }
 }
 
-impl GeometricPredicates<crate::sphericalpolygon::SphericalPolygon> for MultiSphericalPoint {
+impl GeometricRelationships<crate::sphericalpolygon::SphericalPolygon> for MultiSphericalPoint {
     fn intersects(&self, other: &crate::sphericalpolygon::SphericalPolygon) -> bool {
         self.touches(other)
     }
@@ -1688,20 +1585,8 @@ impl GeometricPredicates<crate::sphericalpolygon::SphericalPolygon> for MultiSph
         other.touches(self)
     }
 
-    fn crosses(&self, _: &crate::sphericalpolygon::SphericalPolygon) -> bool {
-        false
-    }
-
     fn within(&self, other: &crate::sphericalpolygon::SphericalPolygon) -> bool {
         other.contains(self)
-    }
-
-    fn contains(&self, _: &crate::sphericalpolygon::SphericalPolygon) -> bool {
-        false
-    }
-
-    fn covers(&self, _: &crate::sphericalpolygon::SphericalPolygon) -> bool {
-        false
     }
 }
 
@@ -1725,17 +1610,15 @@ impl GeometricOperations<crate::sphericalpolygon::SphericalPolygon, SphericalPoi
     }
 }
 
-impl GeometricPredicates<crate::sphericalpolygon::MultiSphericalPolygon> for MultiSphericalPoint {
+impl GeometricRelationships<crate::sphericalpolygon::MultiSphericalPolygon>
+    for MultiSphericalPoint
+{
     fn intersects(&self, other: &crate::sphericalpolygon::MultiSphericalPolygon) -> bool {
         other.intersects(self)
     }
 
     fn touches(&self, other: &crate::sphericalpolygon::MultiSphericalPolygon) -> bool {
         other.touches(self)
-    }
-
-    fn crosses(&self, _: &crate::sphericalpolygon::MultiSphericalPolygon) -> bool {
-        false
     }
 
     fn within(&self, other: &crate::sphericalpolygon::MultiSphericalPolygon) -> bool {
@@ -1749,14 +1632,6 @@ impl GeometricPredicates<crate::sphericalpolygon::MultiSphericalPolygon> for Mul
                 )
             })
         })
-    }
-
-    fn contains(&self, _: &crate::sphericalpolygon::MultiSphericalPolygon) -> bool {
-        false
-    }
-
-    fn covers(&self, _: &crate::sphericalpolygon::MultiSphericalPolygon) -> bool {
-        false
     }
 }
 

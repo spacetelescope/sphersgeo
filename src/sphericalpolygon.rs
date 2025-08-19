@@ -2,7 +2,7 @@ use crate::{
     arcstring::{xyz_two_arc_crossing, ArcString, MultiArcString},
     edgegraph::EdgeGraph,
     geometry::{
-        GeometricOperations, GeometricPredicates, Geometry, GeometryCollection, MultiGeometry,
+        GeometricOperations, GeometricRelationships, Geometry, GeometryCollection, MultiGeometry,
     },
     sphericalpoint::{
         xyz_add_xyz, xyz_cross, xyz_div_f64, xyz_mul_xyz, xyz_sub_xyz, xyz_sum,
@@ -293,6 +293,10 @@ impl SphericalPolygon {
     pub fn is_clockwise(&self) -> bool {
         orientation(&self.boundary.points.xyzs).iter().sum::<f64>() > 0.0
     }
+
+    pub fn simplify(&mut self) {
+        self.boundary.simplify();
+    }
 }
 
 impl Add<Self> for &SphericalPolygon {
@@ -389,21 +393,13 @@ impl Geometry for SphericalPolygon {
     }
 }
 
-impl GeometricPredicates<SphericalPoint> for SphericalPolygon {
+impl GeometricRelationships<SphericalPoint> for SphericalPolygon {
     fn intersects(&self, other: &SphericalPoint) -> bool {
         self.touches(other) || self.contains(other) || self.within(other)
     }
 
     fn touches(&self, other: &SphericalPoint) -> bool {
-        self.boundary.contains(other)
-    }
-
-    fn crosses(&self, _: &SphericalPoint) -> bool {
-        false
-    }
-
-    fn within(&self, _: &SphericalPoint) -> bool {
-        false
+        self.boundary.touches(other)
     }
 
     fn contains(&self, other: &SphericalPoint) -> bool {
@@ -449,7 +445,7 @@ impl GeometricOperations<SphericalPoint> for SphericalPolygon {
     }
 }
 
-impl GeometricPredicates<MultiSphericalPoint> for SphericalPolygon {
+impl GeometricRelationships<MultiSphericalPoint> for SphericalPolygon {
     fn intersects(&self, other: &MultiSphericalPoint) -> bool {
         for xyz in &other.xyzs {
             if xyz_in_polygon_boundary(xyz, &self.interior_point.xyz, &self.boundary.points.xyzs) {
@@ -462,15 +458,7 @@ impl GeometricPredicates<MultiSphericalPoint> for SphericalPolygon {
     }
 
     fn touches(&self, other: &MultiSphericalPoint) -> bool {
-        self.boundary.intersects(other)
-    }
-
-    fn crosses(&self, _: &MultiSphericalPoint) -> bool {
-        false
-    }
-
-    fn within(&self, _: &MultiSphericalPoint) -> bool {
-        false
+        self.boundary.touches(other)
     }
 
     fn contains(&self, other: &MultiSphericalPoint) -> bool {
@@ -551,7 +539,7 @@ impl GeometricOperations<MultiSphericalPoint> for SphericalPolygon {
     }
 }
 
-impl GeometricPredicates<ArcString> for SphericalPolygon {
+impl GeometricRelationships<ArcString> for SphericalPolygon {
     fn intersects(&self, other: &ArcString) -> bool {
         self.touches(other) || self.crosses(other) || self.contains(other)
     }
@@ -564,21 +552,8 @@ impl GeometricPredicates<ArcString> for SphericalPolygon {
         self.boundary.crosses(other)
     }
 
-    fn within(&self, _: &ArcString) -> bool {
-        false
-    }
-
     fn contains(&self, other: &ArcString) -> bool {
-        if self.covers(other) {
-            if let Some(endpoints) = other.boundary() {
-                // endpoints of an arcstring are not part of the set
-                !self.boundary.touches(&endpoints)
-            } else {
-                true
-            }
-        } else {
-            false
-        }
+        self.covers(other) && !self.boundary.contains(other)
     }
 
     fn covers(&self, other: &ArcString) -> bool {
@@ -711,7 +686,7 @@ impl GeometricOperations<ArcString> for SphericalPolygon {
     }
 }
 
-impl GeometricPredicates<MultiArcString> for SphericalPolygon {
+impl GeometricRelationships<MultiArcString> for SphericalPolygon {
     fn intersects(&self, other: &MultiArcString) -> bool {
         self.touches(other) || self.crosses(other) || other.intersects(self)
     }
@@ -722,10 +697,6 @@ impl GeometricPredicates<MultiArcString> for SphericalPolygon {
 
     fn crosses(&self, other: &MultiArcString) -> bool {
         self.boundary.crosses(other)
-    }
-
-    fn within(&self, _: &MultiArcString) -> bool {
-        false
     }
 
     fn contains(&self, other: &MultiArcString) -> bool {
@@ -773,13 +744,21 @@ impl GeometricOperations<MultiArcString> for SphericalPolygon {
     }
 }
 
-impl GeometricPredicates<Self> for SphericalPolygon {
+impl GeometricRelationships<Self> for SphericalPolygon {
+    fn equals(&self, other: &Self) -> bool {
+        self.boundary == other.boundary
+            && !self
+                .interior_point
+                .to(&other.interior_point)
+                .crosses(&self.boundary)
+    }
+
     fn intersects(&self, other: &Self) -> bool {
         self.touches(other) || self.crosses(other) || self.contains(other) || self.within(other)
     }
 
     fn touches(&self, other: &Self) -> bool {
-        self.boundary.touches(&other.boundary)
+        self.boundary.touches(other)
     }
 
     fn crosses(&self, other: &Self) -> bool {
@@ -883,7 +862,7 @@ impl GeometricOperations<Self> for SphericalPolygon {
     }
 }
 
-impl GeometricPredicates<MultiSphericalPolygon> for SphericalPolygon {
+impl GeometricRelationships<MultiSphericalPolygon> for SphericalPolygon {
     fn intersects(&self, other: &MultiSphericalPolygon) -> bool {
         self.touches(other) || self.crosses(other) || other.intersects(self) || self.within(other)
     }
@@ -967,8 +946,8 @@ impl Display for MultiSphericalPolygon {
     }
 }
 
-impl PartialEq<MultiSphericalPolygon> for MultiSphericalPolygon {
-    fn eq(&self, other: &MultiSphericalPolygon) -> bool {
+impl PartialEq for MultiSphericalPolygon {
+    fn eq(&self, other: &Self) -> bool {
         if self.len() != other.len() {
             return false;
         }
@@ -1100,21 +1079,13 @@ impl Sum for MultiSphericalPolygon {
     }
 }
 
-impl GeometricPredicates<SphericalPoint> for MultiSphericalPolygon {
+impl GeometricRelationships<SphericalPoint> for MultiSphericalPolygon {
     fn intersects(&self, other: &SphericalPoint) -> bool {
         self.touches(other) || self.crosses(other) || self.contains(other)
     }
 
     fn touches(&self, other: &SphericalPoint) -> bool {
         self.polygons.iter().any(|polygon| polygon.touches(other))
-    }
-
-    fn crosses(&self, _: &SphericalPoint) -> bool {
-        false
-    }
-
-    fn within(&self, _: &SphericalPoint) -> bool {
-        false
     }
 
     fn contains(&self, other: &SphericalPoint) -> bool {
@@ -1148,7 +1119,7 @@ impl GeometricOperations<SphericalPoint, SphericalPolygon> for MultiSphericalPol
     }
 }
 
-impl GeometricPredicates<MultiSphericalPoint> for MultiSphericalPolygon {
+impl GeometricRelationships<MultiSphericalPoint> for MultiSphericalPolygon {
     fn intersects(&self, other: &MultiSphericalPoint) -> bool {
         self.touches(other)
             || self.crosses(other)
@@ -1160,14 +1131,6 @@ impl GeometricPredicates<MultiSphericalPoint> for MultiSphericalPolygon {
 
     fn touches(&self, other: &MultiSphericalPoint) -> bool {
         self.polygons.iter().any(|polygon| polygon.touches(other))
-    }
-
-    fn crosses(&self, _: &MultiSphericalPoint) -> bool {
-        false
-    }
-
-    fn within(&self, _: &MultiSphericalPoint) -> bool {
-        false
     }
 
     fn contains(&self, other: &MultiSphericalPoint) -> bool {
@@ -1204,7 +1167,7 @@ impl GeometricOperations<MultiSphericalPoint, SphericalPolygon> for MultiSpheric
     }
 }
 
-impl GeometricPredicates<ArcString> for MultiSphericalPolygon {
+impl GeometricRelationships<ArcString> for MultiSphericalPolygon {
     fn intersects(&self, other: &ArcString) -> bool {
         self.touches(other) || self.crosses(other) || self.contains(other)
     }
@@ -1215,10 +1178,6 @@ impl GeometricPredicates<ArcString> for MultiSphericalPolygon {
 
     fn crosses(&self, other: &ArcString) -> bool {
         self.polygons.iter().any(|polygon| polygon.crosses(other))
-    }
-
-    fn within(&self, _: &ArcString) -> bool {
-        false
     }
 
     fn contains(&self, other: &ArcString) -> bool {
@@ -1258,7 +1217,7 @@ impl GeometricOperations<ArcString, SphericalPolygon> for MultiSphericalPolygon 
     }
 }
 
-impl GeometricPredicates<MultiArcString> for MultiSphericalPolygon {
+impl GeometricRelationships<MultiArcString> for MultiSphericalPolygon {
     fn intersects(&self, other: &MultiArcString) -> bool {
         self.touches(other) || self.crosses(other) || other.intersects(self)
     }
@@ -1269,10 +1228,6 @@ impl GeometricPredicates<MultiArcString> for MultiSphericalPolygon {
 
     fn crosses(&self, other: &MultiArcString) -> bool {
         self.polygons.iter().any(|polygon| polygon.crosses(other))
-    }
-
-    fn within(&self, _: &MultiArcString) -> bool {
-        false
     }
 
     fn contains(&self, other: &MultiArcString) -> bool {
@@ -1315,7 +1270,7 @@ impl GeometricOperations<MultiArcString, SphericalPolygon> for MultiSphericalPol
     }
 }
 
-impl GeometricPredicates<SphericalPolygon> for MultiSphericalPolygon {
+impl GeometricRelationships<SphericalPolygon> for MultiSphericalPolygon {
     fn intersects(&self, other: &SphericalPolygon) -> bool {
         self.polygons
             .iter()
@@ -1375,7 +1330,11 @@ impl GeometricOperations<SphericalPolygon, SphericalPolygon> for MultiSphericalP
     }
 }
 
-impl GeometricPredicates<Self> for MultiSphericalPolygon {
+impl GeometricRelationships<Self> for MultiSphericalPolygon {
+    fn equals(&self, other: &Self) -> bool {
+        self == other
+    }
+
     fn intersects(&self, other: &MultiSphericalPolygon) -> bool {
         self.polygons
             .iter()

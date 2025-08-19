@@ -3,8 +3,11 @@ use kiddo::traits::DistanceMetric;
 pub trait Geometry {
     fn vertices(&self) -> crate::sphericalpoint::MultiSphericalPoint;
 
-    /// lower dimension geometry that bounds the object
-    /// The boundary of a polygon is a line, the boundary of a line is a collection of endpoints, and the boundary of a point is null.
+    /// lower dimension geometry that bounds this geometry's interior
+    ///
+    /// The boundary of a polygon is a closed arcstring,
+    /// the boundary of an arcstring is two endpoints (unless closed),
+    /// and the boundary of a point (and a closed arcstring) is null.
     fn boundary(&self) -> Option<impl Geometry>;
 
     /// point guaranteed to be within the object
@@ -33,48 +36,72 @@ pub trait MultiGeometry<G: Geometry> {
     fn push(&mut self, other: G);
 }
 
-pub trait GeometricPredicates<O: Geometry = Self> {
-    /// Two geometries intersect if they share at least one point in common.
-    /// https://esri.github.io/geometry-api-java/doc/Intersects.html
-    fn intersects(&self, other: &O) -> bool;
-
-    /// An object is said to touch other if it has at least one point in common with other and its interior does not intersect with any part of the other.
-    /// Overlapping features therefore do not touch.
-    /// https://esri.github.io/geometry-api-java/doc/Touches.html
-    fn touches(&self, other: &O) -> bool;
-
-    /// Two geometries are disjoint if they don’t have any points in common.
-    /// Disjoint is the inverse of Intersects. Disjoint is the most efficient operator and is guaranteed to work even on non-simple geometries.
-    /// https://esri.github.io/geometry-api-java/doc/Disjoint.html
-    fn disjoint(&self, other: &O) -> bool {
-        !self.intersects(other)
+/// https://developers.arcgis.com/geoanalytics/core-concepts/spatial-relationships/
+pub trait GeometricRelationships<O: Geometry = Self> {
+    /// Whether this and the other geometry's interiors are identical and the geometry types are the same.
+    ///
+    /// https://developers.arcgis.com/geoanalytics/core-concepts/spatial-relationships/#equals
+    fn equals(&self, other: &O) -> bool {
+        false
     }
 
-    /// the geometries have some, but not all interior points in common
+    /// Whether this and the other geometry share ANY point(s).
+    /// If this geometries contains, is within, crosses, touches, or overlaps the other geometry, they intersect.
     ///
-    /// Two polylines cross if they meet at (a) point/s only, and at least one of the shared points is internal to both polylines.
-    /// A polyline and polygon cross if a connected part of the polyline is partly inside and partly outside the polygon.
-    /// https://esri.github.io/geometry-api-java/doc/Crosses.html
-    fn crosses(&self, other: &O) -> bool;
+    /// https://developers.arcgis.com/geoanalytics/core-concepts/spatial-relationships/#intersects
+    fn intersects(&self, other: &O) -> bool;
 
-    /// One geometry is within another if it is a subset of the other geometry and their interiors have at least one point in common. Within is the inverse of Contains.
-    /// https://esri.github.io/geometry-api-java/doc/Within.html
-    fn within(&self, other: &O) -> bool;
+    /// Whether the other geometry is a subset of this geometry
+    /// (every point of the other geometry is a point on the interior OR boundary of this geometry).
+    fn covers(&self, other: &O) -> bool {
+        false
+    }
 
-    /// One geometry contains another if the other geometry is a subset of it and their interiors have at least one point in common.
+    /// Whether this geometry covers the other geometry AND the interiors share at least one point.
+    ///
     /// Contains is the inverse of Within.
-    /// https://esri.github.io/geometry-api-java/doc/Contains.html
-    fn contains(&self, other: &O) -> bool;
+    /// https://developers.arcgis.com/geoanalytics/core-concepts/spatial-relationships/#contains
+    fn contains(&self, other: &O) -> bool {
+        false
+    }
 
-    /// Two geometries overlap if they have the same dimension, and their intersection also has the same dimension but is different from both of them.
-    /// https://esri.github.io/geometry-api-java/doc/Overlaps.html
+    /// Whether the other geometry covers this geometry AND the interiors share at least one point.
+    ///
+    /// Within is the inverse of Contains.
+    /// https://developers.arcgis.com/geoanalytics/core-concepts/spatial-relationships/#contains
+    fn within(&self, other: &O) -> bool {
+        false
+    }
+
+    /// Whether this arcstring / polygon and the other arcstring / polygon share only SOME (not all) interior points, but do NOT overlap.
+    ///
+    /// Two arcstrings cross if they meet at point(s) only, and at least one of the shared points is internal to both arcstrings.
+    /// An arcstring and polygon cross if they share an arcstring on the interior of the polygon, which is NOT equal to the entire arcstring.
+    /// https://developers.arcgis.com/geoanalytics/core-concepts/spatial-relationships/#crosses
+    fn crosses(&self, other: &O) -> bool {
+        false
+    }
+
+    /// Whether this and the other geometry share any vertices but do not overlap.
+    ///
+    /// https://developers.arcgis.com/geoanalytics/core-concepts/spatial-relationships/#touches
+    fn touches(&self, other: &O) -> bool;
+
+    /// Whether this and the other geometry are of the same geometry type,
+    /// AND their intersection is also of the same geometry type BUT is not equal to either.
+    ///
+    /// https://developers.arcgis.com/geoanalytics/core-concepts/spatial-relationships/#overlaps
     fn overlaps(&self, other: &O) -> bool {
         false
     }
 
-    /// Whether every point of other is a point on the interior or boundary of object.
-    /// This is similar to object.contains(other) except that this does not require any interior points of other to lie in the interior of object.
-    fn covers(&self, other: &O) -> bool;
+    /// Whether this and the other geometry do NOT share ANY point(s).
+    ///
+    /// Disjoint is the inverse of Intersects.
+    /// https://developers.arcgis.com/geoanalytics/core-concepts/spatial-relationships/#disjoint
+    fn disjoint(&self, other: &O) -> bool {
+        !self.intersects(other)
+    }
 }
 
 pub trait GeometricOperations<O: Geometry = Self, S: Geometry = Self> {

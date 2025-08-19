@@ -1,4 +1,4 @@
-use crate::geometry::GeometricPredicates;
+use crate::geometry::GeometricRelationships;
 use std::collections::HashMap;
 
 #[derive(Clone, Debug)]

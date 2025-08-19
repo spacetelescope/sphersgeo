@@ -41,6 +41,8 @@ class SphericalPoint:
         self, other: SphericalPoint, theta: float
     ) -> SphericalPoint: ...
 
+    def to(self, other: SphericalPoint) -> ArcString: ...
+
     @property
     def vertices(self) -> MultiSphericalPoint: ...
 
@@ -61,6 +63,16 @@ class SphericalPoint:
 
     @property
     def length(self) -> float: ...
+
+    def equals(
+        self,
+        other: SphericalPoint
+        | MultiSphericalPoint
+        | ArcString
+        | MultiArcString
+        | SphericalPolygon
+        | MultiSphericalPolygon,
+    ) -> bool: ...
 
     def intersects(
         self,
@@ -231,6 +243,16 @@ class MultiSphericalPoint:
 
     @property
     def length(self) -> float: ...
+
+    def equals(
+        self,
+        other: SphericalPoint
+        | MultiSphericalPoint
+        | ArcString
+        | MultiArcString
+        | SphericalPolygon
+        | MultiSphericalPolygon,
+    ) -> bool: ...
 
     def intersects(
         self,
@@ -417,6 +439,16 @@ class ArcString:
     @property
     def length(self) -> float: ...
 
+    def equals(
+        self,
+        other: SphericalPoint
+        | MultiSphericalPoint
+        | ArcString
+        | MultiArcString
+        | SphericalPolygon
+        | MultiSphericalPolygon,
+    ) -> bool: ...
+
     def intersects(
         self,
         other: SphericalPoint
@@ -562,6 +594,16 @@ class MultiArcString:
 
     @property
     def length(self) -> float: ...
+
+    def equals(
+        self,
+        other: SphericalPoint
+        | MultiSphericalPoint
+        | ArcString
+        | MultiArcString
+        | SphericalPolygon
+        | MultiSphericalPolygon,
+    ) -> bool: ...
 
     def intersects(
         self,
@@ -791,6 +833,16 @@ class SphericalPolygon:
         | MultiSphericalPolygon,
     ) -> bool: ...
 
+    def equals(
+        self,
+        other: SphericalPoint
+        | MultiSphericalPoint
+        | ArcString
+        | MultiArcString
+        | SphericalPolygon
+        | MultiSphericalPolygon,
+    ) -> bool: ...
+
     def intersects(
         self,
         other: SphericalPoint
@@ -893,6 +945,16 @@ class MultiSphericalPolygon:
     ) -> bool: ...
 
     def crosses(
+        self,
+        other: SphericalPoint
+        | MultiSphericalPoint
+        | ArcString
+        | MultiArcString
+        | SphericalPolygon
+        | MultiSphericalPolygon,
+    ) -> bool: ...
+
+    def equals(
         self,
         other: SphericalPoint
         | MultiSphericalPoint

@@ -32,7 +32,7 @@ mod py_sphersgeo {
     }
 
     use super::*;
-    use crate::geometry::{GeometricOperations, GeometricPredicates, Geometry, MultiGeometry};
+    use crate::geometry::{GeometricOperations, GeometricRelationships, Geometry, MultiGeometry};
     use numpy::{
         ndarray::{Array1, Array2},
         IntoPyArray, PyArray1, PyArray2, PyReadonlyArray1, PyReadonlyArray2,
@@ -164,6 +164,12 @@ mod py_sphersgeo {
             Ok(self.vector_rotate_around(&Self::py_new(other)?, &theta))
         }
 
+        #[pyo3(name = "to")]
+        /// arc to another point
+        fn py_to(&self, other: PySphericalPointInputs) -> PyResult<ArcString> {
+            Ok(self.to(&Self::py_new(other)?))
+        }
+
         #[getter]
         fn get_vertices(&self) -> MultiSphericalPoint {
             self.vertices()
@@ -197,6 +203,18 @@ mod py_sphersgeo {
         #[getter]
         fn get_length(&self) -> f64 {
             self.length()
+        }
+
+        #[pyo3(name = "equals")]
+        fn py_equals(&self, other: AnyGeometry) -> bool {
+            match other {
+                AnyGeometry::SphericalPoint(point) => self.equals(&point),
+                AnyGeometry::MultiSphericalPoint(multipoint) => self.equals(&multipoint),
+                AnyGeometry::ArcString(arcstring) => self.equals(&arcstring),
+                AnyGeometry::MultiArcString(multiarcstring) => self.equals(&multiarcstring),
+                AnyGeometry::SphericalPolygon(polygon) => self.equals(&polygon),
+                AnyGeometry::MultiSphericalPolygon(multipolygon) => self.equals(&multipolygon),
+            }
         }
 
         #[pyo3(name = "intersects")]
@@ -519,6 +537,18 @@ mod py_sphersgeo {
         #[getter]
         fn get_length(&self) -> f64 {
             self.length()
+        }
+
+        #[pyo3(name = "equals")]
+        fn py_equals(&self, other: AnyGeometry) -> bool {
+            match other {
+                AnyGeometry::SphericalPoint(point) => self.equals(&point),
+                AnyGeometry::MultiSphericalPoint(multipoint) => self.equals(&multipoint),
+                AnyGeometry::ArcString(arcstring) => self.equals(&arcstring),
+                AnyGeometry::MultiArcString(multiarcstring) => self.equals(&multiarcstring),
+                AnyGeometry::SphericalPolygon(polygon) => self.equals(&polygon),
+                AnyGeometry::MultiSphericalPolygon(multipolygon) => self.equals(&multipolygon),
+            }
         }
 
         #[pyo3(name = "intersects")]
@@ -883,6 +913,18 @@ mod py_sphersgeo {
             self.length()
         }
 
+        #[pyo3(name = "equals")]
+        fn py_equals(&self, other: AnyGeometry) -> bool {
+            match other {
+                AnyGeometry::SphericalPoint(point) => self.equals(&point),
+                AnyGeometry::MultiSphericalPoint(multipoint) => self.equals(&multipoint),
+                AnyGeometry::ArcString(arcstring) => self.equals(&arcstring),
+                AnyGeometry::MultiArcString(multiarcstring) => self.equals(&multiarcstring),
+                AnyGeometry::SphericalPolygon(polygon) => self.equals(&polygon),
+                AnyGeometry::MultiSphericalPolygon(multipolygon) => self.equals(&multipolygon),
+            }
+        }
+
         #[pyo3(name = "intersects")]
         fn py_intersects(&self, other: AnyGeometry) -> bool {
             match other {
@@ -1157,6 +1199,18 @@ mod py_sphersgeo {
         #[getter]
         fn get_length(&self) -> f64 {
             self.length()
+        }
+
+        #[pyo3(name = "equals")]
+        fn py_equals(&self, other: AnyGeometry) -> bool {
+            match other {
+                AnyGeometry::SphericalPoint(point) => self.equals(&point),
+                AnyGeometry::MultiSphericalPoint(multipoint) => self.equals(&multipoint),
+                AnyGeometry::ArcString(arcstring) => self.equals(&arcstring),
+                AnyGeometry::MultiArcString(multiarcstring) => self.equals(&multiarcstring),
+                AnyGeometry::SphericalPolygon(polygon) => self.equals(&polygon),
+                AnyGeometry::MultiSphericalPolygon(multipolygon) => self.equals(&multipolygon),
+            }
         }
 
         #[pyo3(name = "intersects")]
@@ -1500,6 +1554,18 @@ mod py_sphersgeo {
             self.length()
         }
 
+        #[pyo3(name = "equals")]
+        fn py_equals(&self, other: AnyGeometry) -> bool {
+            match other {
+                AnyGeometry::SphericalPoint(point) => self.equals(&point),
+                AnyGeometry::MultiSphericalPoint(multipoint) => self.equals(&multipoint),
+                AnyGeometry::ArcString(arcstring) => self.equals(&arcstring),
+                AnyGeometry::MultiArcString(multiarcstring) => self.equals(&multiarcstring),
+                AnyGeometry::SphericalPolygon(polygon) => self.equals(&polygon),
+                AnyGeometry::MultiSphericalPolygon(multipolygon) => self.equals(&multipolygon),
+            }
+        }
+
         #[pyo3(name = "intersects")]
         fn py_intersects(&self, other: AnyGeometry) -> bool {
             match other {
@@ -1776,6 +1842,18 @@ mod py_sphersgeo {
         #[getter]
         fn get_length(&self) -> f64 {
             self.length()
+        }
+
+        #[pyo3(name = "equals")]
+        fn py_equals(&self, other: AnyGeometry) -> bool {
+            match other {
+                AnyGeometry::SphericalPoint(point) => self.equals(&point),
+                AnyGeometry::MultiSphericalPoint(multipoint) => self.equals(&multipoint),
+                AnyGeometry::ArcString(arcstring) => self.equals(&arcstring),
+                AnyGeometry::MultiArcString(multiarcstring) => self.equals(&multiarcstring),
+                AnyGeometry::SphericalPolygon(polygon) => self.equals(&polygon),
+                AnyGeometry::MultiSphericalPolygon(multipolygon) => self.equals(&multipolygon),
+            }
         }
 
         #[pyo3(name = "intersects")]
