@@ -332,20 +332,22 @@ impl Geometry for SphericalPolygon {
     /// https://www.math.csi.cuny.edu/abhijit/623/spherical-triangle.pdf
     fn area(&self) -> f64 {
         // calculate the interior angles of the polygon comprised of the given points
-        let angles_radians = (0..self.boundary.points.len() - 3)
+        let angles_radians = (0..self.boundary.points.len())
             .map(|index| {
                 let triangle = vec![
                     self.boundary.points.xyzs[index],
-                    self.boundary.points.xyzs[if index >= self.boundary.points.xyzs.len() - 1 {
-                        index - self.boundary.points.xyzs.len()
-                    } else {
-                        index
-                    } + 1],
-                    self.boundary.points.xyzs[if index >= self.boundary.points.xyzs.len() - 2 {
-                        index - self.boundary.points.xyzs.len()
-                    } else {
-                        index
-                    } + 2],
+                    self.boundary.points.xyzs[index + 1
+                        - if index >= self.boundary.points.xyzs.len() - 1 {
+                            self.boundary.points.xyzs.len()
+                        } else {
+                            0
+                        }],
+                    self.boundary.points.xyzs[index + 2
+                        - if index >= self.boundary.points.xyzs.len() - 2 {
+                            self.boundary.points.xyzs.len()
+                        } else {
+                            0
+                        }],
                 ];
 
                 let angle_radians =

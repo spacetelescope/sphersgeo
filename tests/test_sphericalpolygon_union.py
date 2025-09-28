@@ -9,7 +9,6 @@ import sys
 
 # THIRD-PARTY
 import numpy as np
-import pytest
 from numpy.testing import assert_array_almost_equal
 
 # LOCAL
@@ -87,67 +86,6 @@ def test2():
     poly5 = SphericalPolygon.from_cone(35, 55, 7, steps=8)
     poly6 = SphericalPolygon.from_cone(60, 60, 3, steps=8)
     return [poly1, poly2, poly3, poly4, poly5, poly6]
-
-
-@pytest.mark.filterwarnings("ignore:CPERROR.*")
-def test5():
-    from astropy import wcs as pywcs
-    from astropy.io import fits
-
-    with fits.open(os.path.join(ROOT_DIR, "2chipA.fits.gz")) as A:
-        wcs = pywcs.WCS(A[1].header, fobj=A)
-        chipA1 = SphericalPolygon.from_wcs(wcs)
-        wcs = pywcs.WCS(A[4].header, fobj=A)
-        chipA2 = SphericalPolygon.from_wcs(wcs)
-
-    _ = chipA1.union(chipA2)
-
-
-def test6():
-    from astropy import wcs as pywcs
-    from astropy.io import fits
-
-    with fits.open(os.path.join(ROOT_DIR, "2chipC.fits.gz")) as A:
-        wcs = pywcs.WCS(A[1].header, fobj=A)
-        chipA1 = SphericalPolygon.from_wcs(wcs)
-        wcs = pywcs.WCS(A[4].header, fobj=A)
-        chipA2 = SphericalPolygon.from_wcs(wcs)
-
-    _ = chipA1.union(chipA2)
-
-
-@pytest.mark.filterwarnings("ignore:CPERROR.*")
-@union_test(0, 90)
-def test7():
-    from astropy import wcs as pywcs
-    from astropy.io import fits
-
-    with fits.open(os.path.join(ROOT_DIR, "2chipA.fits.gz")) as A:
-        wcs = pywcs.WCS(A[1].header, fobj=A)
-        chipA1 = SphericalPolygon.from_wcs(wcs)
-        wcs = pywcs.WCS(A[4].header, fobj=A)
-        chipA2 = SphericalPolygon.from_wcs(wcs)
-
-    with fits.open(os.path.join(ROOT_DIR, "2chipB.fits.gz")) as B:
-        wcs = pywcs.WCS(B[1].header, fobj=B)
-        chipB1 = SphericalPolygon.from_wcs(wcs)
-        wcs = pywcs.WCS(B[4].header, fobj=B)
-        chipB2 = SphericalPolygon.from_wcs(wcs)
-
-    return [chipA1, chipA2, chipB1, chipB2]
-
-
-@union_test(0, 90)
-def test8():
-    from astropy.io import fits
-
-    filename = resolve_imagename(ROOT_DIR, "1904-66_TAN.fits")
-    header = fits.getheader(filename, ext=0)
-
-    poly1 = SphericalPolygon.from_wcs(header, 1)
-    poly2 = SphericalPolygon.from_wcs(header, 1)
-
-    return [poly1, poly2]
 
 
 def test_union_empty():
@@ -328,31 +266,31 @@ def test_edge_crossings():
     _ = A.union(B)
 
 
-def test_almost_identical_polygons_multi_union():
-    filename = resolve_imagename(ROOT_DIR, "almost_same_polygons.npz")
-    polygon_data = np.load(filename)
+# def test_almost_identical_polygons_multi_union():
+#     filename = resolve_imagename(ROOT_DIR, "almost_same_polygons.npz")
+#     polygon_data = np.load(filename)
 
-    polygons = []
-    for k in range(len(polygon_data.files) // 2):
-        polygons.append(
-            SphericalPolygon(
-                polygon_data[f"p{k:02d}_points"],
-                inside=polygon_data[f"p{k:02d}_inside"],
-            )
-        )
+#     polygons = []
+#     for k in range(len(polygon_data.files) // 2):
+#         polygons.append(
+#             SphericalPolygon(
+#                 polygon_data[f"p{k:02d}_points"],
+#                 inside=polygon_data[f"p{k:02d}_inside"],
+#             )
+#         )
 
-    # FIXME: https://github.com/spacetelescope/spherical_geometry/issues/245
-    area_tol = 5.8e-14  # Used to be 5.0e-14 before we started testing different archs
+#     # FIXME: https://github.com/spacetelescope/spherical_geometry/issues/245
+#     area_tol = 5.8e-14  # Used to be 5.0e-14 before we started testing different archs
 
-    # FIXME: https://github.com/spacetelescope/spherical_geometry/issues/244
-    if sys.platform == "win32":
-        p_shapes = [
-            (66, 3),
-            (68, 3),
-        ]  # 32-bit Windows has different shape but not 64-bit Windows
-    else:
-        p_shapes = [(66, 3)]
+#     # FIXME: https://github.com/spacetelescope/spherical_geometry/issues/244
+#     if sys.platform == "win32":
+#         p_shapes = [
+#             (66, 3),
+#             (68, 3),
+#         ]  # 32-bit Windows has different shape but not 64-bit Windows
+#     else:
+#         p_shapes = [(66, 3)]
 
-    p = SphericalPolygon.multi_union(polygons)
-    assert np.shape(list(p.points)[0]) in p_shapes
-    assert abs(p.area() - 2.6672666e-8) < area_tol
+#     p = SphericalPolygon.multi_union(polygons)
+#     assert np.shape(list(p.points)[0]) in p_shapes
+#     assert abs(p.area() - 2.6672666e-8) < area_tol

@@ -135,24 +135,35 @@ pub fn split_arcstring_at_points(arcstring: &ArcString, points: Vec<&[f64; 3]>) 
     for point in &points {
         for arcstring_index in 0..arcstrings.len() {
             let arcstring = arcstrings[arcstring_index].to_owned();
-            for arc_index in 0..arcstring.points.len() - if arcstring.closed { 0 } else { 1 } {
-                let arc_0 = points[arc_index];
-                let arc_1 = points[if arc_index < arcstring.points.len() - 1 {
-                    arc_index + 1
+            for arc_a_index in 0..arcstring.points.len() - if arcstring.closed { 0 } else { 1 } {
+                let arc_b_index = if arc_a_index < arcstring.points.len() - 1 {
+                    arc_a_index + 1
                 } else {
+                    // if the index is greater than the length, the arcstring is closed and we should loop back to the start
                     0
-                }];
+                };
 
-                if xyzs_collinear(arc_0, point, arc_1) {
-                    let mut a = vec![];
-                    a.extend_from_slice(&arcstring.points.xyzs[..arc_index + 1]);
-                    a.push(**point);
+                let arc_0 = arcstring.points.xyzs[arc_a_index];
+                let arc_1 = arcstring.points.xyzs[arc_b_index];
+
+                if xyzs_collinear(&arc_0, point, &arc_1) {
                     // replace arc with the arc split in two at the collinear point
+
+                    // add the first segment up to the collinear point
+                    let mut a = vec![];
+                    a.extend_from_slice(&arcstring.points.xyzs[..arc_a_index + 1]);
+                    a.push(**point);
                     arcstrings[arcstring_index] =
                         ArcString::try_from(MultiSphericalPoint::try_from(a).unwrap()).unwrap();
 
+                    // add the second segment starting from the collinear point
                     let mut b = vec![**point];
-                    b.extend_from_slice(&arcstring.points.xyzs[arc_index + 1..]);
+                    if arc_b_index > 0 {
+                        b.extend_from_slice(&arcstring.points.xyzs[arc_b_index..]);
+                    } else {
+                        // handle case where end point is the start point of the arcstring
+                        b.push(arcstring.points.xyzs[arc_b_index]);
+                    }
                     arcstrings.insert(
                         arcstring_index + 1,
                         ArcString::try_from(MultiSphericalPoint::try_from(b).unwrap()).unwrap(),
@@ -488,13 +499,18 @@ impl ArcString {
     // remove unecessary vertices
     pub fn simplify(&mut self) {
         loop {
+            if self.points.xyzs.len() <= 2 {
+                // can't simplify a line with only two points
+                break;
+            }
+
             let mut unecessary_indices = vec![];
             for index in 1..self.points.xyzs.len() + if self.closed { 1 } else { 0 } {
                 let index = if index < self.points.xyzs.len() {
                     index
                 } else {
                     // if the index is greater than the length, the arcstring is closed and we should loop back to the start
-                    self.points.xyzs.len() - index
+                    self.points.xyzs.len() - index + 1
                 };
 
                 let a = self.points.xyzs[index - 1];
