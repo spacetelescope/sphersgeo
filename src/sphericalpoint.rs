@@ -1168,15 +1168,16 @@ impl Display for MultiSphericalPoint {
 
 impl PartialEq for MultiSphericalPoint {
     fn eq(&self, other: &Self) -> bool {
-        let (less, more) = if self.len() < other.len() {
+        let (shorter, longer) = if self.len() < other.len() {
             (self, other)
         } else {
             (other, self)
         };
 
-        more.xyzs
+        longer
+            .xyzs
             .iter()
-            .all(|xyz| point_within_kdtree(xyz, &less.kdtree))
+            .all(|xyz| point_within_kdtree(xyz, &shorter.kdtree))
     }
 }
 
@@ -1408,15 +1409,16 @@ impl GeometricRelationships<Self> for MultiSphericalPoint {
     }
 
     fn touches(&self, other: &Self) -> bool {
-        let (less, more) = if self.len() < other.len() {
+        let (shorter, longer) = if self.len() < other.len() {
             (self, other)
         } else {
             (other, self)
         };
 
-        less.xyzs
+        shorter
+            .xyzs
             .iter()
-            .any(|xyz| point_within_kdtree(xyz, &more.kdtree))
+            .any(|xyz| point_within_kdtree(xyz, &longer.kdtree))
     }
 
     fn within(&self, other: &Self) -> bool {
@@ -1468,17 +1470,18 @@ impl GeometricOperations<Self, SphericalPoint> for MultiSphericalPoint {
     }
 
     fn intersection(&self, other: &Self) -> Option<Self> {
-        let (less, more) = if self.len() < other.len() {
+        let (shorter, longer) = if self.len() < other.len() {
             (self, other)
         } else {
             (other, self)
         };
 
         Self::try_from(
-            less.xyzs
+            shorter
+                .xyzs
                 .iter()
                 .filter_map(|xyz| {
-                    if point_within_kdtree(xyz, &more.kdtree) {
+                    if point_within_kdtree(xyz, &longer.kdtree) {
                         Some(*xyz)
                     } else {
                         None

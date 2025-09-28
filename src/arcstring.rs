@@ -528,20 +528,20 @@ impl PartialEq for ArcString {
             return false;
         }
 
-        let (less, more) = if self.points.len() < other.points.len() {
+        let (shorter, longer) = if self.points.len() < other.points.len() {
             (self, other)
         } else {
             (other, self)
         };
 
-        for xyz in &more.points.xyzs {
-            if !xyz_in_arcstring(xyz, less) {
+        for xyz in &longer.points.xyzs {
+            if !xyz_in_arcstring(xyz, shorter) {
                 return false;
             }
         }
 
-        for xyz in &less.points.xyzs {
-            if !xyz_in_arcstring(xyz, more) {
+        for xyz in &shorter.points.xyzs {
+            if !xyz_in_arcstring(xyz, longer) {
                 return false;
             }
         }
@@ -763,23 +763,23 @@ impl GeometricRelationships<Self> for ArcString {
             return true;
         }
 
-        let (less, more) = if self.points.len() < other.points.len() {
+        let (shorter, longer) = if self.points.len() < other.points.len() {
             (self, other)
         } else {
             (other, self)
         };
 
-        let mut simple_less = less.to_owned();
-        simple_less.simplify();
+        let mut simple_shorter = shorter.to_owned();
+        simple_shorter.simplify();
 
-        if &simple_less == more {
+        if &simple_shorter == longer {
             return true;
         }
 
-        let mut simple_more = more.to_owned();
-        simple_more.simplify();
+        let mut simple_longer = longer.to_owned();
+        simple_longer.simplify();
 
-        simple_less == simple_more
+        simple_shorter == simple_longer
     }
 
     fn intersects(&self, other: &Self) -> bool {
@@ -1458,16 +1458,17 @@ impl GeometricOperations<ArcString, ArcString> for MultiArcString {
 
 impl GeometricRelationships<Self> for MultiArcString {
     fn equals(&self, other: &Self) -> bool {
-        let (less, more) = if self.arcstrings.len() < other.arcstrings.len() {
+        let (shorter, longer) = if self.arcstrings.len() < other.arcstrings.len() {
             (self, other)
         } else {
             (other, self)
         };
 
-        less.arcstrings.iter().all(|less_arcstring| {
-            more.arcstrings
+        shorter.arcstrings.iter().all(|shorter_arcstring| {
+            longer
+                .arcstrings
                 .iter()
-                .any(|more_arcstring| less_arcstring.equals(more_arcstring))
+                .any(|longer_arcstring| shorter_arcstring.equals(longer_arcstring))
         })
     }
 
