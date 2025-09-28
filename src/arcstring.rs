@@ -839,7 +839,7 @@ impl GeometricRelationships<Self> for ArcString {
         let mut simple_other = other.to_owned();
         simple_other.simplify();
 
-        if simple_self.equals(simple_other) && !self.within(other) && !self.contains(other) {
+        if simple_self.equals(&simple_other) && !self.within(other) && !self.contains(other) {
             for arc_index in 0..self.points.len() - if self.closed { 0 } else { 1 } {
                 let arc = (
                     self.points.xyzs[arc_index],
