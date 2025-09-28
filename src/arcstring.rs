@@ -493,7 +493,7 @@ impl ArcString {
                 let index = if index < self.points.xyzs.len() {
                     index
                 } else {
-                    // loop back to start for closed arcstring
+                    // if the index is greater than the length, the arcstring is closed and we should loop back to the start
                     self.points.xyzs.len() - index
                 };
 
@@ -502,7 +502,7 @@ impl ArcString {
                 let c = self.points.xyzs[if index + 1 < self.points.xyzs.len() {
                     index + 1
                 } else {
-                    // loop back to start for closed arcstring
+                    // if the index is greater than the length, the arcstring is closed and we should loop back to the start
                     self.points.xyzs.len() - index + 1
                 }];
 
