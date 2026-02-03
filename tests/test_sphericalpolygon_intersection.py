@@ -4,7 +4,7 @@ import codecs
 import numpy as np
 import pytest
 from numpy.testing import assert_allclose, assert_array_almost_equal
-from sphersgeo import MultiSphericalPolygon, SphericalPolygon
+from sphersgeo import MultiSphericalPolygon, SphericalPolygon, SphericalPoint
 
 from .helpers import ROOT_DIR, resolve_imagename
 
@@ -43,7 +43,6 @@ def test_nonintersection(center_a, radius_a, center_b, radius_b):
 
 def test_intersects():
     a = SphericalPolygon([(20.0, 5.0), (25.0, 5.0), (25.0, 10.0), (20.0, 10.0)])
-
     b = SphericalPolygon([(18.0, 6.0), (21.0, 6.0), (21.0, 7.0), (18.0, 7.0)])
 
     assert a.intersects(b)
@@ -53,93 +52,79 @@ def test_intersects():
 def test_intersects_simple():
     lon1 = np.array([-10, 10, 10, -10, -10], dtype=float)
     lat1 = np.array([30, 30, 0, 0, 30], dtype=float)
-    poly1 = SphericalPolygon(np.stack((lon1, lat1), axis=1))
+    p1 = SphericalPolygon(np.stack((lon1, lat1), axis=1))
 
-    ra2 = np.array([-5, 15, 15, -5, -5], dtype=float)
-    dec2 = np.array([20, 20, -10, -10, 20], dtype=float)
-    poly2 = SphericalPolygon(np.stack((ra2, dec2), axis=1))
+    lon2 = np.array([-5, 15, 15, -5, -5], dtype=float)
+    lat2 = np.array([20, 20, -10, -10, 20], dtype=float)
+    p2 = SphericalPolygon(np.stack((lon2, lat2), axis=1))
 
-    assert poly1.intersects(poly2)
+    assert p1.intersects(p2)
 
     # Make sure it isn't order-dependent
-    lon1 = lon1[::-1]
-    lat1 = lat1[::-1]
-    poly1 = SphericalPolygon(np.stack((lon1, lat1), axis=1))
+    p1r = SphericalPolygon(np.stack((lon1[::-1], lat1[::-1]), axis=1))
+    p2r = SphericalPolygon(np.stack((lon2[::-1], lat2[::-1]), axis=1))
 
-    ra2 = ra2[::-1]
-    dec2 = dec2[::-1]
-    poly2 = SphericalPolygon(np.stack((ra2, dec2), axis=1))
-
-    assert poly1.intersects(poly2)
+    assert p1r.intersects(p2r)
 
 
 def test_intersects_poly_fully_contained():
     lon1 = np.array([-10, 10, 10, -10, -10], dtype=float)
     lat1 = np.array([30, 30, 0, 0, 30], dtype=float)
-    poly1 = SphericalPolygon(np.stack((lon1, lat1), axis=1))
+    p1 = SphericalPolygon(np.stack((lon1, lat1), axis=1))
 
     lon2 = np.array([-5, 5, 5, -5, -5], dtype=float)
     lat2 = np.array([20, 20, 10, 10, 20], dtype=float)
-    poly2 = SphericalPolygon(np.stack((lon2, lat2), axis=1))
+    p2 = SphericalPolygon(np.stack((lon2, lat2), axis=1))
 
-    assert poly1.intersects(poly2)
+    assert p1.intersects(p2)
 
     # Make sure it isn't order-dependent
-    lon1 = lon1[::-1]
-    lat1 = lat1[::-1]
-    poly1 = SphericalPolygon(np.stack((lon1, lat1), axis=1))
+    p1r = SphericalPolygon(np.stack((lon1[::-1], lat1[::-1]), axis=1))
 
-    lon2 = lon2[::-1]
-    lat2 = lat2[::-1]
-    poly2 = SphericalPolygon(np.stack((lon2, lat2), axis=1))
+    p2r = SphericalPolygon(np.stack((lon2[::-1], lat2[::-1]), axis=1))
 
-    assert poly1.intersects(poly2)
+    assert p1r.intersects(p2r)
 
 
 def test_hard_intersects_poly():
     lon1 = np.array([-10, 10, 10, -10, -10], dtype=float)
     lat1 = np.array([30, 30, 0, 0, 30], dtype=float)
-    poly1 = SphericalPolygon(np.stack((lon1, lat1), axis=1))
+    p1 = SphericalPolygon(np.stack((lon1, lat1), axis=1))
 
     lon2 = np.array([-20, 20, 20, -20, -20], dtype=float)
     lat2 = np.array([20, 20, 10, 10, 20], dtype=float)
-    poly2 = SphericalPolygon(np.stack((lon2, lat2), axis=1))
+    p2 = SphericalPolygon(np.stack((lon2, lat2), axis=1))
 
-    assert poly1.intersects(poly2)
+    assert p1.intersects(p2)
 
     # Make sure it isn't order-dependent
-    lon1 = lon1[::-1]
-    lat1 = lat1[::-1]
-    poly1 = SphericalPolygon(np.stack((lon1, lat1), axis=1))
+    p1r = SphericalPolygon(np.stack((lon1[::-1], lat1[::-1]), axis=1))
+    p2r = SphericalPolygon(np.stack((lon2[::-1], lat2[::-1]), axis=1))
 
-    lon2 = lon2[::-1]
-    lat2 = lat2[::-1]
-    poly2 = SphericalPolygon(np.stack((lon2, lat2), axis=1))
-
-    assert poly1.intersects(poly2)
+    assert p1r.intersects(p2r)
 
 
 def test_not_intersects_poly():
     lon1 = np.array([-10, 10, 10, -10, -10], dtype=float)
     lat1 = np.array([30, 30, 5, 5, 30], dtype=float)
-    poly1 = SphericalPolygon(np.stack((lon1, lat1), axis=1))
+    p1 = SphericalPolygon(np.stack((lon1, lat1), axis=1))
 
     lon2 = np.array([-20, 20, 20, -20, -20], dtype=float)
     lat2 = np.array([-20, -20, -10, -10, -20], dtype=float)
-    poly2 = SphericalPolygon(np.stack((lon2, lat2), axis=1))
+    p2 = SphericalPolygon(np.stack((lon2, lat2), axis=1))
 
-    assert not poly1.intersects(poly2)
+    assert not p1.intersects(p2)
 
     # Make sure it isn't order-dependent
     lon1 = lon1[::-1]
     lat1 = lat1[::-1]
-    poly1 = SphericalPolygon(np.stack((lon1, lat1), axis=1))
+    p1 = SphericalPolygon(np.stack((lon1, lat1), axis=1))
 
     lon2 = lon2[::-1]
     lat2 = lat2[::-1]
-    poly2 = SphericalPolygon(np.stack((lon2, lat2), axis=1))
+    p2 = SphericalPolygon(np.stack((lon2, lat2), axis=1))
 
-    assert not poly1.intersects(poly2)
+    assert not p1.intersects(p2)
 
 
 def test_difficult_intersections():
@@ -159,18 +144,18 @@ def test_difficult_intersections():
         return x.reshape((len(x) // 3, 3))
 
     for i in range(0, len(lines), 4):
-        Apoints, Ainside, Bpoints, Binside = [
+        p1_points, p1_inside, p2_points, p2_inside = [
             to_array(line) for line in lines[i : i + 4]
         ]
-        polyA = SphericalPolygon(Apoints, Ainside)
-        polyB = SphericalPolygon(Bpoints, Binside)
-        # yield test_intersection, (polyA, polyB)
-        polyA.intersection(polyB)
+        p1 = SphericalPolygon(p1_points, p1_inside)
+        p2 = SphericalPolygon(p2_points, p2_inside)
+        # yield test_intersection, (p1, p2)
+        p1.intersection(p2)
 
 
 def test_self_intersection():
     # Tests intersection between a disjoint polygon and itself
-    s1 = SphericalPolygon(
+    p1 = SphericalPolygon(
         [
             (150.15056635, 2.33675579),
             (150.18472797, 2.33675454),
@@ -179,7 +164,7 @@ def test_self_intersection():
             (150.15056635, 2.33675579),
         ]
     )
-    s2 = SphericalPolygon(
+    p2 = SphericalPolygon(
         [
             (150.18472955, 2.37105428),
             (150.18472798, 2.33692121),
@@ -190,16 +175,16 @@ def test_self_intersection():
     )
 
     # create a union polygon
-    s12 = s2.union(s1)
+    p12 = p2.union(p1)
     # asserts self-intersection is same as original
-    s12int = s12.intersection(s12)
-    assert s12int.area == s12.area
+    p12int = p12.intersection(p12)
+    assert p12int.area == p12.area
 
 
 def test_ordering():
     nrepeat = 10
 
-    A = SphericalPolygon(
+    p1 = SphericalPolygon(
         [
             (
                 3.532808036921135653e-01,
@@ -290,7 +275,7 @@ def test_ordering():
         (3.536414047913637448e-01, 6.348851549491377755e-01, -6.869196436573932196e-01),
     )
 
-    B = SphericalPolygon(
+    p2 = SphericalPolygon(
         [
             (
                 3.529249199274748783e-01,
@@ -353,8 +338,8 @@ def test_ordering():
 
     areas = []
     for i in range(nrepeat):
-        C = A.intersection(B)
-        areas.append(C.area)
+        p12 = p1.intersection(p2)
+        areas.append(p12.area)
     areas = np.array(areas)
     assert_array_almost_equal(areas[:-1], areas[1:])
 
@@ -368,116 +353,129 @@ def test_ordering():
             polygons.append(p)
         return MultiSphericalPolygon(polygons)
 
-    Aareas = []
-    Bareas = []
-    Careas = []
+    p1_areas = []
+    p2_areas = []
+    p12_areas = []
     for i in range(nrepeat):
-        AS = roll_polygon(A, i)
-        BS = roll_polygon(B, i)
+        p1s = roll_polygon(p1, i)
+        p2s = roll_polygon(p2, i)
 
-        C = AS.intersection(BS)
+        p12 = p1s.intersection(p2s)
 
-        Aareas.append(A.area)
-        Bareas.append(B.area)
-        Careas.append(C.area)
+        p1_areas.append(p1.area)
+        p2_areas.append(p2.area)
+        p12_areas.append(p12.area)
 
         for j in range(nrepeat):
-            CS = roll_polygon(C, j)
-            Careas.append(CS.area)
+            p12s = roll_polygon(p12, j)
+            p12_areas.append(p12s.area)
 
-    Aareas = np.array(Aareas)
-    Bareas = np.array(Bareas)
-    Careas = np.array(Careas)
-    assert_array_almost_equal(Aareas[:-1], Aareas[1:])
-    assert_array_almost_equal(Bareas[:-1], Bareas[1:])
-    assert_array_almost_equal(Careas[:-1], Careas[1:])
+    p1_areas = np.array(p1_areas)
+    p2_areas = np.array(p2_areas)
+    p12_areas = np.array(p12_areas)
+    assert_array_almost_equal(p1_areas[:-1], p1_areas[1:])
+    assert_array_almost_equal(p2_areas[:-1], p2_areas[1:])
+    assert_array_almost_equal(p12_areas[:-1], p12_areas[1:])
 
 
 def test_intersection_crash():
     # Reported by Darren White
 
-    testpoints = [
-        (0.3583051, 0.04329773, 0.9326),
-        (0.34935525, 0.09059884, 0.9326),
-        (0.41458613, 0.10294118, 0.90416893),
-        (0.42353598, 0.05564007, 0.90416893),
-        (0.3583051, 0.04329773, 0.9326),
-    ]
+    p1 = SphericalPolygon(
+        [
+            (0.3583051, 0.04329773, 0.9326),
+            (0.34935525, 0.09059884, 0.9326),
+            (0.41458613, 0.10294118, 0.90416893),
+            (0.42353598, 0.05564007, 0.90416893),
+            (0.3583051, 0.04329773, 0.9326),
+        ],
+        (0.38681003, 0.07318841, 0.91925049),
+    )
 
-    testcenter = (0.38681003, 0.07318841, 0.91925049)
+    p2 = SphericalPolygon(
+        [
+            (0.4246086, 0.04379716, 0.90431706),
+            (0.41771239, 0.08700592, 0.90440386),
+            (0.35406757, 0.06995283, 0.9326),
+            (0.34465183, 0.10538573, 0.93279631),
+            (0.29364251, 0.08598585, 0.95204018),
+            (0.27687092, 0.13007964, 0.95206186),
+            (0.23924242, 0.10865033, 0.96486174),
+            (0.21881505, 0.14456566, 0.96499779),
+            (0.19972446, 0.12927807, 0.97128643),
+            (0.17211517, 0.16374755, 0.97137177),
+            (0.16418552, 0.15451288, 0.97425299),
+            (0.12763925, 0.18584761, 0.97425299),
+            (0.17303981, 0.2387991, 0.95552719),
+            (0.20958607, 0.20746437, 0.95552719),
+            (0.1861715, 0.18013143, 0.96586378),
+            (0.22383787, 0.21031346, 0.95166426),
+            (0.253951, 0.17275425, 0.95166426),
+            (0.25269325, 0.17174401, 0.95218177),
+            (0.27532947, 0.18462841, 0.94345431),
+            (0.29916705, 0.1428042, 0.94345431),
+            (0.28233717, 0.13319738, 0.95002325),
+            (0.34001511, 0.15514004, 0.92753506),
+            (0.35358851, 0.11967283, 0.92771417),
+            (0.40573405, 0.1336354, 0.90416893),
+            (0.41710657, 0.0913497, 0.90425513),
+            (0.48033933, 0.10150229, 0.87118965),
+            (0.48707009, 0.05997741, 0.871301),
+            (0.4841862, 0.08268655, 0.87104917),
+            (0.54534645, 0.09006864, 0.8333576),
+            (0.55111516, 0.04227516, 0.8333576),
+            (0.48995491, 0.03489307, 0.87104917),
+            (0.48779298, 0.05394194, 0.87129115),
+            (0.4246086, 0.04379716, 0.90431706),
+        ],
+        (0.16877166, 0.19684143, 0.96579997),
+    )
 
-    polypoints = [
-        (0.4246086, 0.04379716, 0.90431706),
-        (0.41771239, 0.08700592, 0.90440386),
-        (0.35406757, 0.06995283, 0.9326),
-        (0.34465183, 0.10538573, 0.93279631),
-        (0.29364251, 0.08598585, 0.95204018),
-        (0.27687092, 0.13007964, 0.95206186),
-        (0.23924242, 0.10865033, 0.96486174),
-        (0.21881505, 0.14456566, 0.96499779),
-        (0.19972446, 0.12927807, 0.97128643),
-        (0.17211517, 0.16374755, 0.97137177),
-        (0.16418552, 0.15451288, 0.97425299),
-        (0.12763925, 0.18584761, 0.97425299),
-        (0.17303981, 0.2387991, 0.95552719),
-        (0.20958607, 0.20746437, 0.95552719),
-        (0.1861715, 0.18013143, 0.96586378),
-        (0.22383787, 0.21031346, 0.95166426),
-        (0.253951, 0.17275425, 0.95166426),
-        (0.25269325, 0.17174401, 0.95218177),
-        (0.27532947, 0.18462841, 0.94345431),
-        (0.29916705, 0.1428042, 0.94345431),
-        (0.28233717, 0.13319738, 0.95002325),
-        (0.34001511, 0.15514004, 0.92753506),
-        (0.35358851, 0.11967283, 0.92771417),
-        (0.40573405, 0.1336354, 0.90416893),
-        (0.41710657, 0.0913497, 0.90425513),
-        (0.48033933, 0.10150229, 0.87118965),
-        (0.48707009, 0.05997741, 0.871301),
-        (0.4841862, 0.08268655, 0.87104917),
-        (0.54534645, 0.09006864, 0.8333576),
-        (0.55111516, 0.04227516, 0.8333576),
-        (0.48995491, 0.03489307, 0.87104917),
-        (0.48779298, 0.05394194, 0.87129115),
-        (0.4246086, 0.04379716, 0.90431706),
-    ]
-    polycenter = (0.16877166, 0.19684143, 0.96579997)
-
-    testFoV = SphericalPolygon(testpoints, interior_point=testcenter)
-    poly = SphericalPolygon(polypoints, interior_point=polycenter)
-
-    _ = poly.overlap(testFoV)
+    assert p1.intersects(p2)
+    assert p1.overlaps(p2)
 
 
 @pytest.mark.xfail(reason="currently there is no solution to get this to pass")
 def test_intersection_crash_similar_poly():
     p1 = SphericalPolygon(
-        [
-            (-0.1094946215827374, -0.8592766830993238, -0.499654390280199),
-            (-0.1089683641318892, -0.8595220381654031, -0.4993473355555343),
-            (-0.108610535224965, -0.8593183788298407, -0.4997756250993051),
-            (-0.1091500557209236, -0.8590667764452905, -0.5000905307482003),
-            (-0.1094946215827374, -0.8592766830993238, -0.499654390280199),
-        ],
-        (-0.1090595793730483, -0.8592979843505629, -0.4997128998115153),
+        (
+            [
+                (-0.1094946215827374, -0.8592766830993238, -0.499654390280199),
+                (-0.1089683641318892, -0.8595220381654031, -0.4993473355555343),
+                (-0.108610535224965, -0.8593183788298407, -0.4997756250993051),
+                (-0.1091500557209236, -0.8590667764452905, -0.5000905307482003),
+                (-0.1094946215827374, -0.8592766830993238, -0.499654390280199),
+            ],
+            (-0.1090595793730483, -0.8592979843505629, -0.4997128998115153),
+        )
     )
 
     p2 = SphericalPolygon(
-        [
-            (-0.1094946213367254, -0.8592766831114167, -0.4996543903133135),
-            (-0.1089683641834766, -0.859522038038747, -0.4993473357622887),
-            (-0.1086105354789061, -0.8593183788183577, -0.4997756250638628),
-            (-0.109150055669766, -0.8590667765760884, -0.5000905305346783),
-            (-0.1094946213367254, -0.8592766831114167, -0.4996543903133135),
-        ],
-        (-0.1090595793730483, -0.8592979843505629, -0.4997128998115153),
+        (
+            [
+                (-0.1094946213367254, -0.8592766831114167, -0.4996543903133135),
+                (-0.1089683641834766, -0.859522038038747, -0.4993473357622887),
+                (-0.1086105354789061, -0.8593183788183577, -0.4997756250638628),
+                (-0.109150055669766, -0.8590667765760884, -0.5000905305346783),
+                (-0.1094946213367254, -0.8592766831114167, -0.4996543903133135),
+            ],
+            (-0.1090595793730483, -0.8592979843505629, -0.4997128998115153),
+        )
     )
 
-    p3 = p1.intersection(p2)
+    assert p1.intersects(p2)
+    assert p1.overlaps(p2)
 
-    pts1 = np.sort(p1.vertices.xyzs[:-1], axis=0)
-    pts3 = np.sort(p3.vertices.xyzs[:-1], axis=0)
-    assert_allclose(pts1, pts3, rtol=0, atol=1e-15)
+    p12 = p1.intersection(p2)
+
+    assert p12 is not None
+
+    assert_allclose(
+        np.sort(p1.vertices.xyzs[:-1], axis=0),
+        np.sort(p12.vertices.xyzs[:-1], axis=0),
+        rtol=0,
+        atol=1e-15,
+    )
 
 
 def test_complement_regression():
@@ -486,9 +484,10 @@ def test_complement_regression():
     p1 = SphericalPolygon.from_cone((90, 0), 100)
     p2 = SphericalPolygon.from_cone((270, 0), 100)
 
-    assert p1.contains((0, 0))
-    assert p2.contains((0, 0))
+    origin = SphericalPoint((0, 0))
+    assert p1.contains(origin)
+    assert p2.contains(origin)
 
     p12 = p1.intersection(p2)
 
-    assert p12.contains((0, 0))
+    assert p12.contains(origin)
