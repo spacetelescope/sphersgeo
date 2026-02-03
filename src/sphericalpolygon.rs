@@ -203,7 +203,11 @@ pub struct SphericalPolygon {
 
 impl Display for SphericalPolygon {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "SphericalPolygon({})", self.boundary)
+        write!(
+            f,
+            "SphericalPolygon({}, {})",
+            self.boundary, self.interior_point
+        )
     }
 }
 
