@@ -17,5 +17,5 @@ dependencies = ["numpy"]
 test = ["pytest", "gwcs"]
 
 [tool.maturin]
-python-source = "python"
+python-source = "src/python/"
 features = ["pyo3/extension-module", "py"]

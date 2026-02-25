@@ -1,3 +1,8 @@
+<a href="https://stsci.edu">
+  <img src="docs/assets/stsci_logo.png" alt="STScI Logo" width="15%" style="margin-left: auto;"/>
+  <img src="docs/assets/stsci_name.png" alt="STScI Name" width="68%"/>
+</a>
+
 # sphersgeo
 
 #### object-oriented spherical geometry in Rust (and Python bindings)
