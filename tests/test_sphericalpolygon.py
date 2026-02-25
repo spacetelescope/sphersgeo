@@ -489,3 +489,19 @@ def test_convex_hull(lonlats, expected_area, expected_on_boundary):
 
     for b, r in zip(on_boundary, expected_on_boundary):
         assert b == r, "convex hull incorrect"
+
+
+def test_nearly_degenerate_polygon():
+    # from https://github.com/spacetelescope/spherical_geometry/issues/192
+
+    points = [
+        (0.87772279707663836, 0.34018023965617028, 0.33746125116734926),
+        (0.92276918091486326, 0.36291770695506587, 0.12956765310905877),
+        (0.92574575323628161, 0.36907299235098134, -0.082340310189372115),
+    ]
+
+    single = SphericalPolygon(points)
+    multi = MultiSphericalPolygon([points])
+
+    assert single.area > 0
+    assert multi.area > 0
