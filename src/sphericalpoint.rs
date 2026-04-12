@@ -327,7 +327,7 @@ pub fn arc_interpolate_points(
 }
 
 /// 3D Cartesian vector representing a point on the unit sphere
-#[cfg_attr(feature = "py", pyclass)]
+#[cfg_attr(feature = "py", pyclass(from_py_object))]
 #[derive(Clone, Debug)]
 pub struct SphericalPoint {
     pub xyz: [f64; 3],
@@ -899,7 +899,7 @@ impl GeometricOperations<crate::sphericalpolygon::MultiSphericalPolygon> for Sph
 }
 
 /// xyz vectors representing points on the sphere
-#[cfg_attr(feature = "py", pyclass)]
+#[cfg_attr(feature = "py", pyclass(from_py_object))]
 #[derive(Clone, Debug)]
 pub struct MultiSphericalPoint {
     pub xyzs: Vec<[f64; 3]>,

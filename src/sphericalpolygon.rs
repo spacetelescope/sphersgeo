@@ -194,7 +194,7 @@ fn interior_point_from_polygon_boundary(boundary: &ArcString) -> Result<Spherica
 /// polygon on the sphere, comprising:
 /// 1. a non-intersecting collection of connected arcs (arcstring) that connects back to its first point (closed)
 /// 2. an interior point to specify which region of the sphere the polygon represents; this is required for non-Euclidian closed geometry
-#[cfg_attr(feature = "py", pyclass)]
+#[cfg_attr(feature = "py", pyclass(from_py_object))]
 #[derive(Clone, Debug, PartialEq)]
 pub struct SphericalPolygon {
     pub boundary: ArcString,
@@ -928,7 +928,7 @@ impl GeometricOperations<MultiSphericalPolygon> for SphericalPolygon {
     }
 }
 
-#[cfg_attr(feature = "py", pyclass)]
+#[cfg_attr(feature = "py", pyclass(from_py_object))]
 #[derive(Clone, Debug)]
 pub struct MultiSphericalPolygon {
     pub polygons: Vec<SphericalPolygon>,

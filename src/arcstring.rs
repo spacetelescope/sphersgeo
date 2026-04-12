@@ -193,7 +193,7 @@ fn arc_radians_over_sphere_to_point(a: &[f64; 3], b: &[f64; 3], xyz: &[f64; 3]) 
 }
 
 /// series of great circle arcs along the sphere
-#[cfg_attr(feature = "py", pyclass)]
+#[cfg_attr(feature = "py", pyclass(from_py_object))]
 #[derive(Clone, Debug)]
 pub struct ArcString {
     pub points: MultiSphericalPoint,
@@ -1098,7 +1098,7 @@ impl GeometricOperations<crate::sphericalpolygon::MultiSphericalPolygon> for Arc
     }
 }
 
-#[cfg_attr(feature = "py", pyclass)]
+#[cfg_attr(feature = "py", pyclass(from_py_object))]
 #[derive(Debug, Clone)]
 pub struct MultiArcString {
     pub arcstrings: Vec<ArcString>,

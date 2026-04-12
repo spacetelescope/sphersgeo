@@ -363,15 +363,13 @@ impl<'a> EdgeGraph<'a, crate::sphericalpolygon::SphericalPolygon> {
 
                 for (polygon_index, polygon) in self.geometries.iter().enumerate() {
                     if !sources.contains(&polygon_index) && polygon.covers(&edge_arc) {
-                        if !edges_new_sources.contains_key(&node_index) {
-                            edges_new_sources.insert(node_index, HashMap::new());
-                        }
+                        edges_new_sources.entry(node_index).or_default();
                         if let Some(pending_source_update) = edges_new_sources.get_mut(&node_index)
                         {
                             if !pending_source_update.contains_key(edge_node_index) {
                                 pending_source_update.insert(*edge_node_index, vec![]);
                             }
-                            if let Some(edge) = pending_source_update.get_mut(&edge_node_index) {
+                            if let Some(edge) = pending_source_update.get_mut(edge_node_index) {
                                 edge.push(polygon_index);
                             }
                         }
