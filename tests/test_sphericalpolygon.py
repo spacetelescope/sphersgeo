@@ -27,23 +27,23 @@ TEST_POINTS = [
 
 
 def test_init():
-    lonlats_a = [
+    lonlats = [
         (0.0, 90.0),
         (0.0, -90.0),
         (45.0, -45.0),
         (45.0, 45.0),
     ]
 
-    lonlats_b = [
+    xyzs = [
         (0.2, 0.5, 0.7),
         (0.0, 0.0, 0.0),
         (1.0, 1.2, 0.3),
         (4.0, -1.0, 0.0),
     ]
 
-    single_from_array = SphericalPolygon(np.array(lonlats_a))
-    single_from_tuple = SphericalPolygon([tuple(vector) for vector in lonlats_a])
-    single_from_list = SphericalPolygon(lonlats_a)
+    single_from_array = SphericalPolygon(np.array(lonlats))
+    single_from_tuple = SphericalPolygon([tuple(vector) for vector in lonlats])
+    single_from_list = SphericalPolygon(lonlats)
 
     assert single_from_tuple == single_from_list
     assert single_from_tuple == single_from_array
@@ -51,16 +51,16 @@ def test_init():
 
     assert SphericalPolygon(single_from_array) == single_from_array
 
-    assert SphericalPolygon((lonlats_a, (45.0, 0.0))) == single_from_list
-    assert SphericalPolygon((lonlats_a, (0.0, 0.0))) != single_from_list
+    assert SphericalPolygon((lonlats, (45.0, 0.0))) == single_from_list
+    assert SphericalPolygon((lonlats, (0.0, 0.0))) != single_from_list
 
     multi_from_list_of_arrays = MultiSphericalPolygon(
-        [np.array(vectors) for vectors in (lonlats_a, lonlats_b)]
+        [np.array(vectors) for vectors in (lonlats, xyzs)]
     )
     multi_from_lists_of_tuples = MultiSphericalPolygon(
-        [[tuple(vector) for vector in vectors] for vectors in (lonlats_a, lonlats_b)]
+        [[tuple(vector) for vector in vectors] for vectors in (lonlats, xyzs)]
     )
-    multi_from_nested_lists = MultiSphericalPolygon([lonlats_a, lonlats_b])
+    multi_from_nested_lists = MultiSphericalPolygon([lonlats, xyzs])
 
     assert multi_from_lists_of_tuples == multi_from_nested_lists
     assert multi_from_lists_of_tuples == multi_from_list_of_arrays
