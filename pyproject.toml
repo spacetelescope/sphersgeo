@@ -1,15 +1,17 @@
 [project]
 name = "sphersgeo"
-readme = "README.md"
 requires-python = ">=3.11"
 classifiers = [
   "Programming Language :: Rust",
 ]
 dependencies = ["numpy"]
-dynamic = ["version"]
-
-[project.urls]
-source = "https://github.com/spacetelescope/sphersgeo"
+dynamic = [
+  "description",
+  "license",
+  "readme",
+  "urls",
+  "version",
+]
 
 [dependency-groups]
 test = ["gwcs", "pytest"]
