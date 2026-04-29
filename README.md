@@ -28,7 +28,7 @@ pip install sphersgeo
 Euclidean geometry packages classify geometries into points, linestrings, and polygons (along with multi-variations: multipoints, multilinestrings, and multipolygons).
 Spherical geometry analogues are spherical points, arcstrings, and spherical polygons.
 
-Full class definitions can be found in `sphersgeo.pyi`.
+Full class definitions can be found in `src/sphersgeo.pyi`.
 
 #### Points on a sphere
 
