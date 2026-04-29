@@ -1,0 +1,76 @@
+name: tests
+
+on:
+  pull_request:
+    types:
+      - opened
+      - synchronize
+      - reopened
+      - ready_for_review
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions: {}
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  versions:
+    runs-on: ubuntu-latest
+    steps:
+      - name: retrieve source code
+        uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+          path: ./sphersgeo/
+      - name: retrieve tool script
+        uses: actions/checkout@v6
+        with:
+          repository: zacharyburnett/stsci-package-template
+          ref: modernize
+          persist-credentials: false
+          path: ./stsci_package_template/
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3"
+      - name: derive supported versions of Python from source code
+        id: supported_pythons
+        run: echo versions=$(pipx run ./stsci_package_template/tools/supported_pythons.py --package-source=./sphersgeo/) >> $GITHUB_OUTPUT
+    outputs:
+      supported_pythons: ${{ steps.supported_pythons.outputs.versions }}
+  test:
+    needs:
+      - versions
+    strategy:
+      fail-fast: false
+      matrix:
+        runs-on: ["ubuntu-latest"]
+        python-version: ${{ fromJSON(needs.versions.outputs.supported_pythons) }}
+        coverage: [false]
+        include:
+          - runs-on: "ubuntu-latest"
+            python-version: "3"
+            coverage: true
+          - runs-on: "macos-latest"
+            python-version: "3"
+    name: run tests (Python ${{ matrix.python-version }}, ${{ matrix.runs-on }})
+    runs-on: ${{ matrix.runs-on }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v6
+        with:
+          python-version: ${{ matrix.python-version }}
+      - run: pip install ".[test]" ${{ matrix.coverage && 'coverage pytest-cov' || '' }}
+      - run: pytest ${{ matrix.coverage && '--cov' || '' }} 
+      - if: matrix.coverage
+        name: report coverage to summary
+        run: |
+          coverage combine
+          echo '## Coverage Report' >> $GITHUB_STEP_SUMMARY
+          coverage report -i -m --format=markdown | tee -a $GITHUB_STEP_SUMMARY
