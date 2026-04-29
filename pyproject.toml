@@ -12,7 +12,7 @@ dynamic = ["version"]
 source = "https://github.com/spacetelescope/sphersgeo"
 
 [dependency-groups]
-test = ["pytest", "gwcs"]
+test = ["gwcs", "pytest"]
 
 [build-system]
 requires = ["maturin>=1.9,<2.0"]

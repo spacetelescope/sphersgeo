@@ -496,7 +496,7 @@ impl ArcString {
         }
     }
 
-    // remove unecessary vertices
+    // remove unnecessary vertices
     pub fn simplify(&mut self) {
         loop {
             if self.points.xyzs.len() <= 2 {

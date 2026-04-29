@@ -28,7 +28,7 @@ pip install sphersgeo
 Euclidean geometry packages classify geometries into points, linestrings, and polygons (along with multi-variations: multipoints, multilinestrings, and multipolygons).
 Spherical geometry analogues are spherical points, arcstrings, and spherical polygons.
 
-Full class definitions can be found in ``sphersgeo.pyi``.
+Full class definitions can be found in `sphersgeo.pyi`.
 
 #### Points on a sphere
 
@@ -124,13 +124,14 @@ abc_de = sphersgeo.MultiArcString([abc, de])
 #### Polygons on a sphere
 
 Spherical polygons are comprised of
+
 1. closed arcstring that represents the outer boundary, and
 2. a sample point that defines which side of the closed spherical region is "inside" the boundary.
 
 If the "inside point" is not given, the **smaller** of the two regions split by the boundary will be assigned to be the "inside".
 
 > [!NOTE]
-> Polygons in ``sphersgeo`` do NOT have holes.
+> Polygons in `sphersgeo` do NOT have holes.
 
 ```python
 import sphersgeo

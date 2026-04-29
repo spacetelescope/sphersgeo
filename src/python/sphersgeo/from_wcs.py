@@ -61,12 +61,8 @@ def polygon_from_wcs(
     origin_indices = np.zeros(vertices_per_side) - 0.5
     x_end_indices = array_shape[0] - origin_indices
     y_end_indices = array_shape[1] - origin_indices
-    vertices_x = np.linspace(
-        0, array_shape[0], num=vertices_per_side, endpoint=False
-    )
-    vertices_y = np.linspace(
-        0, array_shape[1], num=vertices_per_side, endpoint=False
-    )
+    vertices_x = np.linspace(0, array_shape[0], num=vertices_per_side, endpoint=False)
+    vertices_y = np.linspace(0, array_shape[1], num=vertices_per_side, endpoint=False)
     vertex_indices = np.concatenate(
         [
             # north edge
@@ -87,7 +83,9 @@ def polygon_from_wcs(
 
     # query the WCS for pixel indices at the edges
     vertex_skycoords = wcs.pixel_to_world(*vertex_indices.T)
-    lonlats = np.stack([vertex_skycoords.ra.degree, vertex_skycoords.dec.degree], axis=1)
+    lonlats = np.stack(
+        [vertex_skycoords.ra.degree, vertex_skycoords.dec.degree], axis=1
+    )
     center_skycoord = wcs.pixel_to_world(
         *(origin_indices + (origin_indices + array_shape) / 2)
     )
