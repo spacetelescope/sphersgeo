@@ -12,7 +12,7 @@ name = "sphersgeo"
 kiddo = "5.2.2"
 ndarray = { version = "0.17.1", features = ["rayon"], optional = true }
 numpy = { version = "0.28.0", optional = true }
-pyo3 = { version = "0.28.3", features = ["abi3-py39"], optional = true }
+pyo3 = { version = "0.28.3", features = ["abi3-py310"], optional = true }
 
 [features]
 default = ["py"]
