@@ -1,15 +1,17 @@
 [project]
 name = "sphersgeo"
+readme = "README.md"
 requires-python = ">=3.9"
 classifiers = [
-  "Programming Language :: Python :: Implementation :: CPython",
-  "Programming Language :: Python :: Implementation :: PyPy",
   "Programming Language :: Rust",
 ]
 dependencies = ["numpy"]
 dynamic = ["version"]
 
-[project.optional-dependencies]
+[project.urls]
+source = "https://github.com/spacetelescope/sphersgeo"
+
+[dependency-groups]
 test = ["pytest", "gwcs"]
 
 [build-system]

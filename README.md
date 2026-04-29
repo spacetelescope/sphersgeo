@@ -5,7 +5,11 @@
 
 # sphersgeo
 
-#### object-oriented spherical geometry in Rust (and Python bindings)
+[![build](https://github.com/spacetelescope/sphersgeo/actions/workflows/build.yml/badge.svg)](https://github.com/spacetelescope/sphersgeo/actions/workflows/build.yml)
+[![tests](https://github.com/spacetelescope/sphersgeo/actions/workflows/test.yml/badge.svg)](https://github.com/spacetelescope/sphersgeo/actions/workflows/test.yml)
+[![Powered by STScI](https://img.shields.io/badge/powered%20by-STScI-blue.svg?colorA=707170&colorB=3e8ddd&style=flat)](https://www.stsci.edu)
+
+#### object-oriented spherical geometry
 
 > [!IMPORTANT]
 > `sphersgeo` is still in development and does NOT currently implement all of the functionality provided by other geo packages such as `geo` or Shapely.
@@ -16,7 +20,7 @@
 ### Installation
 
 ```shell
-pip install git+https://github.com/spacetelescope/sphersgeo.git
+pip install sphersgeo
 ```
 
 ### Usage
