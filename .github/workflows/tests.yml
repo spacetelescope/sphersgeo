@@ -67,7 +67,7 @@ jobs:
         with:
           python-version: ${{ matrix.python-version }}
       - run: pip install ".[test]" ${{ matrix.coverage && 'coverage pytest-cov' || '' }}
-      - run: pytest ${{ matrix.coverage && '--cov' || '' }} 
+      - run: pytest ${{ matrix.coverage && '--cov' || '' }}
       - if: matrix.coverage
         name: report coverage to summary
         run: |
