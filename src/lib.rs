@@ -2,6 +2,7 @@
 mod arcstring;
 mod edgegraph;
 mod geometry;
+mod sphericalcap;
 mod sphericalpoint;
 mod sphericalpolygon;
 

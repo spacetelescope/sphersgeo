@@ -719,7 +719,7 @@ class MultiArcString:
 
 class SphericalPolygon:
     """
-    polygon on the sphere, comprising:
+    polygon on the sphere, comprised of:
     1. a non-intersecting collection of connected arcs (arcstring) that connects back to its first point (closed)
     2. an interior point to specify which region of the sphere the polygon represents; this is required for non-Euclidian closed geometry
     """
