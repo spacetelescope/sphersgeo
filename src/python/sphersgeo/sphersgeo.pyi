@@ -722,17 +722,15 @@ class SphericalPolygon:
     polygon on the sphere, comprising:
     1. a non-intersecting collection of connected arcs (arcstring) that connects back to its first point (closed)
     2. an interior point to specify which region of the sphere the polygon represents; this is required for non-Euclidian closed geometry
+
+    Providing an interior point is recommended because a sphere is a finite space and the boundary of a polygon divides it into two regions.
+    If not provided, smaller of the two spaces be inferred as "inside" the polygon.
     """
 
     def __init__(
         self,
         polygon: ArcString | tuple[ArcString, SphericalPoint],
-    ):
-        """
-        Providing an interior point is recommended because a sphere is a finite space and the boundary of a polygon divides it into two regions.
-        If not provided, smaller of the two spaces be inferred as "inside" the polygon.
-        """
-        ...
+    ): ...
 
     @classmethod
     def from_cone(
