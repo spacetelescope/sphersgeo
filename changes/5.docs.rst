@@ -1,1 +1,0 @@
-fix reference to `src/sphersgeo.pyi` in README
