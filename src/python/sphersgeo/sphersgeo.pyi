@@ -6,15 +6,15 @@ from numpy.typing import NDArray
 
 
 class SphericalPoint:
+    """3D Cartesian vector (XYZ) representing a point on the sphere"""
+
     def __init__(
         self,
         point: tuple[float, float, float]
         | NDArray[float64]
         | tuple[float, float]
         | list[float],
-    ):
-        """from the given coordinates, build an xyz vector representing a point on the sphere"""
-        ...
+    ): ...
 
     @property
     def xyz(self) -> Tuple[float, float, float]:
@@ -200,15 +200,15 @@ class SphericalPoint:
 
 
 class MultiSphericalPoint:
+    """collection of points on the sphere"""
+
     def __init__(
         self,
         points: list[tuple[float, float, float]]
         | list[SphericalPoint]
         | tuple[float, float]
         | NDArray[float64],
-    ):
-        """from the given coordinates, build xyz vectors representing points on the sphere"""
-        ...
+    ): ...
 
     @property
     def xyzs(self) -> NDArray[float64]:
@@ -226,7 +226,9 @@ class MultiSphericalPoint:
 
     @property
     def vectors_lengths(self) -> NDArray[float64]:
-        """lengths of the underlying xyz vectors"""
+        """
+        lengths of the underlying xyz vectors
+        """
         ...
 
     @property
@@ -238,7 +240,19 @@ class MultiSphericalPoint:
     @property
     def centroid(self) -> SphericalPoint: ...
     @property
-    def convex_hull(self) -> SphericalPolygon: ...
+    def convex_hull(self) -> SphericalPolygon:
+        """
+        Smallest convex polygon containing these points
+
+        Implements Andrew's monotone chain algorithm.
+
+        References
+        ----------
+        - https://www.researchgate.net/profile/Jayaram-Ma-2/publication/303522254/figure/fig1/AS:365886075621376@1464245446409/Monotone-Chain-Algorithm-and-graphic-illustration.png
+        - https://github.com/google/s2geometry/blob/master/src/s2/s2convex_hull_query.cc#L123
+        """
+        ...
+
     @property
     def area(self) -> float: ...
     @property
@@ -371,6 +385,8 @@ class MultiSphericalPoint:
 
 
 class ArcString:
+    """series of great circle arcs along the sphere"""
+
     def __init__(
         self,
         points: MultiSphericalPoint,
@@ -382,12 +398,17 @@ class ArcString:
 
     @property
     def lengths(self) -> NDArray[float64]:
-        """radians subtended by each arc on the sphere"""
+        """angle subtended on the sphere by each arc"""
         ...
 
     @property
     def midpoints(self) -> MultiSphericalPoint:
         """midpoints of each arc"""
+        ...
+
+    @property
+    def arcs(self) -> list[ArcString]:
+        """each individual arc in this arcstring"""
         ...
 
     @property
@@ -411,11 +432,15 @@ class ArcString:
         ...
 
     def adjoins(self, other: ArcString) -> bool:
-        """if this arcstring's endpoints touch another's"""
+        """whether this arcstring shares endpoints with another, ignoring closed arcstrings"""
         ...
 
     def join(self, other: ArcString) -> ArcString | None:
-        """join this arcstring's endpoint(s) to another"""
+        """join this arcstring to another"""
+        ...
+
+    def simplify(self):
+        """remove redundant vertices that already lie along the boundary"""
         ...
 
     @property
@@ -547,6 +572,8 @@ class ArcString:
 
 
 class MultiArcString:
+    """collection of arcstrings"""
+
     def __init__(
         self,
         arcstrings: list[ArcString],
@@ -691,6 +718,12 @@ class MultiArcString:
 
 
 class SphericalPolygon:
+    """
+    polygon on the sphere, comprising:
+    1. a non-intersecting collection of connected arcs (arcstring) that connects back to its first point (closed)
+    2. an interior point to specify which region of the sphere the polygon represents; this is required for non-Euclidian closed geometry
+    """
+
     def __init__(
         self,
         polygon: ArcString | tuple[ArcString, SphericalPoint],
@@ -709,15 +742,34 @@ class SphericalPolygon:
         steps: int = 16,
     ) -> SphericalPolygon: ...
     @property
+    def convex() -> bool:
+        """whether this polygon is convex, that is, all possible arcs between points inside the polygon can never leave the enclosed space"""
+        ...
+
+    @property
     def antipode(self) -> bool: ...
     @property
     def inverse(self) -> SphericalPolygon: ...
     @property
-    def is_clockwise(self) -> bool: ...
+    def is_clockwise(self) -> bool:
+        """whether the points in this polygon are in clockwise order"""
+        ...
+
+    def simplify(self):
+        """remove redundant vertices that already lie along the boundary"""
+        ...
+
     @property
     def vertices(self) -> MultiSphericalPoint: ...
     @property
-    def area(self) -> float: ...
+    def area(self) -> float:
+        """
+        surface area of this polygon
+
+        deconstructs into triangles using method described at https://www.math.csi.cuny.edu/abhijit/623/spherical-triangle.pdf
+        """
+        ...
+
     @property
     def length(self) -> float: ...
     @property
@@ -815,6 +867,8 @@ class SphericalPolygon:
 
 
 class MultiSphericalPolygon:
+    """collection of polygons on the sphere"""
+
     def __init__(self, polygons: list[SphericalPolygon]): ...
     @property
     def vertices(self) -> MultiSphericalPoint: ...

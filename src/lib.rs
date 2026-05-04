@@ -822,6 +822,11 @@ mod py_sphersgeo {
         }
 
         #[getter]
+        fn get_arcs(&self) -> Vec<ArcString> {
+            self.arcs()
+        }
+
+        #[getter]
         fn get_closed(&self) -> bool {
             self.closed
         }
@@ -849,6 +854,11 @@ mod py_sphersgeo {
         #[pyo3(name = "join")]
         fn py_join(&self, other: PyArcStringInputs) -> PyResult<Option<ArcString>> {
             Ok(self.join(&Self::py_new(other, None)?))
+        }
+
+        #[pyo3(name = "simplify")]
+        fn py_simplify(&mut self) {
+            self.simplify()
         }
 
         #[getter]
@@ -1488,6 +1498,11 @@ mod py_sphersgeo {
         #[getter]
         fn get_is_clockwise(&self) -> bool {
             self.is_clockwise()
+        }
+
+        #[pyo3(name = "simplify")]
+        fn py_simplify(&mut self) {
+            self.simplify()
         }
 
         #[getter]

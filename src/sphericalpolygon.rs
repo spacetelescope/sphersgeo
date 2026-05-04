@@ -243,15 +243,9 @@ impl SphericalPolygon {
         }
     }
 
-    /// Create a new `SphericalPolygon` from a cone (otherwise known
-    /// as a "small circle") defined using (*lon*, *lat*, *radius*).
-    ///
-    /// The cone is not represented as an ideal circle on the sphere,
-    /// but as a series of great circle arcs.  The resolution of this
-    /// conversion can be controlled using the *steps* parameter.
+    /// Create a new roughly-circular polygon from a center point and a radius.
     pub fn from_cone(center: &SphericalPoint, radius: &f64, steps: usize) -> Self {
-        // Get an arbitrary perpendicular vector.  This be be obtained
-        // by crossing the center point with any unit vector that is not itself.
+        // Get an arbitrary perpendicular vector by crossing the center point with any unit vector that is not itself.
         let min_index = center
             .xyz
             .iter()
@@ -289,7 +283,7 @@ impl SphericalPolygon {
         .unwrap()
     }
 
-    /// whether all interior angles are clockwise
+    /// whether this polygon is convex, that is, all possible arcs between points inside the polygon can never leave the enclosed space
     pub fn is_convex(&self) -> bool {
         polygon_boundary_is_convex(&self.boundary.points.xyzs)
     }
@@ -299,6 +293,7 @@ impl SphericalPolygon {
         orientation(&self.boundary.points.xyzs).iter().sum::<f64>() > 0.0
     }
 
+    /// remove redundant vertices that already lie along the boundary
     pub fn simplify(&mut self) {
         self.boundary.simplify();
     }
@@ -333,8 +328,9 @@ impl Geometry for SphericalPolygon {
         self.boundary.convex_hull()
     }
 
-    /// surface area of a spherical polygon via deconstructing into triangles
-    /// https://www.math.csi.cuny.edu/abhijit/623/spherical-triangle.pdf
+    /// surface area of this polygon
+    ///
+    /// deconstructs into triangles using method described at https://www.math.csi.cuny.edu/abhijit/623/spherical-triangle.pdf
     fn area(&self) -> f64 {
         // calculate the interior angles of the polygon comprised of the given points
         let angles_radians = (0..self.boundary.points.len())
@@ -929,6 +925,7 @@ impl GeometricOperations<MultiSphericalPolygon> for SphericalPolygon {
     }
 }
 
+/// collection of polygons on the sphere
 #[cfg_attr(feature = "py", pyclass(from_py_object))]
 #[derive(Clone, Debug)]
 pub struct MultiSphericalPolygon {
