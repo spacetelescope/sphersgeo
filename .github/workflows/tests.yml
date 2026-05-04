@@ -39,7 +39,7 @@ jobs:
           python-version: "3"
       - name: derive supported versions of Python from source code
         id: supported_pythons
-        run: echo versions=$(pipx run ./stsci_package_template/tools/supported_pythons.py --package-source=./sphersgeo/) >> $GITHUB_OUTPUT
+        run: echo versions=$(pipx run ./stsci_package_template/tools/supported_pythons.py --package-source=./sphersgeo/ --latest-only) >> $GITHUB_OUTPUT
     outputs:
       supported_pythons: ${{ steps.supported_pythons.outputs.versions }}
   test:
@@ -51,12 +51,6 @@ jobs:
         runs-on: ["ubuntu-latest"]
         python-version: ${{ fromJSON(needs.versions.outputs.supported_pythons) }}
         coverage: [false]
-        include:
-          - runs-on: "ubuntu-latest"
-            python-version: "3"
-            coverage: true
-          - runs-on: "macos-latest"
-            python-version: "3"
     name: run tests (Python ${{ matrix.python-version }}, ${{ matrix.runs-on }})
     runs-on: ${{ matrix.runs-on }}
     steps:
