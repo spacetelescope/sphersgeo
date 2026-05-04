@@ -66,8 +66,8 @@ jobs:
       - uses: actions/setup-python@v6
         with:
           python-version: ${{ matrix.python-version }}
-      - run: pip install ".[test]" ${{ matrix.coverage && 'coverage pytest-cov' || '' }}
-      - run: pytest ${{ matrix.coverage && '--cov' || '' }}
+      - run: pip install . --group=test ${{ matrix.coverage && 'coverage pytest-cov' || '' }} pytest-xdist
+      - run: pytest ${{ matrix.coverage && '--cov' || '' }} -n=auto
       - if: matrix.coverage
         name: report coverage to summary
         run: |
