@@ -212,7 +212,8 @@ impl Display for SphericalPolygon {
 }
 
 impl SphericalPolygon {
-    /// interior point is required because a sphere is a finite space
+    /// Providing an interior point is recommended because a sphere is a finite space and the boundary of a polygon divides it into two regions.
+    /// If not provided, smaller of the two spaces be inferred as "inside" the polygon.
     pub fn try_new(
         boundary: ArcString,
         interior_point: Option<SphericalPoint>,

@@ -61,7 +61,6 @@ mod py_sphersgeo {
     #[pymethods]
     impl SphericalPoint {
         #[new]
-        /// from the given coordinates, build an xyz vector representing a point on the sphere
         fn py_new(point: PySphericalPointInputs) -> PyResult<Self> {
             Ok(match point {
                 PySphericalPointInputs::Geometry(geometry) => match geometry {
@@ -84,19 +83,16 @@ mod py_sphersgeo {
         }
 
         #[getter]
-        /// xyz vector as a 1-dimensional array of 3 floats
         fn get_xyz(&self) -> [f64; 3] {
             self.xyz
         }
 
         #[getter]
-        /// convert this point on the sphere to angular coordinates
         fn get_lonlat(&self) -> [f64; 2] {
             self.into()
         }
 
         #[pyo3(name = "two_arc_angle")]
-        /// angle on the sphere between this point and two other points
         fn py_two_arc_angle(
             &self,
             start: PySphericalPointInputs,
@@ -106,7 +102,6 @@ mod py_sphersgeo {
         }
 
         #[pyo3(name = "collinear")]
-        /// whether this point shares a line with two other points
         fn py_collinear(
             &self,
             a: PySphericalPointInputs,
@@ -116,7 +111,6 @@ mod py_sphersgeo {
         }
 
         #[pyo3(name = "is_clockwise_turn")]
-        /// whether the angle formed between this point and two other points is a clockwise turn
         fn py_is_clockwise_turn(
             &self,
             start: PySphericalPointInputs,
@@ -126,7 +120,6 @@ mod py_sphersgeo {
         }
 
         #[pyo3(name = "interpolate_points")]
-        /// create n number of points equally spaced on an arc between this point and another point
         fn py_interpolate_points(
             &self,
             end: PySphericalPointInputs,
@@ -137,25 +130,21 @@ mod py_sphersgeo {
         }
 
         #[getter]
-        /// length of the underlying xyz vector
         fn get_vector_length(&self) -> f64 {
             self.vector_length()
         }
 
         #[pyo3(name = "vector_cross")]
-        /// cross product of this xyz vector with another xyz vector
         fn py_vector_cross(&self, other: PySphericalPointInputs) -> PyResult<Self> {
             Ok(self.vector_cross(&Self::py_new(other)?))
         }
 
         #[pyo3(name = "vector_dot")]
-        /// dot product of this xyz vector with another xyz vector
         fn py_vector_dot(&self, other: PySphericalPointInputs) -> PyResult<f64> {
             Ok(self.vector_dot(&Self::py_new(other)?))
         }
 
         #[pyo3(name = "vector_rotate_around")]
-        /// rotate this xyz vector by theta angle around another xyz vector
         fn py_vector_rotate_around(
             &self,
             other: PySphericalPointInputs,
@@ -165,7 +154,6 @@ mod py_sphersgeo {
         }
 
         #[pyo3(name = "to")]
-        /// arc to another point
         fn py_to(&self, other: PySphericalPointInputs) -> PyResult<ArcString> {
             Ok(self.to(&Self::py_new(other)?))
         }
@@ -446,7 +434,6 @@ mod py_sphersgeo {
     #[pymethods]
     impl MultiSphericalPoint {
         #[new]
-        /// from the given coordinates, build xyz vectors representing points on the sphere
         fn py_new(points: PyMultiSphericalPointInputs) -> PyResult<Self> {
             match points {
                 PyMultiSphericalPointInputs::Geometry(geometry) => match geometry {
@@ -480,26 +467,22 @@ mod py_sphersgeo {
         }
 
         #[getter]
-        /// xyz vectors as a 2-dimensional array of Nx3 floats
         fn get_xyzs<'py>(&self, py: Python<'py>) -> Bound<'py, PyArray2<f64>> {
             Array2::<f64>::from(self).into_pyarray(py)
         }
 
         #[getter]
-        /// convert to angle coordinates along the sphere
         fn get_lonlats<'py>(&self, py: Python<'py>) -> Bound<'py, PyArray2<f64>> {
             let lonlats: Vec<[f64; 2]> = self.into();
             Array2::<f64>::from(lonlats).into_pyarray(py)
         }
 
         #[pyo3(name = "nearest")]
-        /// retrieve the nearest of these points to the given point, along with the normalized 3D Cartesian distance to that point across the unit sphere
         fn py_nearest(&self, other: PySphericalPointInputs) -> PyResult<(SphericalPoint, f64)> {
             Ok(self.nearest(&SphericalPoint::py_new(other)?))
         }
 
         #[getter]
-        /// lengths of the underlying xyz vectors
         fn get_vectors_lengths<'py>(&self, py: Python<'py>) -> Bound<'py, PyArray1<f64>> {
             Array1::<f64>::from(self.vectors_lengths()).into_pyarray(py)
         }
@@ -736,7 +719,6 @@ mod py_sphersgeo {
             self.to_owned().into()
         }
 
-        /// number of points in this collection
         fn __len__(&self) -> usize {
             self.len()
         }
@@ -825,55 +807,46 @@ mod py_sphersgeo {
             }
         }
 
-        /// number of arcs in this arcstring
         fn __len__(&self) -> usize {
             self.points.len() - 1
         }
 
         #[getter]
-        /// radians subtended by each arc on the sphere
         fn get_lengths<'py>(&self, py: Python<'py>) -> Bound<'py, PyArray1<f64>> {
             Array1::<f64>::from(self.lengths()).into_pyarray(py)
         }
 
         #[getter]
-        /// midpoints of each arc
         fn get_midpoints(&self) -> MultiSphericalPoint {
             self.midpoints()
         }
 
         #[getter]
-        /// whether this arcstring is "closed" (the last vertex is connected to the first)
         fn get_closed(&self) -> bool {
             self.closed
         }
 
         #[setter]
-        /// "close" this arcstring (connect the last vertex to the first)
         fn set_closed(&mut self, closed: bool) {
             self.closed = closed
         }
 
         #[getter]
-        /// whether this arcstring crosses itself
         fn get_crosses_self(&self) -> bool {
             self.crosses_self()
         }
 
         #[getter]
-        /// points at which this arcstring crosses itself
         fn get_crossings_with_self(&self) -> Option<MultiSphericalPoint> {
             self.crossings_with_self()
         }
 
         #[pyo3(name = "adjoins")]
-        /// if this arcstring's endpoints touch another's
         fn py_adjoins(&self, other: PyArcStringInputs) -> PyResult<bool> {
             Ok(self.adjoins(&Self::py_new(other, None)?))
         }
 
         #[pyo3(name = "join")]
-        /// join this arcstring's endpoint(s) to another
         fn py_join(&self, other: PyArcStringInputs) -> PyResult<Option<ArcString>> {
             Ok(self.join(&Self::py_new(other, None)?))
         }
@@ -1398,7 +1371,6 @@ mod py_sphersgeo {
             self.arcstrings.to_owned()
         }
 
-        /// number of arcstrings in this collection
         fn __len__(&self) -> usize {
             self.len()
         }
@@ -1462,7 +1434,6 @@ mod py_sphersgeo {
     #[pymethods]
     impl SphericalPolygon {
         #[new]
-        /// an interior point is required because an arcstring divides a sphere into two regions
         fn py_new<'py>(polygon: PySphericalPolygonInputs<'py>) -> PyResult<Self> {
             match polygon {
                 PySphericalPolygonInputs::Geometry(geometry) => match geometry {
@@ -2041,7 +2012,6 @@ mod py_sphersgeo {
             self.polygons.to_owned()
         }
 
-        /// number of polygons in this collection
         fn __len__(&self) -> usize {
             self.len()
         }
