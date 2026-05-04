@@ -305,6 +305,7 @@ impl ArcString {
         Ok(instance)
     }
 
+    /// angle subtended on the sphere by each arc
     pub fn lengths(&self) -> Vec<f64> {
         let mut lengths = (0..self.points.len() - 1)
             .map(|index| {
@@ -382,7 +383,7 @@ impl ArcString {
         arcs
     }
 
-    /// whether this arcstring intersects itself
+    /// whether this arcstring crosses itself
     pub fn crosses_self(&self) -> bool {
         if self.points.len() >= 4 {
             // we can't use the Bentley-Ottmann sweep-line algorithm here :/
@@ -424,7 +425,7 @@ impl ArcString {
         false
     }
 
-    /// points of intersection with itself
+    /// points at which this arcstring crosses itself
     pub fn crossings_with_self(&self) -> Option<MultiSphericalPoint> {
         if self.points.len() >= 4 {
             let mut crossings = vec![];
@@ -496,7 +497,7 @@ impl ArcString {
         }
     }
 
-    // remove unnecessary vertices
+    /// remove redundant vertices that already lie along the arcstring
     pub fn simplify(&mut self) {
         loop {
             if self.points.xyzs.len() <= 2 {
@@ -1098,6 +1099,7 @@ impl GeometricOperations<crate::sphericalpolygon::MultiSphericalPolygon> for Arc
     }
 }
 
+/// collection of arcstrings
 #[cfg_attr(feature = "py", pyclass(from_py_object))]
 #[derive(Debug, Clone)]
 pub struct MultiArcString {

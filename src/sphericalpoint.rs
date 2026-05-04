@@ -326,7 +326,7 @@ pub fn arc_interpolate_points(
         .collect())
 }
 
-/// 3D Cartesian vector representing a point on the unit sphere
+/// 3D Cartesian vector (XYZ) representing a point on the unit sphere
 #[cfg_attr(feature = "py", pyclass(from_py_object))]
 #[derive(Clone, Debug)]
 pub struct SphericalPoint {
@@ -898,7 +898,7 @@ impl GeometricOperations<crate::sphericalpolygon::MultiSphericalPolygon> for Sph
     }
 }
 
-/// xyz vectors representing points on the sphere
+/// collection of points on the sphere
 #[cfg_attr(feature = "py", pyclass(from_py_object))]
 #[derive(Clone, Debug)]
 pub struct MultiSphericalPoint {
@@ -1142,8 +1142,6 @@ impl MultiSphericalPoint {
     }
 
     /// lengths of the underlying xyz vectors
-    ///
-    ///     r = sqrt(x^2 + y^2 + z^2)
     pub fn vectors_lengths(&self) -> Vec<f64> {
         self.xyzs.iter().map(xyz_length).collect()
     }
@@ -1230,18 +1228,14 @@ impl Geometry for MultiSphericalPoint {
         SphericalPoint::from(crate::sphericalpoint::xyzs_mean(&self.xyzs))
     }
 
-    /// This code implements Andrew's monotone chain algorithm, which is a simple
-    /// variant of the Graham scan.  Rather than sorting by x-coordinate, instead
-    /// we sort the points in CCW order around an origin O such that all points
-    /// are guaranteed to be on one side of some geodesic through O.  This
-    /// ensures that as we scan through the points, each new point can only
-    /// belong at the end of the chain (i.e., the chain is monotone in terms of
-    /// the angle around O from the starting point).
+    /// Smallest convex polygon containing these points.
+    ///
+    /// Implements Andrew's monotone chain algorithm.
     ///
     /// References
     /// ----------
-    /// - https://github.com/google/s2geometry/blob/master/src/s2/s2convex_hull_query.cc#L123
     /// - https://www.researchgate.net/profile/Jayaram-Ma-2/publication/303522254/figure/fig1/AS:365886075621376@1464245446409/Monotone-Chain-Algorithm-and-graphic-illustration.png
+    /// - https://github.com/google/s2geometry/blob/master/src/s2/s2convex_hull_query.cc#L123
     fn convex_hull(&self) -> Option<crate::sphericalpolygon::SphericalPolygon> {
         if self.len() < 3 {
             return None;
