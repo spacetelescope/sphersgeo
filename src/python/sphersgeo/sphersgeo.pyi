@@ -26,11 +26,14 @@ class SphericalPoint:
         """convert this point on the sphere to angular coordinates"""
         ...
 
+    @property
+    def antipode(self) -> SphericalPoint: ...
+
     def two_arc_angle(self, a: SphericalPoint, b: SphericalPoint) -> float:
         """angle on the sphere between this point and two other points"""
         ...
 
-    def collinear(self, a: SphericalPoint, b: SphericalPoint) -> bool:
+    def colinear(self, a: SphericalPoint, b: SphericalPoint) -> bool:
         """whether this point shares a line with two other points"""
         ...
 
@@ -745,13 +748,7 @@ class SphericalPolygon:
         ...
 
     @property
-    def antipode(self) -> bool: ...
-    @property
     def inverse(self) -> SphericalPolygon: ...
-    @property
-    def is_clockwise(self) -> bool:
-        """whether the points in this polygon are in clockwise order"""
-        ...
 
     def simplify(self):
         """remove redundant vertices that already lie along the boundary"""

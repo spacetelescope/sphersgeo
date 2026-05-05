@@ -13,18 +13,6 @@ from sphersgeo import (
 
 DATA_DIRECTORY = Path(__file__).parent / "data"
 
-TEST_POINTS = [
-    (0.88955854, 87.53857137),
-    (20.6543883, 87.60498618),
-    (343.19474696, 85.05565535),
-    (8.94286202, 85.50465173),
-    (27.38417684, 85.03404907),
-    (310.53503934, 88.56749324),
-    (0, 60),
-    (0, 90),
-    (12, 66),
-]
-
 
 def test_init():
     lonlats = [
@@ -77,64 +65,17 @@ def test_from_cone(lon, lat):
     assert_almost_equal(polygon.area, 312, decimal=0)
 
 
-@pytest.mark.parametrize(
-    "lonlats,is_clockwise",
-    [
-        (
-            [
-                (18.0, 6.0),
-                (20.0, 5.0),
-                (25.0, 5.0),
-                (25.0, 10.0),
-                (20.0, 10.0),
-                (18.0, 7.0),
-            ],
-            False,
-        ),
-        (
-            [
-                (18.0, 7.0),
-                (20.0, 10.0),
-                (25.0, 10.0),
-                (25.0, 5.0),
-                (20.0, 5.0),
-                (18.0, 6.0),
-            ],
-            True,
-        ),
-    ],
-)
-def test_is_clockwise(lonlats, is_clockwise):
-    poly = SphericalPolygon(lonlats)
-    assert poly.is_clockwise == is_clockwise
-
-
-def test_symmetric_difference():
-    a = SphericalPolygon([(20.0, 5.0), (25.0, 5.0), (25.0, 10.0), (20.0, 10.0)])
-    b = SphericalPolygon([(5.0, 5.0), (25.0, 5.0), (25.0, 15.0), (5.0, 15.0)])
-
-    symmetric_difference = a.symmetric_difference(b)
-
-    # TODO: add more validation
-    assert symmetric_difference is not None
-
-
-def test_overlap():
-    y_eps = 1e-8
-
-    def build_polygon(offset: float):
-        lonlats = np.array([(0.0, 0.0), (0.0, 10.0), (10.0, 10.0), (10.0, 0.0)])
-        lonlats[:, 0] += offset
-        lonlats[:, 1] += y_eps
-        poly = SphericalPolygon(lonlats)
-        return poly
-
-    first_poly = build_polygon(0.0)
-    for offset in range(11):
-        second_poly = build_polygon(offset)
-        overlap_area = first_poly.intersection(second_poly).area / first_poly.area
-        calculated_area = (10.0 - offset) / 10.0
-        assert abs(overlap_area - calculated_area) < 0.0005
+TEST_POINTS = [
+    (0.88955854, 87.53857137),
+    (20.6543883, 87.60498618),
+    (343.19474696, 85.05565535),
+    (8.94286202, 85.50465173),
+    (27.38417684, 85.03404907),
+    (310.53503934, 88.56749324),
+    (0, 60),
+    (0, 90),
+    (12, 66),
+]
 
 
 @pytest.mark.parametrize("test_point", TEST_POINTS)
@@ -174,158 +115,163 @@ def test_from_wcs(test_point, rotation, bounding_box, pixel_shape):
     assert polygon.contains(SphericalPoint(test_point))
 
 
-def test_point_in_poly():
-    point = SphericalPoint((-0.27475449, 0.47588873, -0.83548781))
-    poly = SphericalPolygon(
-        (
-            [
-                (0.04821217, -0.29877206, 0.95310589),
-                (0.04451801, -0.47274119, 0.88007608),
-                (-0.14916503, -0.46369786, 0.87334649),
-                (-0.16101648, -0.29210164, 0.94273555),
-                (0.04821217, -0.29877206, 0.95310589),
-            ],
-            (-0.03416009, -0.36858623, 0.9289657),
-        )
-    )
-    assert not poly.contains(point)
+TEST_POLYGONS = [
+    (
+        [(90.0, 0.0), (0.0, 45.0), (0.0, -45.0)],
+        1.5707963267948968,
+        (35.2643897, 0.0),
+        True,
+    ),
+    (
+        [(90.0, 0.0), (0.0, 22.5), (0.0, -22.5)],
+        0.7853981633974486,
+        (33.155842, 0.0),
+        True,
+    ),
+    (
+        [(90.0, 0.0), (0.0, 11.25), (0.0, -11.25)],
+        0.39269908169872403,
+        (32.648859, 0.0),
+        True,
+    ),
+    (
+        [
+            (20.0, 5.0),
+            (25.0, 5.0),
+            (25.0, 10.0),
+            (20.0, 10.0),
+        ],
+        0.007552428735220221,
+        (22.5, 7.502247),
+        True,
+    ),
+    (
+        [
+            (5.0, 5.0),
+            (25.0, 5.0),
+            (25.0, 15.0),
+            (5.0, 15.0),
+        ],
+        0.06047687635308728,
+        (15.0, 10.122954),
+        True,
+    ),
+    (
+        [
+            (18.0, 6.0),
+            (20.0, 5.0),
+            (25.0, 5.0),
+            (25.0, 10.0),
+            (20.0, 10.0),
+            (18.0, 7.0),
+        ],
+        0.009368119881222133,
+        (21.864038, 7.428367),
+        True,
+    ),
+    (
+        [
+            # clockwise (inverse polygon comprising most of the sphere)
+            (18.0, 7.0),
+            (20.0, 10.0),
+            (25.0, 10.0),
+            (25.0, 5.0),
+            (20.0, 5.0),
+            (18.0, 6.0),
+        ],
+        12.55700249447795,
+        (-158.135962, -7.428367),
+        False,
+    ),
+    (
+        [
+            (18.0, 6.0),
+            (20.0, 5.0),
+            (25.0, 5.0),
+            (25.0, 10.0),
+            (20.0, 10.0),
+            (19.0, 8.0),  # concave vertex
+            (18.0, 7.0),
+        ],
+        0.009215352192799085,
+        (21.911468, 7.413186),
+        False,
+    ),
+    (
+        [
+            # clockwise (inverse polygon comprising most of the sphere)
+            (18.0, 7.0),
+            (19.0, 8.0),  # concave vertex
+            (20.0, 10.0),
+            (25.0, 10.0),
+            (25.0, 5.0),
+            (20.0, 5.0),
+            (18.0, 6.0),
+        ],
+        0.009215352192799085,
+        (-158.088532, -7.413186),
+        False,
+    ),
+    (
+        # nearly degenerate, from https://github.com/spacetelescope/spherical_geometry/issues/192
+        [
+            [21.18490548, 19.72227505],
+            [21.46931577, 7.44460937],
+            [21.73600364, -4.72309959],
+        ],
+        8.082013e-07,
+        (21.468642, 7.481543),
+        True,
+    ),
+]
 
 
-@pytest.mark.parametrize(
-    "lonlats,expected_area",
-    [
-        ([(90, 0), (0, 45), (0, -45)], 450.0),
-        ([(90, 0), (0, 22.5), (0, -22.5)], 675.0),
-        ([(90, 0), (0, 11.25), (0, -11.25)], 22.5),
-        (
-            np.array(
-                [
-                    (20.0, 5.0),
-                    (25.0, 5.0),
-                    (25.0, 10.0),
-                    (20.0, 10.0),
-                ]
-            ),
-            0.43272229160307324,
-        ),
-        (
-            np.array(
-                [
-                    (5.0, 5.0),
-                    (25.0, 5.0),
-                    (25.0, 15.0),
-                    (5.0, 15.0),
-                ]
-            ),
-            3.4650697731667437,
-        ),
-        (
-            np.array(
-                [
-                    (18.0, 6.0),
-                    (20.0, 5.0),
-                    (25.0, 5.0),
-                    (25.0, 10.0),
-                    (20.0, 10.0),
-                    (18.0, 7.0),
-                ]
-            ),
-            54.50117948865602,
-        ),
-        (
-            np.array(
-                [
-                    (18.0, 7.0),
-                    (20.0, 10.0),
-                    (25.0, 10.0),
-                    (25.0, 5.0),
-                    (20.0, 5.0),
-                    (18.0, 6.0),
-                ]
-            ),
-            112.56362825102903,
-        ),
-        (
-            np.array(
-                [
-                    (18.0, 6.0),
-                    (20.0, 5.0),
-                    (25.0, 5.0),
-                    (25.0, 10.0),
-                    (20.0, 10.0),
-                    (19.0, 8.0),  # concave point
-                    (18.0, 7.0),
-                ]
-            ),
-            54.49242654476835,
-        ),
-    ],
-)
-def test_area(lonlats, expected_area):
-    assert_almost_equal(SphericalPolygon(lonlats).area, expected_area)
+@pytest.mark.parametrize("polygon", TEST_POLYGONS)
+def test_area(polygon):
+    assert_almost_equal(SphericalPolygon(polygon[0]).area / 3282.8065632, polygon[1])
 
 
-@pytest.mark.parametrize(
-    "lonlats,expected_centroid_lonlat",
-    [
-        ([(90, 0), (0, 45), (0, -45)], (35.2643897, 0.0)),
-        ([(90, 0), (0, 22.5), (0, -22.5)], (28.4220791, 0.0)),
-        ([(90, 0), (0, 11.25), (0, -11.25)], (27.012286, 0.0)),
-        (
-            np.array(
-                [
-                    (20.0, 5.0),
-                    (25.0, 5.0),
-                    (25.0, 10.0),
-                    (20.0, 10.0),
-                ]
-            ),
-            (22.5, 7.5070637),
-        ),
-        (
-            np.array(
-                [
-                    (5.0, 5.0),
-                    (25.0, 5.0),
-                    (25.0, 15.0),
-                    (5.0, 15.0),
-                ]
-            ),
-            (15.0, 10.1510817),
-        ),
-        (
-            np.array(
-                [
-                    (18.0, 6.0),
-                    (20.0, 5.0),
-                    (25.0, 5.0),
-                    (25.0, 10.0),
-                    (20.0, 10.0),
-                    (18.0, 7.0),
-                ]
-            ),
-            (21.4828013, 8.0147551),
-        ),
-        (
-            np.array(
-                [
-                    (18.0, 6.0),
-                    (20.0, 5.0),
-                    (25.0, 5.0),
-                    (25.0, 10.0),
-                    (20.0, 10.0),
-                    (19.0, 8.0),
-                    (18.0, 7.0),
-                ]
-            ),
-            (21.4828013, 8.0147551),
-        ),
-    ],
-)
-def test_centroid(lonlats, expected_centroid_lonlat):
-    poly = SphericalPolygon(lonlats)
+@pytest.mark.parametrize("polygon", TEST_POLYGONS)
+def test_centroid(polygon):
+    assert_almost_equal(SphericalPolygon(polygon[0]).centroid.lonlat, polygon[2])
 
-    assert_almost_equal(poly.centroid.lonlat, expected_centroid_lonlat)
+
+@pytest.mark.parametrize("polygon", TEST_POLYGONS)
+def test_is_convex(polygon):
+    assert SphericalPolygon(polygon[0]).is_convex == polygon[3]
+
+
+@pytest.mark.parametrize("polygon", TEST_POLYGONS)
+def test_contains_point(polygon):
+    assert SphericalPolygon(polygon[0]).contains(SphericalPoint(polygon[2]))
+
+
+def test_symmetric_difference():
+    a = SphericalPolygon([(20.0, 5.0), (25.0, 5.0), (25.0, 10.0), (20.0, 10.0)])
+    b = SphericalPolygon([(5.0, 5.0), (25.0, 5.0), (25.0, 15.0), (5.0, 15.0)])
+
+    symmetric_difference = a.symmetric_difference(b)
+
+    # TODO: add more validation
+    assert symmetric_difference is not None
+
+
+def test_overlap():
+    y_eps = 1e-8
+
+    def build_polygon(offset: float):
+        lonlats = np.array([(0.0, 0.0), (0.0, 10.0), (10.0, 10.0), (10.0, 0.0)])
+        lonlats[:, 0] += offset
+        lonlats[:, 1] += y_eps
+        poly = SphericalPolygon(lonlats)
+        return poly
+
+    first_poly = build_polygon(0.0)
+    for offset in range(11):
+        second_poly = build_polygon(offset)
+        overlap_area = first_poly.intersection(second_poly).area / first_poly.area
+        calculated_area = (10.0 - offset) / 10.0
+        assert abs(overlap_area - calculated_area) < 0.0005
 
 
 @pytest.mark.parametrize(
@@ -489,19 +435,3 @@ def test_convex_hull(lonlats, expected_area, expected_on_boundary):
 
     for b, r in zip(on_boundary, expected_on_boundary):
         assert b == r, "convex hull incorrect"
-
-
-def test_nearly_degenerate_polygon():
-    # from https://github.com/spacetelescope/spherical_geometry/issues/192
-
-    points = [
-        (0.87772279707663836, 0.34018023965617028, 0.33746125116734926),
-        (0.92276918091486326, 0.36291770695506587, 0.12956765310905877),
-        (0.92574575323628161, 0.36907299235098134, -0.082340310189372115),
-    ]
-
-    single = SphericalPolygon(points)
-    multi = MultiSphericalPolygon([points])
-
-    assert single.area > 0
-    assert multi.area > 0

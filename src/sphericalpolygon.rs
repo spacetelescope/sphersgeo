@@ -1,13 +1,10 @@
 use crate::{
-    arcstring::{xyz_two_arc_crossing, ArcString, MultiArcString},
+    arcstring::{ArcString, MultiArcString, points_are_on_same_side, xyzs_turn_orientations},
     edgegraph::EdgeGraph,
     geometry::{
         GeometricOperations, GeometricRelationships, Geometry, GeometryCollection, MultiGeometry,
     },
-    sphericalpoint::{
-        xyz_add_xyz, xyz_cross, xyz_div_f64, xyz_mul_xyz, xyz_sub_xyz, xyz_sum,
-        xyz_two_arc_angle_radians, xyzs_mean, xyzs_sum, MultiSphericalPoint, SphericalPoint,
-    },
+    sphericalpoint::{MultiSphericalPoint, SphericalPoint, xyz_div_f64, xyzs_sum},
 };
 use std::{
     cmp::Ordering,
@@ -19,7 +16,7 @@ use std::{
 #[cfg(feature = "py")]
 use pyo3::prelude::*;
 
-/// surface area of a triangle on the sphere via Girard's theorum
+/// surface area of a triangle on the sphere via Girard's theorem
 ///
 ///     θ_1 + θ_2 + θ_3 − π
 ///
@@ -28,16 +25,16 @@ use pyo3::prelude::*;
 /// - Klain, D. A. (2019). A probabilistic proof of the spherical excess formula (No. arXiv:1909.04505). arXiv. https://doi.org/10.48550/arXiv.1909.04505
 /// - Miller, Robert D. Computing the area of a spherical polygon. Graphics Gems IV. 1994. Academic Press. doi:10.5555/180895.180907
 ///   `pdf <https://www.google.com/books/edition/Graphics_Gems_IV/CCqzMm_-WucC?hl=en&gbpv=1&dq=Graphics%20Gems%20IV.%20p132&pg=PA133&printsec=frontcover>`_
-pub fn spherical_triangle_area(a: &[f64; 3], b: &[f64; 3], c: &[f64; 3]) -> f64 {
+pub fn area_of_triangle(a: &[f64; 3], b: &[f64; 3], c: &[f64; 3]) -> f64 {
     // xyz_two_arc_angle_radians(c, a, b)
     //     + xyz_two_arc_angle_radians(a, b, c)
     //     + xyz_two_arc_angle_radians(b, c, a)
     //     - std::f64::consts::PI
 
-    // redefine Girard's theorum to avoid domain errors
-    let ab = crate::sphericalpoint::arc_distance_over_sphere_radians(a, b);
-    let bc = crate::sphericalpoint::arc_distance_over_sphere_radians(b, c);
-    let ca = crate::sphericalpoint::arc_distance_over_sphere_radians(c, a);
+    // redefine Girard's theorem to avoid domain errors
+    let ab = crate::sphericalpoint::arc_distance_over_sphere(a, b);
+    let bc = crate::sphericalpoint::arc_distance_over_sphere(b, c);
+    let ca = crate::sphericalpoint::arc_distance_over_sphere(c, a);
     let s = (ab + bc + ca) / 2.0;
 
     4.0 * ((s / 2.0).tan()
@@ -48,146 +45,200 @@ pub fn spherical_triangle_area(a: &[f64; 3], b: &[f64; 3], c: &[f64; 3]) -> f64 
     .atan()
 }
 
-// use the classical even-crossings ray algorithm for point-in-polygon
-pub fn xyz_in_polygon_boundary(
-    xyz: &[f64; 3],
-    polygon_interior_xyz: &[f64; 3],
-    polygon_boundary_xyzs: &[[f64; 3]],
-) -> bool {
-    // record the number of times the ray intersects the exterior boundary arcstring
-    let mut crossings = 0;
-    for index in 0..polygon_boundary_xyzs.len() - 1 {
-        if xyz_two_arc_crossing(
-            (xyz, polygon_interior_xyz),
-            (
-                &polygon_boundary_xyzs[index],
-                &polygon_boundary_xyzs[index + 1],
-            ),
-        )
-        .is_some()
-        {
-            crossings += 1;
-        }
-    }
-
-    // if the number of crossings is even, the point is within the polygon's exterior
-    crossings % 2 == 0
+/// whether this polygon is convex, that is, all possible arcs between points inside the polygon never leave the enclosed space
+fn polygon_boundary_is_convex(boundary: &ArcString) -> bool {
+    // if all orientations are positive (left turns), the polygon is convex
+    boundary.points.xyzs.len() <= 4
+        || xyzs_turn_orientations(&boundary.points.xyzs, true)
+            .iter()
+            .all(|orientation| orientation < &0.0)
 }
 
-fn polygon_boundary_is_convex(xyzs: &[[f64; 3]]) -> bool {
-    // if all orientations are positive, the polygon is convex
-    let orient = orientation(xyzs);
-
-    let positive_dominant = orient.iter().sum::<f64>() > 0.0;
-    orient.iter().all(|orientation| {
-        if positive_dominant {
-            orientation > &0.0
-        } else {
-            orientation < &0.0
-        }
-    })
+fn centroid_of_polygon_boundary(boundary: &ArcString) -> SphericalPoint {
+    // see here https://www.javaspring.net/blog/how-can-you-find-the-centroid-of-a-concave-irregular-polygon-in-javascript/#step-by-step-calculation-in-javascript
+    todo!()
 }
 
-/// The normal vector to the two arcs containing a vertex points; outward
-/// from the sphere if the angle is clockwise, and inward if the angle is
-/// counter-clockwise. The sign of the inner product of the normal vector
-/// with the vertex tells you this. The polygon is ordered clockwise if
-/// the vertices are predominantly clockwise and counter-clockwise if
-/// the reverse.
-fn orientation(xyzs: &[[f64; 3]]) -> Vec<f64> {
-    (0..xyzs.len() - 2)
-        .map(|index| {
-            let a = xyzs[index];
-            let b = xyzs[index + 1];
-            let c = xyzs[index + 2];
-
-            xyz_sum(&xyz_mul_xyz(
-                &b,
-                &xyz_cross(&xyz_sub_xyz(&a, &b), &xyz_sub_xyz(&c, &b)),
-            ))
+/// vertex angles in radians to the left of the given polygon boundary
+fn vertex_angles_inside_polygon_boundary(boundary: &ArcString) -> Vec<f64> {
+    crate::arcstring::xyzs_turn_angles(&boundary.points.xyzs, true)
+        .into_iter()
+        .zip(xyzs_turn_orientations(&boundary.points.xyzs, true).iter())
+        .map(|(angle, orientation)| {
+            if orientation < &0.0 {
+                angle
+            } else {
+                // invert the angle to ensure it's the one on the left
+                (2.0 * std::f64::consts::PI) - angle
+            }
         })
-        .collect()
+        .collect::<Vec<f64>>()
 }
 
-fn centroid_from_polygon_boundary(xyzs: &Vec<[f64; 3]>) -> SphericalPoint {
-    let mut orient = orientation(xyzs);
+/// surface area of the polygon in square degrees
+///
+/// deconstructed into triangles via method described in Girard's Theorem
+///
+///     area = (sum_of_angles - (num_vertices - 2) * pi) * radius^2
+///
+/// References
+/// ----------
+/// - Toddhunter, I. (1886). Article 99. In Spherical Trigonometry: For the Use of Colleges and Schools (pp. 73–74). print.
+fn area_inside_polygon_boundary(boundary: &ArcString) -> f64 {
+    let interior_angles = vertex_angles_inside_polygon_boundary(boundary);
 
-    // make positive orientation the dominant
-    if orient.iter().sum::<f64>() < 0.0 {
-        orient = orient.iter().map(|value| value * -1.0).collect();
-    }
-
-    // if all orientations are positive, the polygon is convex
-    SphericalPoint::from(if orient.iter().all(|orientation| orientation > &0.0) {
-        // the centroid of a convex polygon is the simple mean of its vertices
-        xyzs_mean(xyzs)
-    } else {
-        // get the centroid of all midpoints between the endpoints of each convex triad (acute interior angle)
-        xyzs_mean(
-            &orient
-                .iter()
-                .enumerate()
-                .filter_map(|(index, orientation)| {
-                    if orientation > &0.0 {
-                        // midpoint between endpoint of convex triad (acute interior angle)
-                        Some(xyz_div_f64(
-                            &xyz_add_xyz(
-                                &xyzs[index],
-                                &xyzs[if index >= xyzs.len() - 2 {
-                                    index - xyzs.len()
-                                } else {
-                                    index
-                                } + 2],
-                            ),
-                            &2.0,
-                        ))
-                    } else {
-                        None
-                    }
-                })
-                .collect::<Vec<[f64; 3]>>(),
-        )
-    })
+    // sum the interior angles at each vertex,
+    // subtract pi for each vertex sans 2 (or four right angles),
+    // then convert from steradians to square degrees
+    (interior_angles.iter().sum::<f64>()
+        - ((interior_angles.len() - 2) as f64 * std::f64::consts::PI))
+        * 3282.8065632
 }
 
-/// choose an interior point from the smaller area of the two regions created by the given boundary
-fn interior_point_from_polygon_boundary(boundary: &ArcString) -> Result<SphericalPoint, String> {
-    let boundary_centroid = boundary.centroid();
+/// choose an interior point from the region to the left of the given boundary
+///
+/// assumes the boundary is closed
+fn find_point_inside_polygon_boundary(boundary: &ArcString) -> Result<SphericalPoint, String> {
+    let centroid_of_vertices = boundary.centroid();
 
-    if boundary.points.len() <= 4 {
-        Ok(boundary_centroid)
+    let orientations = xyzs_turn_orientations(&boundary.points.xyzs, true);
+    if boundary.points.xyzs.len() <= 4 || orientations.iter().all(|orientation| orientation < &0.0)
+    {
+        // if the polygon has 4 or less points,
+        // or is only comprised of left turns,
+        // then we can assume the centroid of vertices is inside, ezpz
+        Ok(centroid_of_vertices)
+    } else if orientations.iter().all(|orientation| orientation > &0.0) {
+        // if the polygon is ENTIRELY right turns
+        // (comprising an area of more than half the sphere)
+        // then we know that the antipode of the vertex centroid is inside, so again ezpz gg
+        Ok(centroid_of_vertices.antipode())
+    } else if orientations.iter().all(|orientation| orientation == &0.0) {
+        // if the polygon is a great circle on the sphere, bisecting it in two,
+        // then we can pick any point from the hemisphere on the left
+        todo!()
     } else {
-        // the centroid of the boundary arcstring COULD be outside the polygon if the boundary is not convex
+        // otherwise this is a concave polygon and we have to do some WORK
+        // to find a point guaranteed to be inside
 
-        // build two lists of triangle centroids, segregated by the exterior boundary of the polygon (we don't know which is which yet)
-        let mut side_a = vec![];
-        let mut side_b = vec![];
-        for index in 0..boundary.points.len() - 2 {
-            let triangle_centroid = SphericalPoint {
-                xyz: xyz_div_f64(
-                    &xyzs_sum(&boundary.points.xyzs[index..index + 3].to_vec()),
-                    &3.0,
-                ),
+        // iterate over groups of three vertices on the boundary to form triangles,
+        // the centroids of which can be either inside or outside the polygon.
+        // Keep track which side of the boundary each one is on
+        // (IMPORTANT: remember we don't know yet if the centroid of vertices is inside or outside)
+        let mut centroids_of_triangles = vec![];
+        let mut with_centroid_of_vertices = vec![];
+        for index in 0..boundary.points.len() {
+            let a = boundary.points.xyzs[if index > 0 {
+                index - 1
+            } else {
+                boundary.points.len() - 1
+            }];
+            let b = boundary.points.xyzs[index];
+            let c = boundary.points.xyzs[if index < boundary.points.len() - 1 {
+                index + 1
+            } else {
+                0
+            }];
+
+            let centroid_of_triangle = SphericalPoint {
+                xyz: xyz_div_f64(&xyzs_sum(&vec![a, b, c]), &3.0),
             };
 
-            if crate::arcstring::arc_crosses_arcstring(
-                (&triangle_centroid.xyz, &boundary_centroid.xyz),
+            with_centroid_of_vertices.push(points_are_on_same_side(
+                &centroid_of_triangle.xyz,
+                &centroid_of_vertices.xyz,
                 boundary,
-            ) {
-                side_a.push(triangle_centroid);
-            } else {
-                side_b.push(triangle_centroid);
-            }
+            ));
+            centroids_of_triangles.push(centroid_of_triangle)
         }
 
-        // assume there are always more interior triangles than exterior, due to the nature of the boundary being closed
-        match side_a.len().cmp(&side_b.len()) {
-            Ordering::Less => Ok(side_b[0].to_owned()),
-            Ordering::Equal => Err(String::from(
-                "cannot infer an interior point from two equal hemispheres!",
-            )),
-            Ordering::Greater => Ok(side_a[0].to_owned()),
-        }
+        // If the polygon is majorly left turns (counterclockwise)
+        // then we need a triangle centroid from a left turn.
+        // The opposite (from a right turn) for majorly right turns (clockwise).
+        let is_clockwise = orientations.iter().sum::<f64>() > 0.0;
+
+        // Then we'll simply need to compare the areas of each side.
+        // This is where it gets dodgy;
+        // I figure we can ROUGHLY tell which side has the greater area
+        // by comparing the interior angles of triangles with centroids on either side...
+        //
+        // TODO validate this by testing with a polygon in the shape of a gulper eel
+        let interior_angles = vertex_angles_inside_polygon_boundary(boundary);
+        let sum_angles_with_centroid_of_vertices = interior_angles
+            .iter()
+            .zip(with_centroid_of_vertices.iter())
+            .filter_map(|(angle, on_same_side_as_centroid_of_vertices)| {
+                if on_same_side_as_centroid_of_vertices == &true {
+                    Some(angle)
+                } else {
+                    None
+                }
+            })
+            .sum::<f64>();
+        let sum_angles_without_centroid_of_vertices = interior_angles
+            .iter()
+            .zip(with_centroid_of_vertices.iter())
+            .filter_map(|(angle, on_same_side_as_centroid_of_vertices)| {
+                if on_same_side_as_centroid_of_vertices == &false {
+                    Some(angle)
+                } else {
+                    None
+                }
+            })
+            .sum::<f64>();
+
+        // For a counterclockwise polygon,
+        // we need to pick a triangle centroid from the side with the LESSER area.
+        // The opposite (greater area) for a clockwise polygon.
+        //
+        // here we're making the assumption that
+        // there will always be a triangle whose centroid is inside the polygon
+        let assumption_is_wrong_message = String::from(
+            "apparently no triangles exist along the boundary with a centroid inside the polygon.",
+        );
+        let cannot_infer_error_message = if sum_angles_with_centroid_of_vertices
+            > sum_angles_without_centroid_of_vertices
+        {
+            if !is_clockwise {
+                return Ok(centroid_of_vertices);
+            } else {
+                for (centroid_of_triangle, same_side_as_centroid_of_vertices) in
+                    centroids_of_triangles
+                        .iter()
+                        .zip(with_centroid_of_vertices.iter())
+                {
+                    if same_side_as_centroid_of_vertices == &false {
+                        return Ok(centroid_of_triangle.to_owned());
+                    }
+                }
+
+                assumption_is_wrong_message
+            }
+        } else if sum_angles_without_centroid_of_vertices > sum_angles_with_centroid_of_vertices {
+            if is_clockwise {
+                return Ok(centroid_of_vertices);
+            } else {
+                for (centroid_of_triangle, same_side_as_centroid_of_vertices) in
+                    centroids_of_triangles
+                        .iter()
+                        .zip(with_centroid_of_vertices.iter())
+                {
+                    if same_side_as_centroid_of_vertices == &false {
+                        return Ok(centroid_of_triangle.to_owned());
+                    }
+                }
+
+                assumption_is_wrong_message
+            }
+        } else {
+            format!(
+                "triangles along the boundary of this polygon have equal turn angles ({sum_angles_with_centroid_of_vertices} == {sum_angles_without_centroid_of_vertices})"
+            )
+        };
+
+        Err(format!(
+            "Cannot infer an interior point automatically; {cannot_infer_error_message}. Please provide a point known to be inside this polygon."
+        ))
     }
 }
 
@@ -227,7 +278,7 @@ impl SphericalPolygon {
             let interior_point = if let Some(interior_point) = interior_point {
                 interior_point
             } else {
-                interior_point_from_polygon_boundary(&boundary)?
+                find_point_inside_polygon_boundary(&boundary)?
             };
 
             Ok(Self {
@@ -283,14 +334,9 @@ impl SphericalPolygon {
         .unwrap()
     }
 
-    /// whether this polygon is convex, that is, all possible arcs between points inside the polygon can never leave the enclosed space
+    /// whether this polygon is convex, that is, all possible arcs between points inside the polygon never leave the enclosed space
     pub fn is_convex(&self) -> bool {
-        polygon_boundary_is_convex(&self.boundary.points.xyzs)
-    }
-
-    /// whether the points in this polygon are in clockwise order
-    pub fn is_clockwise(&self) -> bool {
-        orientation(&self.boundary.points.xyzs).iter().sum::<f64>() > 0.0
+        polygon_boundary_is_convex(&self.boundary)
     }
 
     /// remove redundant vertices that already lie along the boundary
@@ -321,55 +367,16 @@ impl Geometry for SphericalPolygon {
     }
 
     fn centroid(&self) -> crate::sphericalpoint::SphericalPoint {
-        centroid_from_polygon_boundary(&self.boundary.points.xyzs)
+        centroid_of_polygon_boundary(&self.boundary)
     }
 
     fn convex_hull(&self) -> Option<SphericalPolygon> {
         self.boundary.convex_hull()
     }
 
-    /// surface area of this polygon
-    ///
-    /// deconstructs into triangles using method described at https://www.math.csi.cuny.edu/abhijit/623/spherical-triangle.pdf
+    /// surface area of the polygon in square degrees
     fn area(&self) -> f64 {
-        // calculate the interior angles of the polygon comprised of the given points
-        let angles_radians = (0..self.boundary.points.len())
-            .map(|index| {
-                let triangle = vec![
-                    self.boundary.points.xyzs[index],
-                    self.boundary.points.xyzs[index + 1
-                        - if index >= self.boundary.points.xyzs.len() - 1 {
-                            self.boundary.points.xyzs.len()
-                        } else {
-                            0
-                        }],
-                    self.boundary.points.xyzs[index + 2
-                        - if index >= self.boundary.points.xyzs.len() - 2 {
-                            self.boundary.points.xyzs.len()
-                        } else {
-                            0
-                        }],
-                ];
-
-                let angle_radians =
-                    xyz_two_arc_angle_radians(&triangle[0], &triangle[1], &triangle[2]);
-
-                if crate::arcstring::arc_crosses_arcstring(
-                    (&xyzs_mean(&triangle), &self.interior_point.xyz),
-                    &self.boundary,
-                ) {
-                    // invert angle if it's on the exterior of the polygon
-                    2.0 * std::f64::consts::PI - angle_radians
-                } else {
-                    angle_radians
-                }
-            })
-            .collect::<Vec<f64>>();
-
-        // sum the interior angles and subtract a flat angle (pi) to get the spherical excess (area)
-        (angles_radians.iter().sum::<f64>()
-            - ((angles_radians.len() - 2) as f64 * std::f64::consts::PI))
-            .to_degrees()
+        area_inside_polygon_boundary(&self.boundary)
     }
 
     fn length(&self) -> f64 {
@@ -379,7 +386,7 @@ impl Geometry for SphericalPolygon {
                 (index + 1..self.boundary.points.len())
                     .filter_map(|other_index| {
                         if index != other_index {
-                            Some(crate::sphericalpoint::arc_distance_over_sphere_radians(
+                            Some(crate::sphericalpoint::arc_distance_over_sphere(
                                 &self.boundary.points.xyzs[index],
                                 &self.boundary.points.xyzs[other_index],
                             ))
@@ -407,20 +414,12 @@ impl GeometricRelationships<SphericalPoint> for SphericalPolygon {
 
     fn contains(&self, other: &SphericalPoint) -> bool {
         !self.boundary.contains(other)
-            && xyz_in_polygon_boundary(
-                &other.xyz,
-                &self.interior_point.xyz,
-                &self.boundary.points.xyzs,
-            )
+            && points_are_on_same_side(&other.xyz, &self.interior_point.xyz, &self.boundary)
     }
 
     fn covers(&self, other: &SphericalPoint) -> bool {
         self.boundary.contains(other)
-            || xyz_in_polygon_boundary(
-                &other.xyz,
-                &self.interior_point.xyz,
-                &self.boundary.points.xyzs,
-            )
+            || points_are_on_same_side(&other.xyz, &self.interior_point.xyz, &self.boundary)
     }
 }
 
@@ -450,14 +449,10 @@ impl GeometricOperations<SphericalPoint> for SphericalPolygon {
 
 impl GeometricRelationships<MultiSphericalPoint> for SphericalPolygon {
     fn intersects(&self, other: &MultiSphericalPoint) -> bool {
-        for xyz in &other.xyzs {
-            if xyz_in_polygon_boundary(xyz, &self.interior_point.xyz, &self.boundary.points.xyzs) {
-                return true;
-            }
-        }
-
-        // if no points returned true
-        false
+        return other
+            .xyzs
+            .iter()
+            .any(|point| points_are_on_same_side(point, &self.interior_point.xyz, &self.boundary));
     }
 
     fn touches(&self, other: &MultiSphericalPoint) -> bool {
@@ -465,39 +460,17 @@ impl GeometricRelationships<MultiSphericalPoint> for SphericalPolygon {
     }
 
     fn contains(&self, other: &MultiSphericalPoint) -> bool {
-        for xyz in &other.xyzs {
-            if crate::arcstring::xyz_in_arcstring(xyz, &self.boundary)
-                || !xyz_in_polygon_boundary(
-                    xyz,
-                    &self.interior_point.xyz,
-                    &self.boundary.points.xyzs,
-                )
-            {
-                // if the point is NOT within the polygon exterior
-                return false;
-            }
-        }
-
-        // if none of the points returned false
-        true
+        other.xyzs.iter().all(|point| {
+            !crate::arcstring::point_is_along_arcstring(point, &self.boundary)
+                && points_are_on_same_side(point, &self.interior_point.xyz, &self.boundary)
+        })
     }
 
     fn covers(&self, other: &MultiSphericalPoint) -> bool {
-        for xyz in &other.xyzs {
-            if !crate::arcstring::xyz_in_arcstring(xyz, &self.boundary)
-                && !xyz_in_polygon_boundary(
-                    xyz,
-                    &self.interior_point.xyz,
-                    &self.boundary.points.xyzs,
-                )
-            {
-                // if the point is NOT within the polygon exterior
-                return false;
-            }
-        }
-
-        // if none of the points returned false
-        true
+        other.xyzs.iter().all(|point| {
+            crate::arcstring::point_is_along_arcstring(point, &self.boundary)
+                || points_are_on_same_side(point, &self.interior_point.xyz, &self.boundary)
+        })
     }
 }
 
@@ -519,13 +492,11 @@ impl GeometricOperations<MultiSphericalPoint> for SphericalPolygon {
             other
                 .xyzs
                 .iter()
-                .filter_map(|xyz| {
-                    if xyz_in_polygon_boundary(
-                        xyz,
-                        &self.interior_point.xyz,
-                        &self.boundary.points.xyzs,
-                    ) {
-                        Some(*xyz)
+                .filter_map(|point| {
+                    if crate::arcstring::point_is_along_arcstring(point, &self.boundary)
+                        || points_are_on_same_side(point, &self.interior_point.xyz, &self.boundary)
+                    {
+                        Some(*point)
                     } else {
                         None
                     }
@@ -612,10 +583,10 @@ impl GeometricOperations<ArcString> for SphericalPolygon {
                     if let Some(crossing_segments) = polygon.intersection(&arcstring) {
                         for crossing_segment in crossing_segments.arcstrings {
                             // an arcstring only splits the polygon if it touches the boundary twice
-                            if crate::arcstring::xyz_in_arcstring(
+                            if crate::arcstring::point_is_along_arcstring(
                                 &crossing_segment.points.xyzs[0],
                                 &self.boundary,
-                            ) && crate::arcstring::xyz_in_arcstring(
+                            ) && crate::arcstring::point_is_along_arcstring(
                                 &crossing_segment.points.xyzs[crossing_segment.points.len() - 1],
                                 &self.boundary,
                             ) {

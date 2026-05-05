@@ -376,37 +376,37 @@ def test_angle_nearly_coplanar():
     assert_allclose(angles[4], 0)
 
 
-def test_collinear():
+def test_colinear():
     # equatorial
     A = SphericalPoint((20.0, 0.0))
     B = SphericalPoint((0.0, 0.0))
     C = SphericalPoint((-20.0, 0.0))
-    assert A.collinear(B, C)
-    assert B.collinear(A, C)
-    assert C.collinear(A, B)
+    assert A.colinear(B, C)
+    assert B.colinear(A, C)
+    assert C.colinear(A, B)
 
     # meridianal
     A = SphericalPoint((0.0, 20.0))
     B = SphericalPoint((0.0, 0.0))
     C = SphericalPoint((0.0, -20.0))
-    assert A.collinear(B, C)
-    assert B.collinear(A, C)
-    assert C.collinear(A, B)
+    assert A.colinear(B, C)
+    assert B.colinear(A, C)
+    assert C.colinear(A, B)
 
-    # non-collinear points
+    # non-colinear points
     A = SphericalPoint((1.0, 0.0, 0.0))
     B = SphericalPoint((0.0, 1.0, 0.0))
     C = SphericalPoint((0.0, 0.0, 1.0))
-    assert not B.collinear(A, C)
+    assert not B.colinear(A, C)
 
     # mirrored
     A = SphericalPoint((1.0, 1.0, 1.0))
     B = SphericalPoint((0.0, 1.0, 0.0))
     C = SphericalPoint((-1.0, -1.0, -1.0))
-    assert B.collinear(A, C)
+    assert B.colinear(A, C)
 
     # points that equal each other
     A = SphericalPoint((1.0, 1.0, 1.0))
     B = SphericalPoint((0.0, 0.0, 0.0))
     C = SphericalPoint((1.0, 1.0, 1.0))
-    assert B.collinear(A, C)
+    assert B.colinear(A, C)
