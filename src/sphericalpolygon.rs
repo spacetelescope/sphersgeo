@@ -25,7 +25,8 @@ use pyo3::prelude::*;
 /// - Klain, D. A. (2019). A probabilistic proof of the spherical excess formula (No. arXiv:1909.04505). arXiv. https://doi.org/10.48550/arXiv.1909.04505
 /// - Miller, Robert D. Computing the area of a spherical polygon. Graphics Gems IV. 1994. Academic Press. doi:10.5555/180895.180907
 ///   `pdf <https://www.google.com/books/edition/Graphics_Gems_IV/CCqzMm_-WucC?hl=en&gbpv=1&dq=Graphics%20Gems%20IV.%20p132&pg=PA133&printsec=frontcover>`_
-pub fn area_of_triangle(a: &[f64; 3], b: &[f64; 3], c: &[f64; 3]) -> f64 {
+/// - Toddhunter, I. (1886). Article 97. In Spherical Trigonometry: For the Use of Colleges and Schools (pp. 72–73). print.
+pub fn spherical_triangle_area(a: &[f64; 3], b: &[f64; 3], c: &[f64; 3]) -> f64 {
     // xyz_two_arc_angle_radians(c, a, b)
     //     + xyz_two_arc_angle_radians(a, b, c)
     //     + xyz_two_arc_angle_radians(b, c, a)
@@ -75,7 +76,7 @@ fn vertex_angles_inside_polygon_boundary(boundary: &ArcString) -> Vec<f64> {
         .collect::<Vec<f64>>()
 }
 
-/// surface area of the polygon in square degrees
+/// surface area of the polygon in steradians
 ///
 /// deconstructed into triangles via method described in Girard's Theorem
 ///
@@ -92,7 +93,6 @@ fn area_inside_polygon_boundary(boundary: &ArcString) -> f64 {
     // then convert from steradians to square degrees
     (interior_angles.iter().sum::<f64>()
         - ((interior_angles.len() - 2) as f64 * std::f64::consts::PI))
-        * 3282.8065632
 }
 
 /// choose an interior point from the region to the left of the given boundary
@@ -310,7 +310,7 @@ impl SphericalPolygon {
         // Rotate by radius around the perpendicular vector to get the "pen"
         let pen = center.vector_rotate_around(&perpendicular, radius);
 
-        // Then rotate the pen around the center point all 360 degrees
+        // Then rotate the pen around the center point
         let mut spokes = crate::sphericalpoint::linspace(0.0, std::f64::consts::PI * 2.0, steps);
 
         // Ensure that the first and last elements are exactly the same.
@@ -322,7 +322,7 @@ impl SphericalPolygon {
         let vertices = spokes
             .iter()
             .rev()
-            .map(|spoke| pen.vector_rotate_around(center, &spoke.to_degrees()).xyz)
+            .map(|spoke| pen.vector_rotate_around(center, &spoke).xyz)
             .collect::<Vec<[f64; 3]>>();
 
         Self::try_new(
@@ -372,10 +372,19 @@ impl Geometry for SphericalPolygon {
         self.boundary.convex_hull()
     }
 
+    /// surface area of this polygon
+    ///
+    /// deconstructs into triangles using method described at https://www.math.csi.cuny.edu/abhijit/623/spherical-triangle.pdf
     fn area(&self) -> f64 {
-        area_inside_polygon_boundary(&self.boundary)
+        let mut solid_angle = area_inside_polygon_boundary(&self.boundary);
+
+        #[cfg(feature = "degrees")]
+        solid_angle *= 3282.8065632;
+
+        solid_angle
     }
 
+    /// longest distance between any two points on the boundary, in radians over the sphere
     fn length(&self) -> f64 {
         (0..self.boundary.points.len())
             .map(|index| {
@@ -396,7 +405,6 @@ impl Geometry for SphericalPolygon {
             })
             .max_by(|a, b| a.partial_cmp(b).unwrap())
             .unwrap()
-            .to_degrees()
     }
 }
 

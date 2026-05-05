@@ -7,6 +7,8 @@ use crate::{
         MultiSphericalPoint, SphericalPoint, arc_distance_over_sphere, point_within_kdtree,
         xyz_add_xyz, xyz_cross, xyz_div_f64, xyz_dot, xyz_eq, xyz_mul_xyz, xyz_neg, xyz_sub_xyz,
         xyz_sum, xyzs_colinear,
+        arc_distance_over_sphere, point_within_kdtree, xyz_add_xyz, xyz_cross, xyz_div_f64,
+         xyz_dot, xyz_eq, xyz_neg, xyzs_collinear, MultiSphericalPoint, SphericalPoint,
     },
 };
 use std::{

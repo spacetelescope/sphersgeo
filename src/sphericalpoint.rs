@@ -100,7 +100,7 @@ pub fn xyzs_mean(xyzs: &Vec<[f64; 3]>) -> [f64; 3] {
     xyz_div_f64(&xyzs_sum(xyzs), &(xyzs.len() as f64))
 }
 
-/// from the given coordinates, build an xyz vector representing a point on the sphere
+/// from the given coordinates in radians, build an xyz vector representing a point on the sphere
 ///
 /// With radius *r*, longitude *l*, and latitude *b*:
 ///
@@ -112,15 +112,15 @@ pub fn xyzs_mean(xyzs: &Vec<[f64; 3]>) -> [f64; 3] {
 /// ----------
 /// - Miller, Robert D. Computing the area of a spherical polygon. Graphics Gems IV. 1994. Academic Press. doi:10.5555/180895.180907
 fn lonlat_to_xyz(lonlat: &[f64; 2]) -> [f64; 3] {
-    let lon = lonlat[0].to_radians();
-    let lat = lonlat[1].to_radians();
+    let lon = lonlat[0];
+    let lat = lonlat[1];
     let (lon_sin, lon_cos) = lon.sin_cos();
     let (lat_sin, lat_cos) = lat.sin_cos();
 
     [lon_cos * lat_cos, lon_sin * lat_cos, lat_sin]
 }
 
-/// convert 3D Cartesian point on the sphere to angular coordinates
+/// convert 3D Cartesian point on the sphere to angular coordinates in radians
 ///
 /// With radius *r*, longitude *l*, and latitude *b*:
 ///
@@ -147,7 +147,7 @@ fn xyz_to_lonlat(xyz: &[f64; 3]) -> [f64; 2] {
 
     let lat = xyz[2].atan2((xyz[0].powi(2) + xyz[1].powi(2)).sqrt());
 
-    [lon.to_degrees(), lat.to_degrees()]
+    [lon, lat]
 }
 
 /// rotate xyz vector by theta radians around another xyz vector
@@ -569,10 +569,15 @@ impl SphericalPoint {
     }
 
     /// given three (X, Y, Z) vector points on the sphere `a`, `b` (this point), and `c`,
-    /// retrieve the angle in radians at `b` formed by arcs `ab` and `bc`
+    /// retrieve the angle at `b` formed by arcs `ab` and `bc`
     /// (the smaller angle irrespective of turn orientation)
     pub fn two_arc_angle(&self, start: &SphericalPoint, end: &SphericalPoint) -> f64 {
-        xyz_two_arc_angle(&start.xyz, &self.xyz, &end.xyz).to_degrees()
+        let mut angle = xyz_two_arc_angle(&start.xyz, &self.xyz, &end.xyz);
+
+        #[cfg(feature = "degrees")]
+        angle = angle.to_degrees();
+
+        angle
     }
 
     /// whether this point lies on an arc between two other points
@@ -689,7 +694,12 @@ impl GeometricOperations<Self> for SphericalPoint {
     }
 
     fn distance(&self, other: &Self) -> f64 {
-        arc_distance_over_sphere(&self.xyz, &other.xyz).to_degrees()
+        let mut angle = arc_distance_over_sphere(&self.xyz, &other.xyz);
+
+        #[cfg(feature = "degrees")]
+        angle.to_degrees();
+
+        angle
     }
 
     fn intersection(&self, other: &Self) -> Option<SphericalPoint> {
