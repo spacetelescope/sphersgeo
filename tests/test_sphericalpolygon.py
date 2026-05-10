@@ -117,6 +117,12 @@ def test_from_wcs(test_point, rotation, bounding_box, pixel_shape):
 
 TEST_POLYGONS = [
     (
+        [(10.0, 0.0), (10.0, 10.0), (0.0, 10.0), (0.0, 0.0)],
+        0.03038215667460244,
+        (5.0, 5.005959),
+        True,
+    ),
+    (
         [(90.0, 0.0), (0.0, 45.0), (0.0, -45.0)],
         1.5707963267948968,
         (35.2643897, 0.0),
@@ -208,7 +214,7 @@ TEST_POLYGONS = [
             (20.0, 5.0),
             (18.0, 6.0),
         ],
-        0.009215352192799085,
+        12.557155262166374,
         (-158.088532, -7.413186),
         False,
     ),
@@ -219,7 +225,7 @@ TEST_POLYGONS = [
             [21.46931577, 7.44460937],
             [21.73600364, -4.72309959],
         ],
-        8.082013e-07,
+        8.082013188722373e-07,
         (21.468642, 7.481543),
         True,
     ),
@@ -256,22 +262,19 @@ def test_symmetric_difference():
     assert symmetric_difference is not None
 
 
-def test_overlap():
-    y_eps = 1e-8
+@pytest.mark.parametrize("polygon", TEST_POLYGONS)
+@pytest.mark.parametrize("x_offset", list(range(11)))
+@pytest.mark.parametrize("y_offset", [1e-8])
+def test_overlap(polygon, x_offset, y_offset):
+    lonlats = np.asanyarray(polygon[0])
 
-    def build_polygon(offset: float):
-        lonlats = np.array([(0.0, 0.0), (0.0, 10.0), (10.0, 10.0), (10.0, 0.0)])
-        lonlats[:, 0] += offset
-        lonlats[:, 1] += y_eps
-        poly = SphericalPolygon(lonlats)
-        return poly
+    original_polygon = SphericalPolygon(lonlats)
+    offsetted_polygon = SphericalPolygon(lonlats + [x_offset, y_offset])
 
-    first_poly = build_polygon(0.0)
-    for offset in range(11):
-        second_poly = build_polygon(offset)
-        overlap_area = first_poly.intersection(second_poly).area / first_poly.area
-        calculated_area = (10.0 - offset) / 10.0
-        assert abs(overlap_area - calculated_area) < 0.0005
+    assert np.allclose(
+        original_polygon.intersection(offsetted_polygon).area / original_polygon.area,
+        (10.0 - x_offset) / 10.0,
+    )
 
 
 @pytest.mark.parametrize(
