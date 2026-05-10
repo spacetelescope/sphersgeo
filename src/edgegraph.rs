@@ -149,7 +149,9 @@ where
             }
 
             if node_index >= &num_nodes {
-                panic!("new node attempts to reference invalid index {node_index} (out of {num_nodes} nodes)");
+                panic!(
+                    "new node attempts to reference invalid index {node_index} (out of {num_nodes} nodes)"
+                );
             }
 
             self.nodes[*node_index]
@@ -234,7 +236,7 @@ where
         let mut removed = vec![];
         for (node_index, node) in self.nodes.to_owned().iter().enumerate() {
             for edge_node_index in node.edges.keys() {
-                if crate::sphericalpoint::arc_distance_over_sphere_radians(
+                if crate::sphericalpoint::arc_distance_over_sphere(
                     &node.xyz,
                     &self.nodes[*edge_node_index].xyz,
                 ) < tolerance
@@ -275,7 +277,7 @@ where
                     let end_node = &nodes[*end_node_index];
                     // check if any other nodes lie on this edge...
                     for (middle_node_index, middle_node) in self.nodes.iter().enumerate() {
-                        if crate::sphericalpoint::xyzs_collinear(
+                        if crate::sphericalpoint::xyzs_colinear(
                             &start_node.xyz,
                             &middle_node.xyz,
                             &end_node.xyz,
@@ -307,7 +309,7 @@ where
                             other_start_node.edges.iter()
                         {
                             let other_end_node = &self.nodes[*other_end_node_index];
-                            if let Some(crossing) = crate::arcstring::xyz_two_arc_crossing(
+                            if let Some(crossing) = crate::arcstring::arcs_crossing(
                                 (&start_node.xyz, &end_node.xyz),
                                 (&other_start_node.xyz, &other_end_node.xyz),
                             ) {
@@ -507,7 +509,7 @@ fn trace_polygons(
             .map(|(edge_node_index, edge_sources)| {
                 (
                     (edge_node_index, edge_sources),
-                    crate::sphericalpoint::xyz_two_arc_angle_radians(
+                    crate::sphericalpoint::xyz_two_arc_angle(
                         &previous_node.xyz,
                         &working_node.xyz,
                         &nodes[*edge_node_index].xyz,
@@ -549,20 +551,22 @@ fn trace_polygons(
         } else {
             // if the traced polygon is closed...
             if polygon_node_indices[0] == polygon_node_indices[polygon_node_indices.len() - 1] {
-                vec![crate::sphericalpolygon::SphericalPolygon::try_new(
-                    crate::arcstring::ArcString::try_from(
-                        crate::sphericalpoint::MultiSphericalPoint::try_from(
-                            polygon_node_indices
-                                .iter()
-                                .map(|node_index| nodes[*node_index].xyz)
-                                .collect::<Vec<[f64; 3]>>(),
+                vec![
+                    crate::sphericalpolygon::SphericalPolygon::try_new(
+                        crate::arcstring::ArcString::try_from(
+                            crate::sphericalpoint::MultiSphericalPoint::try_from(
+                                polygon_node_indices
+                                    .iter()
+                                    .map(|node_index| nodes[*node_index].xyz)
+                                    .collect::<Vec<[f64; 3]>>(),
+                            )
+                            .unwrap(),
                         )
                         .unwrap(),
+                        None,
                     )
                     .unwrap(),
-                    None,
-                )
-                .unwrap()]
+                ]
             } else {
                 vec![]
             }

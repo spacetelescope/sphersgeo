@@ -1,7 +1,7 @@
 [package]
 name = "sphersgeo"
 version = "0.0.4"
-edition = "2021"
+edition = "2024"
 description = "object-oriented spherical geometry"
 readme = "README.md"
 repository = "https://github.com/spacetelescope/sphersgeo"

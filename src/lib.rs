@@ -92,6 +92,11 @@ mod py_sphersgeo {
             self.into()
         }
 
+        #[getter]
+        fn get_antipode(&self) -> SphericalPoint {
+            self.antipode()
+        }
+
         #[pyo3(name = "two_arc_angle")]
         fn py_two_arc_angle(
             &self,
@@ -101,13 +106,13 @@ mod py_sphersgeo {
             Ok(self.two_arc_angle(&Self::py_new(start)?, &Self::py_new(end)?))
         }
 
-        #[pyo3(name = "collinear")]
-        fn py_collinear(
+        #[pyo3(name = "colinear")]
+        fn py_colinear(
             &self,
             a: PySphericalPointInputs,
             b: PySphericalPointInputs,
         ) -> PyResult<bool> {
-            Ok(self.collinear(&Self::py_new(a)?, &Self::py_new(b)?))
+            Ok(self.colinear(&Self::py_new(a)?, &Self::py_new(b)?))
         }
 
         #[pyo3(name = "is_clockwise_turn")]
@@ -1493,11 +1498,6 @@ mod py_sphersgeo {
         #[getter]
         fn get_is_convex(&self) -> bool {
             self.is_convex()
-        }
-
-        #[getter]
-        fn get_is_clockwise(&self) -> bool {
-            self.is_clockwise()
         }
 
         #[pyo3(name = "simplify")]

@@ -4,8 +4,9 @@ use crate::{
         GeometricOperations, GeometricRelationships, Geometry, GeometryCollection, MultiGeometry,
     },
     sphericalpoint::{
-        arc_distance_over_sphere_radians, point_within_kdtree, xyz_add_xyz, xyz_cross, xyz_div_f64,
-        xyz_dot, xyz_eq, xyz_neg, xyzs_collinear, MultiSphericalPoint, SphericalPoint,
+        MultiSphericalPoint, SphericalPoint, arc_distance_over_sphere, point_within_kdtree,
+        xyz_add_xyz, xyz_cross, xyz_div_f64, xyz_dot, xyz_eq, xyz_mul_xyz, xyz_neg, xyz_sub_xyz,
+        xyz_sum, xyzs_colinear,
     },
 };
 use std::{
@@ -18,29 +19,29 @@ use std::{
 use pyo3::prelude::*;
 
 #[cfg(feature = "ndarray")]
-use numpy::ndarray::{concatenate, s, Array2, ArrayView2, Axis};
+use numpy::ndarray::{Array2, ArrayView2, Axis, concatenate, s};
 
-/// Given xyz vectors of the endpoints of two great circle arcs, find the point at which the arcs cross
+/// Given xyz vectors of two great circle arcs, find the point at which the arcs cross
 ///
 /// References
 /// ----------
 /// - Method explained in an `e-mail <http://www.mathworks.com/matlabcentral/newsreader/view_thread/276271>`_ by Roger Stafford.
 /// - https://spherical-geometry.readthedocs.io/en/latest/api/spherical_geometry.great_circle_arc.intersection.html#rb82e4e1c8654-1
 /// - Spinielli, Enrico. 2014. “Understanding Great Circle Arcs Intersection Algorithm.” October 19, 2014. https://enrico.spinielli.net/posts/2014-10-19-understanding-great-circle-arcs.
-pub fn xyz_two_arc_crossing(
-    a: (&[f64; 3], &[f64; 3]),
-    b: (&[f64; 3], &[f64; 3]),
+pub fn arcs_crossing(
+    arc_a: (&[f64; 3], &[f64; 3]),
+    arc_b: (&[f64; 3], &[f64; 3]),
 ) -> Option<[f64; 3]> {
-    let p = xyz_cross(a.0, a.1);
-    let q = xyz_cross(b.0, b.1);
+    let p = xyz_cross(arc_a.0, arc_a.1);
+    let q = xyz_cross(arc_b.0, arc_b.1);
 
     let t = xyz_cross(&p, &q);
 
     let result = [
-        xyz_dot(&xyz_neg(&xyz_cross(a.0, &p)), &t),
-        xyz_dot(&xyz_cross(a.1, &p), &t),
-        xyz_dot(&xyz_neg(&xyz_cross(b.0, &q)), &t),
-        xyz_dot(&xyz_cross(b.1, &q), &t),
+        xyz_dot(&xyz_neg(&xyz_cross(arc_a.0, &p)), &t),
+        xyz_dot(&xyz_cross(arc_a.1, &p), &t),
+        xyz_dot(&xyz_neg(&xyz_cross(arc_b.0, &q)), &t),
+        xyz_dot(&xyz_cross(arc_b.1, &q), &t),
     ];
 
     if result.iter().all(|result| result.is_sign_positive()) {
@@ -52,17 +53,21 @@ pub fn xyz_two_arc_crossing(
     }
 }
 
-pub fn arc_crosses_arcstring(arc: (&[f64; 3], &[f64; 3]), arcstring: &ArcString) -> bool {
-    for other_arc_index in 0..arcstring.points.len() - if arcstring.closed { 0 } else { 1 } {
+pub fn arc_crossings_with_arcstring(
+    arc: (&[f64; 3], &[f64; 3]),
+    arcstring: &ArcString,
+) -> Option<Vec<[f64; 3]>> {
+    let mut crossings = vec![];
+    for other_arc_index in 0..arcstring.points.xyzs.len() - if arcstring.closed { 0 } else { 1 } {
         let other_arc = (
             &arcstring.points.xyzs[other_arc_index],
-            &arcstring.points.xyzs[if other_arc_index < arcstring.points.len() - 1 {
+            &arcstring.points.xyzs[if other_arc_index < arcstring.points.xyzs.len() - 1 {
                 other_arc_index + 1
             } else {
                 0
             }],
         );
-        if let Some(point) = xyz_two_arc_crossing(arc, other_arc) {
+        if let Some(point) = arcs_crossing(arc, other_arc) {
             if xyz_eq(&point, arc.0)
                 || xyz_eq(&point, arc.1)
                 || xyz_eq(&point, other_arc.0)
@@ -70,15 +75,33 @@ pub fn arc_crosses_arcstring(arc: (&[f64; 3], &[f64; 3]), arcstring: &ArcString)
             {
                 continue;
             } else {
-                return true;
+                crossings.push(point);
             }
         }
     }
 
-    false
+    if !crossings.is_empty() {
+        Some(crossings)
+    } else {
+        None
+    }
 }
 
-pub fn xyz_in_arcstring(xyz: &[f64; 3], arcstring: &ArcString) -> bool {
+/// whether two points are on the same side of an arcstring
+///
+/// uses the classical even-crossings algorithm;
+/// if the number of crossings between the arc and the arcstring is even,
+/// then the two points are on the same side of the arcstring
+pub fn points_are_on_same_side(
+    point_a: &[f64; 3],
+    point_b: &[f64; 3],
+    arcstring: &ArcString,
+) -> bool {
+    arc_crossings_with_arcstring((point_a, point_b), arcstring)
+        .map_or(true, |crossings| crossings.len() % 2 == 0)
+}
+
+pub fn point_is_along_arcstring(xyz: &[f64; 3], arcstring: &ArcString) -> bool {
     let xyzs = &arcstring.points.xyzs;
 
     // check if point is one of the vertices of this linestring
@@ -86,7 +109,7 @@ pub fn xyz_in_arcstring(xyz: &[f64; 3], arcstring: &ArcString) -> bool {
         return true;
     }
 
-    // iterate over individual arcs and check if the given point is collinear with their endpoints
+    // iterate over individual arcs and check if the given point is colinear with their endpoints
     for arc_index in 0..xyzs.len() - if arcstring.closed { 0 } else { 1 } {
         let arc_0 = xyzs[arc_index];
         let arc_1 = xyzs[if arc_index < xyzs.len() - 1 {
@@ -95,7 +118,7 @@ pub fn xyz_in_arcstring(xyz: &[f64; 3], arcstring: &ArcString) -> bool {
             0
         }];
 
-        if xyzs_collinear(&arc_0, xyz, &arc_1) {
+        if xyzs_colinear(&arc_0, xyz, &arc_1) {
             return true;
         }
     }
@@ -118,8 +141,8 @@ pub fn split_arc_at_points<'a>(
                 continue;
             }
 
-            if xyzs_collinear(arc_0, point, arc_1) {
-                // replace arc with the arc split in two at the collinear point
+            if xyzs_colinear(arc_0, point, arc_1) {
+                // replace arc with the arc split in two at the colinear point
                 arcs[arc_index] = vec![arcs[arc_index][0], point];
                 arcs.insert(arc_index + 1, vec![point, arcs[arc_index][1]]);
             }
@@ -146,17 +169,17 @@ pub fn split_arcstring_at_points(arcstring: &ArcString, points: Vec<&[f64; 3]>) 
                 let arc_0 = arcstring.points.xyzs[arc_a_index];
                 let arc_1 = arcstring.points.xyzs[arc_b_index];
 
-                if xyzs_collinear(&arc_0, point, &arc_1) {
-                    // replace arc with the arc split in two at the collinear point
+                if xyzs_colinear(&arc_0, point, &arc_1) {
+                    // replace arc with the arc split in two at the colinear point
 
-                    // add the first segment up to the collinear point
+                    // add the first segment up to the colinear point
                     let mut a = vec![];
                     a.extend_from_slice(&arcstring.points.xyzs[..arc_a_index + 1]);
                     a.push(**point);
                     arcstrings[arcstring_index] =
                         ArcString::try_from(MultiSphericalPoint::try_from(a).unwrap()).unwrap();
 
-                    // add the second segment starting from the collinear point
+                    // add the second segment starting from the colinear point
                     let mut b = vec![**point];
                     if arc_b_index > 0 {
                         b.extend_from_slice(&arcstring.points.xyzs[arc_b_index..]);
@@ -185,11 +208,57 @@ pub fn split_arcstring_at_points(arcstring: &ArcString, points: Vec<&[f64; 3]>) 
 /// References
 /// ----------
 /// - https://stackoverflow.com/a/1302268
-fn arc_radians_over_sphere_to_point(a: &[f64; 3], b: &[f64; 3], xyz: &[f64; 3]) -> f64 {
+fn arc_closest_distance_to_point(a: &[f64; 3], b: &[f64; 3], xyz: &[f64; 3]) -> ([f64; 3], f64) {
     let g = xyz_cross(a, b);
     let f = xyz_cross(xyz, &g);
     let t = xyz_cross(&g, &f);
-    arc_distance_over_sphere_radians(&t, xyz)
+    (t, arc_distance_over_sphere(&t, xyz))
+}
+
+/// Inner products of the normal vectors at each vertex of the given arcstring.
+///
+/// Normal vectors point into the sphere if the angle is clockwise and outward if counter-clockwise.
+/// Thus, a negative inner product is a right turn, and positive is left.
+///
+/// If the arcstring is NOT closed the first and last vertices do NOT have turn orientations.
+pub fn xyzs_turn_orientations(xyzs: &[[f64; 3]], closed: bool) -> Vec<f64> {
+    (0..xyzs.len())
+        .map(|index| {
+            // if the arcstring is not closed, the first and last points have no turning angle
+            if !closed && (index == 0 || index == xyzs.len() - 1) {
+                f64::NAN
+            } else {
+                let a = xyzs[if index > 0 { index - 1 } else { xyzs.len() - 1 }];
+                let b = xyzs[index];
+                let c = xyzs[if index < xyzs.len() - 1 { index + 1 } else { 0 }];
+
+                xyz_sum(&xyz_mul_xyz(
+                    &b,
+                    &xyz_cross(&xyz_sub_xyz(&a, &b), &xyz_sub_xyz(&c, &b)),
+                ))
+            }
+        })
+        .collect()
+}
+
+/// Angle in radians at each vertex of the given arcstring (the smaller angle regardless of turn orientation).
+///
+/// If the arcstring is NOT closed the first and last vertices do NOT have angles.
+pub fn xyzs_turn_angles(xyzs: &[[f64; 3]], closed: bool) -> Vec<f64> {
+    (0..xyzs.len())
+        .map(|index| {
+            // if the arcstring is not closed, the first and last points have no turning angle
+            if !closed && (index == 0 || index == xyzs.len() - 1) {
+                f64::NAN
+            } else {
+                let a = xyzs[if index > 0 { index - 1 } else { xyzs.len() - 1 }];
+                let b = xyzs[index];
+                let c = xyzs[if index < xyzs.len() - 1 { index + 1 } else { 0 }];
+
+                crate::sphericalpoint::xyz_two_arc_angle(&a, &b, &c)
+            }
+        })
+        .collect()
 }
 
 /// series of great circle arcs along the sphere
@@ -309,16 +378,13 @@ impl ArcString {
     pub fn lengths(&self) -> Vec<f64> {
         let mut lengths = (0..self.points.len() - 1)
             .map(|index| {
-                arc_distance_over_sphere_radians(
-                    &self.points.xyzs[index],
-                    &self.points.xyzs[index + 1],
-                )
+                arc_distance_over_sphere(&self.points.xyzs[index], &self.points.xyzs[index + 1])
             })
             .collect::<Vec<f64>>();
 
         if self.closed {
             // if the arcstring is closed, also add the length of the final closing arc
-            lengths.push(arc_distance_over_sphere_radians(
+            lengths.push(arc_distance_over_sphere(
                 &self.points.xyzs[self.points.len() - 1],
                 &self.points.xyzs[0],
             ));
@@ -407,7 +473,7 @@ impl ArcString {
                             0
                         }],
                     );
-                    if let Some(point) = xyz_two_arc_crossing(arc, other_arc) {
+                    if let Some(point) = arcs_crossing(arc, other_arc) {
                         if xyz_eq(&point, arc.0)
                             || xyz_eq(&point, arc.1)
                             || xyz_eq(&point, other_arc.0)
@@ -446,7 +512,7 @@ impl ArcString {
                         &self.points.xyzs[other_arc_index + 1],
                     );
 
-                    if let Some(point) = xyz_two_arc_crossing(arc, other_arc) {
+                    if let Some(point) = arcs_crossing(arc, other_arc) {
                         if xyz_eq(&point, arc.0)
                             || xyz_eq(&point, arc.1)
                             || xyz_eq(&point, other_arc.0)
@@ -523,7 +589,7 @@ impl ArcString {
                     self.points.xyzs.len() - index + 1
                 }];
 
-                if xyzs_collinear(&a, &b, &c) {
+                if xyzs_colinear(&a, &b, &c) {
                     unecessary_indices.push(index);
                 }
             }
@@ -552,13 +618,13 @@ impl PartialEq for ArcString {
         };
 
         for xyz in &longer.points.xyzs {
-            if !xyz_in_arcstring(xyz, shorter) {
+            if !point_is_along_arcstring(xyz, shorter) {
                 return false;
             }
         }
 
         for xyz in &shorter.points.xyzs {
-            if !xyz_in_arcstring(xyz, longer) {
+            if !point_is_along_arcstring(xyz, longer) {
                 return false;
             }
         }
@@ -648,7 +714,7 @@ impl GeometricRelationships<SphericalPoint> for ArcString {
     }
 
     fn covers(&self, other: &SphericalPoint) -> bool {
-        xyz_in_arcstring(&other.xyz, self)
+        point_is_along_arcstring(&other.xyz, self)
     }
 }
 
@@ -660,21 +726,25 @@ impl GeometricOperations<SphericalPoint> for ArcString {
     fn distance(&self, other: &SphericalPoint) -> f64 {
         let mut distances = (0..self.points.len() - 1)
             .map(|index| {
-                arc_radians_over_sphere_to_point(
+                arc_closest_distance_to_point(
                     &self.points.xyzs[index],
                     &self.points.xyzs[index + 1],
                     &other.xyz,
                 )
+                .1
             })
             .collect::<Vec<f64>>();
 
         if self.closed {
             // if the arcstring is closed, also add the midpoint of the final closing arc
-            distances.push(arc_radians_over_sphere_to_point(
-                &self.points.xyzs[self.points.len() - 1],
-                &self.points.xyzs[0],
-                &other.xyz,
-            ));
+            distances.push(
+                arc_closest_distance_to_point(
+                    &self.points.xyzs[self.points.len() - 1],
+                    &self.points.xyzs[0],
+                    &other.xyz,
+                )
+                .1,
+            );
         }
 
         match distances.iter().min_by(|a, b| a.partial_cmp(b).unwrap()) {
@@ -725,7 +795,7 @@ impl GeometricRelationships<MultiSphericalPoint> for ArcString {
 
     fn covers(&self, other: &MultiSphericalPoint) -> bool {
         for xyz in &other.xyzs {
-            if xyz_in_arcstring(xyz, self) {
+            if point_is_along_arcstring(xyz, self) {
                 return true;
             }
         }
@@ -742,20 +812,24 @@ impl GeometricOperations<MultiSphericalPoint> for ArcString {
         let mut distances = vec![];
         for xyz in &other.xyzs {
             distances.extend((0..self.points.len() - 1).map(|index| {
-                arc_radians_over_sphere_to_point(
+                arc_closest_distance_to_point(
                     &self.points.xyzs[index],
                     &self.points.xyzs[index + 1],
                     xyz,
                 )
+                .1
             }));
 
             if self.closed {
                 // if the arcstring is closed, also add the midpoint of the final closing arc
-                distances.push(arc_radians_over_sphere_to_point(
-                    &self.points.xyzs[self.points.len() - 1],
-                    &self.points.xyzs[0],
-                    xyz,
-                ));
+                distances.push(
+                    arc_closest_distance_to_point(
+                        &self.points.xyzs[self.points.len() - 1],
+                        &self.points.xyzs[0],
+                        xyz,
+                    )
+                    .1,
+                );
             }
         }
 
@@ -817,10 +891,10 @@ impl GeometricRelationships<Self> for ArcString {
         }
 
         // we can't use the Bentley-Ottmann sweep-line algorithm here :/
-        // because a sphere is an enclosed infinite space so there's no good way to sort by longitude
+        // because a sphere is an enclosed connected space so there's no good way to sort by longitude
         // so I guess the best we can do instead is use brute-force
         for arc_index in 0..self.points.len() - if self.closed { 0 } else { 1 } {
-            if arc_crosses_arcstring(
+            if arc_crossings_with_arcstring(
                 (
                     &self.points.xyzs[arc_index],
                     &self.points.xyzs[if arc_index < self.points.len() - 1 {
@@ -830,7 +904,9 @@ impl GeometricRelationships<Self> for ArcString {
                     }],
                 ),
                 other,
-            ) {
+            )
+            .is_some()
+            {
                 return true;
             }
         }
@@ -842,7 +918,7 @@ impl GeometricRelationships<Self> for ArcString {
         self.points
             .xyzs
             .iter()
-            .all(|xyz| xyz_in_arcstring(xyz, other))
+            .all(|xyz| point_is_along_arcstring(xyz, other))
     }
 
     fn contains(&self, other: &Self) -> bool {
@@ -868,7 +944,9 @@ impl GeometricRelationships<Self> for ArcString {
                 );
 
                 // TODO: handle case where an arcstring has both endpoints on the other arcstring, but cuts a corner...
-                if xyz_in_arcstring(&arc.0, other) && xyz_in_arcstring(&arc.1, other) {
+                if point_is_along_arcstring(&arc.0, other)
+                    && point_is_along_arcstring(&arc.1, other)
+                {
                     return true;
                 }
             }
@@ -917,7 +995,7 @@ impl GeometricOperations<ArcString> for ArcString {
                     }],
                 );
 
-                if let Some(point) = xyz_two_arc_crossing(arc, other_arc) {
+                if let Some(point) = arcs_crossing(arc, other_arc) {
                     intersections.push(point);
                 }
             }

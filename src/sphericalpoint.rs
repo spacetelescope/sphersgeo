@@ -10,7 +10,7 @@ use std::{
 use pyo3::prelude::*;
 
 #[cfg(feature = "ndarray")]
-use ndarray::{array, Array1, Array2, ArrayView1, Axis};
+use ndarray::{Array1, Array2, ArrayView1, Axis, array};
 
 pub fn linspace(x0: f64, xend: f64, n: usize) -> Vec<f64> {
     let dx = (xend - x0) / ((n - 1) as f64);
@@ -150,8 +150,8 @@ fn xyz_to_lonlat(xyz: &[f64; 3]) -> [f64; 2] {
     [lon.to_degrees(), lat.to_degrees()]
 }
 
-/// rotate xyz vector by theta angle around another xyz vector
-fn xyz_rotate_around_radians(a: &[f64; 3], b: &[f64; 3], theta: &f64) -> [f64; 3] {
+/// rotate xyz vector by theta angle (in radians) around another xyz vector
+fn xyz_rotate_around(a: &[f64; 3], b: &[f64; 3], theta: &f64) -> [f64; 3] {
     let theta_sin = theta.sin();
     let theta_cos = theta.cos();
 
@@ -192,7 +192,7 @@ fn haversine_distance_over_sphere_radians(a: &[f64; 2], b: &[f64; 2]) -> f64 {
 /// References
 /// ----------
 /// - https://www.mathforengineers.com/math-calculators/angle-between-two-vectors-in-spherical-coordinates.html
-pub fn arc_distance_over_sphere_radians(a: &[f64; 3], b: &[f64; 3]) -> f64 {
+pub fn arc_distance_over_sphere(a: &[f64; 3], b: &[f64; 3]) -> f64 {
     if xyz_eq(a, b) {
         0.0
     } else {
@@ -210,14 +210,16 @@ pub fn arc_distance_over_sphere_radians(a: &[f64; 3], b: &[f64; 3]) -> f64 {
     }
 }
 
-/// given three XYZ vector points on the sphere (`a`, `b`, and `c`), retrieve the angle at `b` formed by arcs `ab` and `bc`
+/// given three XYZ vector points on the sphere (`a`, `b`, and `c`),
+/// retrieve the angle in radians at `b` formed by arcs `ab` and `bc`
+/// (the smaller angle irrespective of turn orientation)
 ///
 ///     cos(ca) = cos(bc) * cos(ab) + sin(bc) * sin(ab) * cos(b)
 ///
 /// References:
 /// - Miller, Robert D. Computing the area of a spherical polygon. Graphics Gems IV. p132. 1994. Academic Press. doi:10.5555/180895.180907
 ///   `pdf <https://www.google.com/books/edition/Graphics_Gems_IV/CCqzMm_-WucC?hl=en&gbpv=1&dq=Graphics%20Gems%20IV.%20p132&pg=PA133&printsec=frontcover>`_
-pub fn xyz_two_arc_angle_radians(a: &[f64; 3], b: &[f64; 3], c: &[f64; 3]) -> f64 {
+pub fn xyz_two_arc_angle(a: &[f64; 3], b: &[f64; 3], c: &[f64; 3]) -> f64 {
     let tolerance = 2e-8;
 
     // let abx = xyz_cross(&a, &b);
@@ -243,9 +245,9 @@ pub fn xyz_two_arc_angle_radians(a: &[f64; 3], b: &[f64; 3], c: &[f64; 3]) -> f6
     //     }
     // }
 
-    let ab = arc_distance_over_sphere_radians(a, b);
-    let bc = arc_distance_over_sphere_radians(b, c);
-    let ca = arc_distance_over_sphere_radians(c, a);
+    let ab = arc_distance_over_sphere(a, b);
+    let bc = arc_distance_over_sphere(b, c);
+    let ca = arc_distance_over_sphere(c, a);
 
     if ab < tolerance || bc < tolerance || ca < tolerance {
         // if any side of the triangle is negligibly small
@@ -275,15 +277,15 @@ fn xyz_two_arc_is_clockwise(a: &[f64; 3], b: &[f64; 3], c: &[f64; 3]) -> bool {
 }
 
 /// whether the three xyz points exist on the same great-circle arc
-pub fn xyzs_collinear(a: &[f64; 3], b: &[f64; 3], c: &[f64; 3]) -> bool {
+pub fn xyzs_colinear(a: &[f64; 3], b: &[f64; 3], c: &[f64; 3]) -> bool {
     if xyz_eq(a, b) || xyz_eq(b, c) {
         true
     } else {
         let tolerance = 2e-8;
 
-        let abc = xyz_two_arc_angle_radians(a, b, c);
-        let cab = xyz_two_arc_angle_radians(c, a, b);
-        let bca = xyz_two_arc_angle_radians(b, c, a);
+        let abc = xyz_two_arc_angle(a, b, c);
+        let cab = xyz_two_arc_angle(c, a, b);
+        let bca = xyz_two_arc_angle(b, c, a);
 
         abc < tolerance
             || cab < tolerance
@@ -305,7 +307,7 @@ pub fn arc_interpolate_points(
     n: usize,
 ) -> Result<Vec<[f64; 3]>, String> {
     let n = if n < 2 { 2 } else { n };
-    let omega = arc_distance_over_sphere_radians(a, b);
+    let omega = arc_distance_over_sphere(a, b);
 
     let mut offsets = linspace(0.0, 1.0, n);
     offsets = if omega == 0.0 {
@@ -557,13 +559,19 @@ impl SphericalPoint {
         Self::from([x, y, z])
     }
 
+    pub fn antipode(&self) -> SphericalPoint {
+        SphericalPoint {
+            xyz: xyz_sub_f64(&self.xyz, &1.0),
+        }
+    }
+
     pub fn two_arc_angle(&self, start: &SphericalPoint, end: &SphericalPoint) -> f64 {
-        xyz_two_arc_angle_radians(&start.xyz, &self.xyz, &end.xyz).to_degrees()
+        xyz_two_arc_angle(&start.xyz, &self.xyz, &end.xyz).to_degrees()
     }
 
     /// whether this point shares a line with two other points
-    pub fn collinear(&self, a: &SphericalPoint, b: &SphericalPoint) -> bool {
-        xyzs_collinear(&a.xyz, &self.xyz, &b.xyz)
+    pub fn colinear(&self, a: &SphericalPoint, b: &SphericalPoint) -> bool {
+        xyzs_colinear(&a.xyz, &self.xyz, &b.xyz)
     }
 
     /// whether the angle formed between this point and two other points is a clockwise turn
@@ -593,7 +601,7 @@ impl SphericalPoint {
 
     /// rotate this xyz vector by theta angle around another xyz vector
     pub fn vector_rotate_around(&self, other: &Self, theta: &f64) -> Self {
-        Self::from(xyz_rotate_around_radians(
+        Self::from(xyz_rotate_around(
             &self.xyz,
             &other.xyz,
             &theta.to_radians(),
@@ -675,7 +683,7 @@ impl GeometricOperations<Self> for SphericalPoint {
     }
 
     fn distance(&self, other: &Self) -> f64 {
-        arc_distance_over_sphere_radians(&self.xyz, &other.xyz).to_degrees()
+        arc_distance_over_sphere(&self.xyz, &other.xyz).to_degrees()
     }
 
     fn intersection(&self, other: &Self) -> Option<SphericalPoint> {
@@ -1495,7 +1503,7 @@ impl GeometricRelationships<crate::arcstring::ArcString> for MultiSphericalPoint
     fn intersects(&self, other: &crate::arcstring::ArcString) -> bool {
         self.xyzs
             .iter()
-            .any(|xyz| crate::arcstring::xyz_in_arcstring(xyz, other))
+            .any(|xyz| crate::arcstring::point_is_along_arcstring(xyz, other))
     }
 
     fn touches(&self, other: &crate::arcstring::ArcString) -> bool {
@@ -1525,7 +1533,7 @@ impl GeometricOperations<crate::arcstring::ArcString, SphericalPoint> for MultiS
             self.xyzs
                 .iter()
                 .filter_map(|xyz| {
-                    if crate::arcstring::xyz_in_arcstring(xyz, other) {
+                    if crate::arcstring::point_is_along_arcstring(xyz, other) {
                         Some(*xyz)
                     } else {
                         None
@@ -1622,10 +1630,10 @@ impl GeometricRelationships<crate::sphericalpolygon::MultiSphericalPolygon>
         // TODO: find a better algorithm than brute-force; perhaps we can keep a kdtree of centroids for multigeometries?
         self.xyzs.iter().all(|xyz| {
             other.polygons.iter().any(|polygon| {
-                crate::sphericalpolygon::xyz_in_polygon_boundary(
+                crate::arcstring::points_are_on_same_side(
                     xyz,
                     &polygon.interior_point.xyz,
-                    &polygon.boundary.points.xyzs,
+                    &polygon.boundary,
                 )
             })
         })
@@ -1657,27 +1665,15 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_xyzs_distance_over_sphere_radians() {
+    fn test_xyzs_distance_over_sphere() {
         let a = [0.0, 0.0, 1.0];
         let b = [0.0, 0.0, -1.0];
         let c = [1.0, 1.0, 0.0];
         let d = [1.0, -1.0, 0.0];
 
-        assert_eq!(
-            arc_distance_over_sphere_radians(&a, &b),
-            xyz_dot(&a, &b).acos()
-        );
-        assert_eq!(
-            arc_distance_over_sphere_radians(&b, &c),
-            xyz_dot(&b, &c).acos()
-        );
-        assert_eq!(
-            arc_distance_over_sphere_radians(&c, &d),
-            xyz_dot(&c, &d).acos()
-        );
-        assert_eq!(
-            arc_distance_over_sphere_radians(&d, &a),
-            xyz_dot(&d, &a).acos()
-        );
+        assert_eq!(arc_distance_over_sphere(&a, &b), xyz_dot(&a, &b).acos());
+        assert_eq!(arc_distance_over_sphere(&b, &c), xyz_dot(&b, &c).acos());
+        assert_eq!(arc_distance_over_sphere(&c, &d), xyz_dot(&c, &d).acos());
+        assert_eq!(arc_distance_over_sphere(&d, &a), xyz_dot(&d, &a).acos());
     }
 }

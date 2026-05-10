@@ -114,7 +114,7 @@ pub trait GeometricOperations<O: Geometry = Self, S: Geometry = Self> {
     ///
     /// NOTE: this function is NOT rigorous;
     /// it will ONLY return the lower order of geometry being compared
-    /// and will NOT handle touching, collinear overlap, or degenerate cases
+    /// and will NOT handle touching, colinear overlap, or degenerate cases
     fn intersection(&self, other: &O) -> Option<impl Geometry>;
 
     /// split this geometry into a multi-geometry, at the crossing with the given geometry
