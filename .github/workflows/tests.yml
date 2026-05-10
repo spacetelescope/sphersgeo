@@ -19,38 +19,13 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  versions:
-    runs-on: ubuntu-latest
-    steps:
-      - name: retrieve source code
-        uses: actions/checkout@v6
-        with:
-          persist-credentials: false
-          path: ./sphersgeo/
-      - name: retrieve tool script
-        uses: actions/checkout@v6
-        with:
-          repository: zacharyburnett/stsci-package-template
-          ref: modernize
-          persist-credentials: false
-          path: ./stsci_package_template/
-      - uses: actions/setup-python@v6
-        with:
-          python-version: "3"
-      - name: derive supported versions of Python from source code
-        id: supported_pythons
-        run: echo versions=$(pipx run ./stsci_package_template/tools/supported_pythons.py --package-source=./sphersgeo/ --latest-only) >> $GITHUB_OUTPUT
-    outputs:
-      supported_pythons: ${{ steps.supported_pythons.outputs.versions }}
   test:
-    needs:
-      - versions
     strategy:
       fail-fast: false
       matrix:
-        runs-on: ["ubuntu-latest"]
-        python-version: ${{ fromJSON(needs.versions.outputs.supported_pythons) }}
-        coverage: [false]
+        runs-on: [ "ubuntu-latest" ]
+        python-version: [ "3.11" ]
+        coverage: [ false ]
     name: run tests (Python ${{ matrix.python-version }}, ${{ matrix.runs-on }})
     runs-on: ${{ matrix.runs-on }}
     steps:
@@ -60,7 +35,8 @@ jobs:
       - uses: actions/setup-python@v6
         with:
           python-version: ${{ matrix.python-version }}
-      - run: pip install . --group=test ${{ matrix.coverage && 'coverage pytest-cov' || '' }} pytest-xdist
+      - run: pip install . --group=test ${{ matrix.coverage && 'coverage pytest-cov' ||
+          '' }} pytest-xdist
       - run: pytest ${{ matrix.coverage && '--cov' || '' }} -n=auto
       - if: matrix.coverage
         name: report coverage to summary
