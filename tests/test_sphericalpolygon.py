@@ -1,11 +1,9 @@
-import math
 from pathlib import Path
 
 import numpy as np
 import pytest
 from numpy.testing import assert_almost_equal
 from sphersgeo import (
-    MultiSphericalPoint,
     MultiSphericalPolygon,
     SphericalPoint,
     SphericalPolygon,
@@ -117,12 +115,6 @@ def test_from_wcs(test_point, rotation, bounding_box, pixel_shape):
 
 TEST_POLYGONS = [
     (
-        [(10.0, 0.0), (10.0, 10.0), (0.0, 10.0), (0.0, 0.0)],
-        0.03038215667460244,
-        (5.0, 5.005959),
-        True,
-    ),
-    (
         [(90.0, 0.0), (0.0, 45.0), (0.0, -45.0)],
         1.5707963267948968,
         (35.2643897, 0.0),
@@ -229,6 +221,23 @@ TEST_POLYGONS = [
         (21.468642, 7.481543),
         True,
     ),
+    (
+        [(10.0, 0.0), (10.0, 10.0), (0.0, 10.0), (0.0, 0.0)],
+        0.03038215667460244,
+        (5.0, 5.005959),
+        True,
+    ),
+    (
+        [
+            (20.0, 5.0),
+            (25.0, 5.0),
+            (25.0, 10.0),
+            (20.0, 10.0),
+        ],
+        0.007552428735220221,
+        (22.5, 7.502247),
+        True,
+    ),
 ]
 
 
@@ -278,163 +287,24 @@ def test_overlap(polygon, x_offset, y_offset):
 
 
 @pytest.mark.parametrize(
-    "lonlats,expected_area,expected_on_boundary",
-    [
-        (
-            np.array(
-                [
-                    (20.0, 5.0),
-                    (25.0, 5.0),
-                    (25.0, 10.0),
-                    (20.0, 10.0),
-                ]
-            ),
-            25,
-            [True, True, True, True],
-        ),
-        (
-            np.array(
-                [
-                    (18.0, 6.0),
-                    (21.0, 6.0),
-                    (20.0, 5.0),
-                    (21.0, 7.0),
-                    (19.0, 8.0),
-                    (25.0, 5.0),
-                    (25.0, 10.0),
-                    (20.0, 10.0),
-                    (18.0, 7.0),
-                ]
-            ),
-            25,
-            [True, False, True, False, True, True, True, True, True],
-        ),
-        (
-            np.array(
-                [
-                    (0.02, 0.06),
-                    (0.10, 0.00),
-                    (0.05, 0.05),
-                    (0.03, 0.01),
-                    (0.04, 0.12),
-                    (0.07, 0.08),
-                    (0.00, 0.03),
-                    (0.06, 0.02),
-                    (0.08, 0.04),
-                    (0.13, 0.03),
-                    (0.08, 0.10),
-                    (0.14, 0.11),
-                    (0.15, 0.01),
-                    (0.12, 0.13),
-                    (0.01, 0.09),
-                    (0.11, 0.07),
-                ]
-            ),
-            np.pi,
-            [
-                False,
-                True,
-                False,
-                True,
-                True,
-                False,
-                True,
-                False,
-                False,
-                False,
-                False,
-                True,
-                True,
-                True,
-                True,
-                False,
-            ],
-        ),
-        (
-            np.array(
-                [
-                    (0.02, 0.06),
-                    (0.10, 0.00),
-                    (0.05, 0.05),
-                    (0.03, 0.01),
-                    (0.04, 0.12),
-                    (0.07, 0.08),
-                    (0.00, 0.03),
-                    (0.06, 0.02),
-                    (0.08, 0.04),
-                    (0.13, 0.03),
-                    (0.08, 0.10),
-                    (0.14, 0.11),
-                    (0.15, 0.01),
-                    (0.12, 0.13),
-                    (0.01, 0.09),
-                    (0.11, 0.07),
-                    (0.02, 0.06),
-                    (0.10, 0.00),
-                    (0.05, 0.05),
-                    (0.03, 0.01),
-                    (0.04, 0.12),
-                    (0.07, 0.08),
-                    (0.00, 0.03),
-                    (0.06, 0.02),
-                    (0.08, 0.04),
-                    (0.13, 0.03),
-                    (0.08, 0.10),
-                    (0.14, 0.11),
-                    (0.15, 0.01),
-                    (0.12, 0.13),
-                    (0.01, 0.09),
-                    (0.11, 0.07),
-                ]
-            ),
-            np.pi,
-            [
-                False,
-                True,
-                False,
-                True,
-                True,
-                False,
-                True,
-                False,
-                False,
-                False,
-                False,
-                True,
-                True,
-                True,
-                True,
-                False,
-            ],
-        ),
-    ],
+    "polygon",
+    TEST_POLYGONS,
 )
-def test_convex_hull(lonlats, expected_area, expected_on_boundary):
-    points = MultiSphericalPoint(lonlats)
+def test_polygon_vertices_convex_hull(polygon):
+    lonlats = polygon[0]
+    is_convex = polygon[3]
+    polygon = SphericalPolygon(lonlats)
 
-    convex_hull = points.convex_hull
+    convex_hull = polygon.boundary.vertices.convex_hull
 
-    assert convex_hull.area == expected_area
+    assert convex_hull.area == polygon.area
 
-    boundary_lonlats = convex_hull.boundary.vertices.lonlats
+    polygon_vertices_shared_with_convex_hull = [
+        convex_hull.boundary.vertices.contains(SphericalPoint(lonlat))
+        for lonlat in lonlats
+    ]
 
-    def lonlat_in_lonlats(
-        lonlat: tuple[float, float], lonlats: list[tuple[float, float]]
-    ):
-        for boundary_lonlat in boundary_lonlats:
-            if (
-                math.sqrt(
-                    (lonlat[0] - boundary_lonlat[0]) ** 2
-                    + (lonlat[1] - boundary_lonlat[1]) ** 2
-                )
-                < 0.005
-            ):
-                return True
-                break
-        else:
-            return False
-
-    on_boundary = [lonlat_in_lonlats(lonlat, boundary_lonlats) for lonlat in lonlats]
-
-    for b, r in zip(on_boundary, expected_on_boundary):
-        assert b == r, "convex hull incorrect"
+    if is_convex:
+        assert all(polygon_vertices_shared_with_convex_hull)
+    else:
+        assert any(polygon_vertices_shared_with_convex_hull)

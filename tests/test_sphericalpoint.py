@@ -1,6 +1,7 @@
 import math
 
 import numpy as np
+import pytest
 from numpy.testing import assert_allclose
 from sphersgeo import MultiSphericalPoint, SphericalPoint
 
@@ -410,3 +411,107 @@ def test_colinear():
     B = SphericalPoint((0.0, 0.0, 0.0))
     C = SphericalPoint((1.0, 1.0, 1.0))
     assert B.colinear(A, C)
+
+
+TEST_MULTIPOINTS = [
+    (
+        [
+            ((20.0, 5.0), True),
+            ((25.0, 5.0), True),
+            ((25.0, 10.0), True),
+            ((20.0, 10.0), True),
+        ],
+        24.79316262017451,
+    ),
+    (
+        [
+            ((18.0, 6.0), True),
+            ((21.0, 6.0), False),
+            ((20.0, 5.0), True),
+            ((21.0, 7.0), False),
+            ((19.0, 8.0), False),
+            ((25.0, 5.0), True),
+            ((25.0, 10.0), True),
+            ((20.0, 10.0), True),
+            ((18.0, 7.0), True),
+        ],
+        30.753725432790755,
+    ),
+    (
+        [
+            ((0.02, 0.06), False),
+            ((0.10, 0.00), True),
+            ((0.05, 0.05), False),
+            ((0.03, 0.01), True),
+            ((0.04, 0.12), True),
+            ((0.07, 0.08), False),
+            ((0.00, 0.03), True),
+            ((0.06, 0.02), False),
+            ((0.08, 0.04), False),
+            ((0.13, 0.03), False),
+            ((0.08, 0.10), False),
+            ((0.14, 0.11), True),
+            ((0.15, 0.01), True),
+            ((0.12, 0.13), True),
+            ((0.01, 0.09), True),
+            ((0.11, 0.07), False),
+        ],
+        0.015556716412923744,
+    ),
+    (
+        [
+            ((0.02, 0.06), False),
+            ((0.10, 0.00), True),
+            ((0.05, 0.05), False),
+            ((0.03, 0.01), True),
+            ((0.04, 0.12), True),
+            ((0.07, 0.08), False),
+            ((0.00, 0.03), True),
+            ((0.06, 0.02), False),
+            ((0.08, 0.04), False),
+            ((0.13, 0.03), False),
+            ((0.08, 0.10), False),
+            ((0.14, 0.11), True),
+            ((0.15, 0.01), True),
+            ((0.12, 0.13), True),
+            ((0.01, 0.09), True),
+            ((0.11, 0.07), False),
+            ((0.02, 0.06), False),
+            ((0.10, 0.00), False),
+            ((0.05, 0.05), False),
+            ((0.03, 0.01), False),
+            ((0.04, 0.12), False),
+            ((0.07, 0.08), False),
+            ((0.00, 0.03), False),
+            ((0.06, 0.02), False),
+            ((0.08, 0.04), False),
+            ((0.13, 0.03), False),
+            ((0.08, 0.10), False),
+            ((0.14, 0.11), False),
+            ((0.15, 0.01), False),
+            ((0.12, 0.13), False),
+            ((0.01, 0.09), False),
+            ((0.11, 0.07), False),
+        ],
+        np.pi,
+    ),
+]
+
+
+@pytest.mark.parametrize(
+    "lonlats,convex_hull_area",
+    TEST_MULTIPOINTS,
+)
+def test_multipoint_convex_hull(lonlats, convex_hull_area):
+    lonlats, on_convex_hull = zip(*lonlats)
+
+    points = MultiSphericalPoint(lonlats)
+
+    convex_hull = points.convex_hull
+
+    assert convex_hull.area == convex_hull_area
+
+    assert [
+        convex_hull.boundary.vertices.contains(SphericalPoint(lonlat))
+        for lonlat in lonlats
+    ] == list(on_convex_hull)
