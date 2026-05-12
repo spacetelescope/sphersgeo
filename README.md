@@ -9,7 +9,7 @@
 [![tests](https://github.com/spacetelescope/sphersgeo/actions/workflows/test.yml/badge.svg)](https://github.com/spacetelescope/sphersgeo/actions/workflows/test.yml)
 [![Powered by STScI](https://img.shields.io/badge/powered%20by-STScI-blue.svg?colorA=707170&colorB=3e8ddd&style=flat)](https://www.stsci.edu)
 
-#### object-oriented spherical geometry
+`sphersgeo` is an object-oriented spherical geometry package written in Rust with Python accessor classes and methods.
 
 > [!IMPORTANT]
 > `sphersgeo` is still in development and does NOT currently implement all of the functionality provided by other geo packages such as `geo` or Shapely.
@@ -17,29 +17,27 @@
 > [!NOTE]
 > Intersections between geometries are NOT rigorous; the `.intersection()` function will ONLY return the lower order of geometry being compared, and does NOT handle degenerate cases / touching geometries.
 
-### Installation
-
 ```shell
 pip install sphersgeo
 ```
 
-### Usage
+## Usage
 
 Euclidean geometry packages classify geometries into points, linestrings, and polygons (along with multi-variations: multipoints, multilinestrings, and multipolygons).
 Spherical geometry analogues are spherical points, arcstrings, and spherical polygons.
 
-| Euclidean       | Spherical             |
-| --------------- | --------------------- |
-| Point           | SphericalPoint        |
-| MultiPoint      | MultiSphericalPoint   |
-| LineString      | ArcString             |
-| MultiLineString | MultiArcString        |
-| Polygon         | SphericalPolygon      |
-| MultiPolygon    | MultiSphericalPolygon |
+| Euclidean       | Spherical                                       |
+| --------------- | ----------------------------------------------- |
+| Point           | [SphericalPoint](#sphericalpoint)               |
+| MultiPoint      | [MultiSphericalPoint](#multisphericalpoint)     |
+| LineString      | [ArcString](#arcstring)                         |
+| MultiLineString | [MultiArcString](#multiarcstring)               |
+| Polygon         | [SphericalPolygon](#sphericalpolygon)           |
+| MultiPolygon    | [MultiSphericalPolygon](#multisphericalpolygon) |
 
 See [`src/python/sphersgeo/sphersgeo.pyi`](src/python/sphersgeo/sphersgeo.pyi) for Python class definitions.
 
-#### SphericalPoint
+### SphericalPoint
 
 Spherical points are represented internally as 3-dimensional Euclidean vectors (X, Y, Z) a unit distance (length of 1.0) from the center of the sphere.
 
@@ -57,7 +55,11 @@ b = SphericalPoint((0.5, 0.8660254037844386, 0.0))
 c = SphericalPoint((0.75, -0.4330127018922193, -0.5))
 d = SphericalPoint((0.0, 0.0, 1.0))
 e = SphericalPoint((0.0, 0.0, -1.0))
+```
 
+### MultiSphericalPoint
+
+```python
 # collate multiple points together by passing lists of angular or Euclidean coordinates
 from sphersgeo import MultiSphericalPoint
 
@@ -84,7 +86,7 @@ ab = MultiSphericalPoint(
 abcde = MultiSphericalPoint([a, b, c, d, e])
 ```
 
-#### ArcString
+### ArcString
 
 A great circle arcs is the shortest geodesic distance over the surface of the sphere between any two points.
 Arcstrings are comprised of an **ordered** collection of spherical points.
@@ -125,7 +127,11 @@ de = ArcString(
         ]
     )
 )
+```
 
+### MultiArcString
+
+```
 # collate arcstrings into a MultiArcString by passing the same inputs you would to the individual objects
 from sphersgeo import MultiArcString
 
@@ -143,7 +149,7 @@ abc_de = MultiArcString(
 abc_de = MultiArcString([abc, de])
 ```
 
-#### SphericalPolygon
+### SphericalPolygon
 
 Spherical polygons are comprised of
 
@@ -174,7 +180,11 @@ from sphersgeo import ArcString
 abc = SphericalPolygon(
     ArcString([(60.0, 0.0), (60.0, 30.0), (-30.0, -30.0)])
 )
+```
 
+### MultiSphericalPolygon
+
+```python
 # collate multiple polygons into a MultiSphericalPolygon by passing the same inputs you would to the individual objects
 from sphersgeo import MultiSphericalPolygon
 
