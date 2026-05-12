@@ -1,10 +1,11 @@
 [project]
 name = "sphersgeo"
 requires-python = ">=3.11"
+authors = [{ name = "Zach Burnett", email = "zburnett@stsci.edu" }]
 classifiers = [
   "Programming Language :: Rust",
 ]
-dependencies = ["numpy"]
+dependencies = ["numpy>=2.1"]
 dynamic = [
   "description",
   "license",
@@ -14,6 +15,7 @@ dynamic = [
 ]
 
 [dependency-groups]
+docs = ["sphinx", "sphinx-autoapi", "sphinx-rtd-theme"]
 test = ["gwcs", "pytest"]
 
 [build-system]

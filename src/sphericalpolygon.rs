@@ -242,9 +242,7 @@ fn find_point_inside_polygon_boundary(boundary: &ArcString) -> Result<SphericalP
     }
 }
 
-/// polygon on the sphere, comprising:
-/// 1. a non-intersecting collection of connected arcs (arcstring) that connects back to its first point (closed)
-/// 2. an interior point to specify which region of the sphere the polygon represents; this is required for non-Euclidian closed geometry
+/// polygon on the sphere, comprised of a closed boundary arcstring and a point guaranteed to be inside the polygon (inferred if not provided)
 #[cfg_attr(feature = "py", pyclass(from_py_object))]
 #[derive(Clone, Debug, PartialEq)]
 pub struct SphericalPolygon {
@@ -374,7 +372,6 @@ impl Geometry for SphericalPolygon {
         self.boundary.convex_hull()
     }
 
-    /// surface area of the polygon in square degrees
     fn area(&self) -> f64 {
         area_inside_polygon_boundary(&self.boundary)
     }

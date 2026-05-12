@@ -210,9 +210,12 @@ pub fn arc_distance_over_sphere(a: &[f64; 3], b: &[f64; 3]) -> f64 {
     }
 }
 
-/// given three XYZ vector points on the sphere (`a`, `b`, and `c`),
-/// retrieve the angle in radians at `b` formed by arcs `ab` and `bc`
-/// (the smaller angle irrespective of turn orientation)
+/// given three (X, Y, Z) vector points on the sphere:
+///   - `a`
+///   - `b` (this point)
+///   - `c`
+///
+/// retrieves the turning angle, in radians, at `b` formed by arcs `ab` and `bc`
 ///
 ///     cos(ca) = cos(bc) * cos(ab) + sin(bc) * sin(ab) * cos(b)
 ///
@@ -328,7 +331,7 @@ pub fn arc_interpolate_points(
         .collect())
 }
 
-/// 3D Cartesian vector (XYZ) representing a point on the unit sphere
+/// single point on the unit sphere, represented internally as a 3-dimensional Cartesian point (X, Y, Z) with origin at the center of the unit sphere
 #[cfg_attr(feature = "py", pyclass(from_py_object))]
 #[derive(Clone, Debug)]
 pub struct SphericalPoint {
@@ -565,11 +568,14 @@ impl SphericalPoint {
         }
     }
 
+    /// given three (X, Y, Z) vector points on the sphere `a`, `b` (this point), and `c`,
+    /// retrieve the angle in radians at `b` formed by arcs `ab` and `bc`
+    /// (the smaller angle irrespective of turn orientation)
     pub fn two_arc_angle(&self, start: &SphericalPoint, end: &SphericalPoint) -> f64 {
         xyz_two_arc_angle(&start.xyz, &self.xyz, &end.xyz).to_degrees()
     }
 
-    /// whether this point shares a line with two other points
+    /// whether this point lies on an arc between two other points
     pub fn colinear(&self, a: &SphericalPoint, b: &SphericalPoint) -> bool {
         xyzs_colinear(&a.xyz, &self.xyz, &b.xyz)
     }
@@ -579,7 +585,7 @@ impl SphericalPoint {
         xyz_two_arc_is_clockwise(&start.xyz, &self.xyz, &end.xyz)
     }
 
-    /// create n number of points equally spaced on an arc between this point and another point
+    /// create n number of equally-spaced points on the arc between this point and another point
     pub fn interpolate_points(&self, end: &Self, n: usize) -> Result<MultiSphericalPoint, String> {
         MultiSphericalPoint::try_from(arc_interpolate_points(&self.xyz, &end.xyz, n)?)
     }
