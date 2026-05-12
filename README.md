@@ -28,33 +28,44 @@ pip install sphersgeo
 Euclidean geometry packages classify geometries into points, linestrings, and polygons (along with multi-variations: multipoints, multilinestrings, and multipolygons).
 Spherical geometry analogues are spherical points, arcstrings, and spherical polygons.
 
-Full class definitions can be found in `src/sphersgeo.pyi`.
+| Euclidean       | Spherical             |
+| --------------- | --------------------- |
+| Point           | SphericalPoint        |
+| MultiPoint      | MultiSphericalPoint   |
+| LineString      | ArcString             |
+| MultiLineString | MultiArcString        |
+| Polygon         | SphericalPolygon      |
+| MultiPolygon    | MultiSphericalPolygon |
 
-#### Points on a sphere
+See [`src/python/sphersgeo/sphersgeo.pyi`](src/python/sphersgeo/sphersgeo.pyi) for Python class definitions.
 
-Spherical points are represented internally as 3-dimensional Euclidean points (X, Y, Z) relative to the origin of the unit sphere.
+#### SphericalPoint
+
+Spherical points are represented internally as 3-dimensional Euclidean vectors (X, Y, Z) a unit distance (length of 1.0) from the center of the sphere.
 
 ```python
-import sphersgeo
+from sphersgeo import SphericalPoint
 
 # define a point on the sphere in angular coordinates (longitude and latitude)
-a = sphersgeo.SphericalPoint((60.0, 30.0))
-b = sphersgeo.SphericalPoint((60.0, 0.0))
-c = sphersgeo.SphericalPoint((-30.0, -30.0))
+a = SphericalPoint((60.0, 30.0))
+b = SphericalPoint((60.0, 0.0))
+c = SphericalPoint((-30.0, -30.0))
 
 # ... or in Euclidean coordinates (X, Y, Z)
-a = sphersgeo.SphericalPoint((0.43301270189221946, 0.75, 0.5))
-b = sphersgeo.SphericalPoint((0.5, 0.8660254037844386, 0.0))
-c = sphersgeo.SphericalPoint((0.75, -0.4330127018922193, -0.5))
-d = sphersgeo.SphericalPoint((0.0, 0.0, 1.0))
-e = sphersgeo.SphericalPoint((0.0, 0.0, -1.0))
+a = SphericalPoint((0.43301270189221946, 0.75, 0.5))
+b = SphericalPoint((0.5, 0.8660254037844386, 0.0))
+c = SphericalPoint((0.75, -0.4330127018922193, -0.5))
+d = SphericalPoint((0.0, 0.0, 1.0))
+e = SphericalPoint((0.0, 0.0, -1.0))
 
 # collate multiple points together by passing lists of angular or Euclidean coordinates
-ab = sphersgeo.MultiSphericalPoint([(60.0, 30.0), (60.0, 0.0)])
-ab = sphersgeo.MultiSphericalPoint(
+from sphersgeo import MultiSphericalPoint
+
+ab = MultiSphericalPoint([(60.0, 30.0), (60.0, 0.0)])
+ab = MultiSphericalPoint(
     [(0.43301270189221946, 0.75, 0.5), (0.5, 0.8660254037844386, 0.0)]
 )
-de = sphersgeo.MultiSphericalPoint(
+de = MultiSphericalPoint(
     [
         (0.0, 0.0, 1.0),
         (0.0, 0.0, -1.0),
@@ -63,51 +74,62 @@ de = sphersgeo.MultiSphericalPoint(
 
 # ... or a Numpy array of coordinates
 import numpy as np
-ab = sphersgeo.MultiSphericalPoint(np.array([(60.0, 30.0), (60.0, 0.0)]))
-ab = sphersgeo.MultiSphericalPoint(
+
+ab = MultiSphericalPoint(np.array([(60.0, 30.0), (60.0, 0.0)]))
+ab = MultiSphericalPoint(
     np.array([(0.43301270189221946, 0.75, 0.5), (0.5, 0.8660254037844386, 0.0)])
 )
 
 # ... or a list of SphericalPoint objects
-abcde = sphersgeo.MultiSphericalPoint([a, b, c, d, e])
+abcde = MultiSphericalPoint([a, b, c, d, e])
 ```
 
-#### Strings of great circle arcs on a sphere
+#### ArcString
 
 A great circle arcs is the shortest geodesic distance over the surface of the sphere between any two points.
 Arcstrings are comprised of an **ordered** collection of spherical points.
 Arcstrings can also be **closed**, in which case the final point is considered as connected back to the first point.
 
 ```python
-import sphersgeo
+from sphersgeo import ArcString
 
 # define an arcstring on the sphere by passing angular or Euclidean coordinates
-abc = sphersgeo.ArcString([(60.0, 0.0), (60.0, 30.0), (-30.0, -30.0)])
-de = sphersgeo.ArcString(
+abc = ArcString([(60.0, 0.0), (60.0, 30.0), (-30.0, -30.0)])
+de = ArcString(
     [
         (0.0, 0.0, 1.0),
         (0.0, 0.0, -1.0),
     ]
 )
 
-# ... or a list of SphericalPoint objects
-abc = sphersgeo.ArcString(
+# ... or a list of SphericalPoints
+from sphersgeo import SphericalPoint
+
+abc = ArcString(
     [
-        sphersgeo.SphericalPoint((60.0, 0.0)),
-        sphersgeo.SphericalPoint((60.0, 30.0)),
-        sphersgeo.SphericalPoint((-30.0, -30.0)),
+        SphericalPoint((60.0, 0.0)),
+        SphericalPoint((60.0, 30.0)),
+        SphericalPoint((-30.0, -30.0)),
     ],
     closed=True,
 )
-de = sphersgeo.ArcString(
-    [
-        sphersgeo.SphericalPoint((0.0, 0.0, 1.0)),
-        sphersgeo.SphericalPoint((0.0, 0.0, -1.0)),
-    ]
+
+# ... or a single MultiSphericalPoint
+from sphersgeo import MultiSphericalPoint
+
+de = ArcString(
+    MultiSphericalPoint(
+        [
+            (0.0, 0.0, 1.0),
+            (0.0, 0.0, -1.0),
+        ]
+    )
 )
 
 # collate arcstrings into a MultiArcString by passing the same inputs you would to the individual objects
-abc_de = sphersgeo.MultiArcString(
+from sphersgeo import MultiArcString
+
+abc_de = MultiArcString(
     [
         [(60.0, 0.0), (60.0, 30.0), (-30.0, -30.0)],
         [
@@ -118,10 +140,10 @@ abc_de = sphersgeo.MultiArcString(
 )
 
 # ... or a list of ArcString objects
-abc_de = sphersgeo.MultiArcString([abc, de])
+abc_de = MultiArcString([abc, de])
 ```
 
-#### Polygons on a sphere
+#### SphericalPolygon
 
 Spherical polygons are comprised of
 
@@ -134,11 +156,11 @@ If the "inside point" is not given, the **smaller** of the two regions split by 
 > Polygons in `sphersgeo` do NOT have holes.
 
 ```python
-import sphersgeo
+from sphersgeo import SphericalPolygon
 
 # define a spherical polygon by passing angular or Euclidean coordinates to form the boundary
-abc = sphersgeo.SphericalPolygon([(60.0, 0.0), (60.0, 30.0), (-30.0, -30.0)])
-abc = sphersgeo.SphericalPolygon(
+abc = SphericalPolygon([(60.0, 0.0), (60.0, 30.0), (-30.0, -30.0)])
+abc = SphericalPolygon(
     [
         (0.43301270189221946, 0.75, 0.5),
         (0.5, 0.8660254037844386, 0.0),
@@ -147,12 +169,16 @@ abc = sphersgeo.SphericalPolygon(
 )
 
 # ... or pass an ArcString object (the arcstring is assumed to be closed)
-abc = sphersgeo.SphericalPolygon(
-    sphersgeo.ArcString([(60.0, 0.0), (60.0, 30.0), (-30.0, -30.0)])
+from sphersgeo import ArcString
+
+abc = SphericalPolygon(
+    ArcString([(60.0, 0.0), (60.0, 30.0), (-30.0, -30.0)])
 )
 
 # collate multiple polygons into a MultiSphericalPolygon by passing the same inputs you would to the individual objects
-abc_def = sphersgeo.MultiSphericalPolygon(
+from sphersgeo import MultiSphericalPolygon
+
+abc_def = MultiSphericalPolygon(
     [
         [(60.0, 30.0), (60.0, 0.0), (-30.0, -30.0)],
         [
@@ -164,10 +190,10 @@ abc_def = sphersgeo.MultiSphericalPolygon(
 )
 
 # ... or a list of SphericalPolygon objects
-abc_def = sphersgeo.MultiSphericalPolygon(
+abc_def = MultiSphericalPolygon(
     [
-        sphersgeo.SphericalPolygon([(60.0, 30.0), (60.0, 0.0), (-30.0, -30.0)]),
-        sphersgeo.SphericalPolygon(
+        abc,
+        SphericalPolygon(
             [
                 (0.0, 0.0, 1.0),
                 (0.0, 0.0, -1.0),
