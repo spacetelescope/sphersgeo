@@ -293,27 +293,7 @@ class GeometricOperations:
 
 
 class SphericalPoint(Geometry, GeometricRelationships, GeometricOperations):
-    """
-    single point on the sphere, represented internally as a 3-dimensional Cartesian point (X, Y, Z) with origin at the center of the unit sphere
-
-    Create a `SphericalPoint` from angular coordinates (longitude, latitude)::
-
-        from sphersgeo import SphericalPoint
-
-        a = SphericalPoint((60.0, 30.0))
-        b = SphericalPoint((60.0, 0.0))
-        c = SphericalPoint((-30.0, -30.0))
-
-    \... or Cartesian coordinates (X, Y, Z)::
-
-        from sphersgeo import SphericalPoint
-
-        a = SphericalPoint((0.43301270189221946, 0.75, 0.5))
-        b = SphericalPoint((0.5, 0.8660254037844386, 0.0))
-        c = SphericalPoint((0.75, -0.4330127018922193, -0.5))
-        d = SphericalPoint((0.0, 0.0, 1.0))
-        e = SphericalPoint((0.0, 0.0, -1.0))
-    """
+    """single point on the sphere, represented internally as a 3-dimensional Cartesian point (X, Y, Z) with origin at the center of the unit sphere"""
 
     def __init__(
         self,
@@ -321,7 +301,27 @@ class SphericalPoint(Geometry, GeometricRelationships, GeometricOperations):
         | np.ndarray[tuple[np.typing.Literal[3]], np.dtype[np.float64]]
         | tuple[float, float]
         | list[float],
-    ): ...
+    ):
+        """
+        Create a `SphericalPoint` from angular coordinates (longitude, latitude)::
+
+            from sphersgeo import SphericalPoint
+
+            a = SphericalPoint((60.0, 30.0))
+            b = SphericalPoint((60.0, 0.0))
+            c = SphericalPoint((-30.0, -30.0))
+
+        \... or Cartesian coordinates (X, Y, Z)::
+
+            from sphersgeo import SphericalPoint
+
+            a = SphericalPoint((0.43301270189221946, 0.75, 0.5))
+            b = SphericalPoint((0.5, 0.8660254037844386, 0.0))
+            c = SphericalPoint((0.75, -0.4330127018922193, -0.5))
+            d = SphericalPoint((0.0, 0.0, 1.0))
+            e = SphericalPoint((0.0, 0.0, -1.0))
+        """
+        ...
 
     @property
     def xyz(self) -> tuple[float, float, float]:
@@ -404,44 +404,7 @@ class SphericalPoint(Geometry, GeometricRelationships, GeometricOperations):
 
 
 class MultiSphericalPoint(Geometry, GeometricRelationships, GeometricOperations):
-    """
-    collection of multiple points on the sphere
-
-    Create a `MultiSphericalPoint` from a list of `SphericalPoint` s::
-
-        from sphersgeo import SphericalPoint, MultiSphericalPoint
-
-        a = SphericalPoint((60.0, 30.0))
-        b = SphericalPoint((60.0, 0.0))
-        c = SphericalPoint((0.75, -0.4330127018922193, -0.5))
-
-        abc = MultiSphericalPoint([a, b, c])
-
-    \... or from the inputs required to make a list of `SphericalPoint` s::
-
-        from sphersgeo import MultiSphericalPoint
-
-        abc = MultiSphericalPoint(
-            [(60.0, 30.0), (60.0, 0.0), (0.75, -0.4330127018922193, -0.5)]
-        )
-
-    \... or from a `numpy.ndarray` of shape Nx2 (longitude, latitude) or Nx3 (X, Y, Z)::
-
-        import numpy as np
-        from sphersgeo import MultiSphericalPoint
-
-        abc = MultiSphericalPoint(np.array([(60.0, 30.0), (60.0, 0.0), (-30.0, -30.0)]))
-        abc = MultiSphericalPoint(
-            np.array(
-                [
-                    (0.43301270189221946, 0.75, 0.5),
-                    (0.5, 0.8660254037844386, 0.0),
-                    (0.75, -0.4330127018922193, -0.5),
-                ]
-            )
-        )
-
-    """
+    """collection of multiple points on the sphere"""
 
     def __init__(
         self,
@@ -449,7 +412,43 @@ class MultiSphericalPoint(Geometry, GeometricRelationships, GeometricOperations)
         | list[SphericalPoint]
         | tuple[float, float]
         | np.ndarray[tuple[Any, np.typing.Literal[3]], np.dtype[np.float64]],
-    ): ...
+    ):
+        """
+        Create a `MultiSphericalPoint` from a list of `SphericalPoint` s::
+
+            from sphersgeo import SphericalPoint, MultiSphericalPoint
+
+            a = SphericalPoint((60.0, 30.0))
+            b = SphericalPoint((60.0, 0.0))
+            c = SphericalPoint((0.75, -0.4330127018922193, -0.5))
+
+            abc = MultiSphericalPoint([a, b, c])
+
+        \... or from the inputs required to make a list of `SphericalPoint` s::
+
+            from sphersgeo import MultiSphericalPoint
+
+            abc = MultiSphericalPoint(
+                [(60.0, 30.0), (60.0, 0.0), (0.75, -0.4330127018922193, -0.5)]
+            )
+
+        \... or from a `numpy.ndarray` of shape Nx2 (longitude, latitude) or Nx3 (X, Y, Z)::
+
+            import numpy as np
+            from sphersgeo import MultiSphericalPoint
+
+            abc = MultiSphericalPoint(np.array([(60.0, 30.0), (60.0, 0.0), (-30.0, -30.0)]))
+            abc = MultiSphericalPoint(
+                np.array(
+                    [
+                        (0.43301270189221946, 0.75, 0.5),
+                        (0.5, 0.8660254037844386, 0.0),
+                        (0.75, -0.4330127018922193, -0.5),
+                    ]
+                )
+            )
+        """
+        ...
 
     @property
     def xyzs(
@@ -514,33 +513,34 @@ class ArcString(Geometry, GeometricRelationships, GeometricOperations):
     A great circle arc is the shortest geodesic distance over the surface of the sphere between any two points.
     Arcstrings are comprised of an **ordered** collection of spherical points.
     Arcstrings can also be **closed**, in which case the final point is considered as connected back to the first point.
-
-    Create an `ArcString` from a `MultiSphericalPoint`::
-
-        from sphersgeo import ArcString, MultiSphericalPoint
-
-        abc = ArcString(
-            MultiSphericalPoint([(60.0, 0.0), (60.0, 30.0), (-30.0, -30.0)]), closed=True
-        )
-
-    \... or from the inputs required to make a `MultiSphericalPoint`::
-
-        from sphersgeo import ArcString
-
-        de = ArcString(
-            [
-                (0.0, 0.0, 1.0),
-                (0.0, 0.0, -1.0),
-            ]
-        )
-
     """
 
     def __init__(
         self,
         points: MultiSphericalPoint,
         closed: bool = False,
-    ): ...
+    ):
+        """
+        Create an `ArcString` from a `MultiSphericalPoint`::
+
+            from sphersgeo import ArcString, MultiSphericalPoint
+
+            abc = ArcString(
+                MultiSphericalPoint([(60.0, 0.0), (60.0, 30.0), (-30.0, -30.0)]), closed=True
+            )
+
+        \... or from the inputs required to make a `MultiSphericalPoint`::
+
+            from sphersgeo import ArcString
+
+            de = ArcString(
+                [
+                    (0.0, 0.0, 1.0),
+                    (0.0, 0.0, -1.0),
+                ]
+            )
+        """
+        ...
 
     def __len__(self) -> int:
         """number of arcs in this arcstring"""
@@ -604,23 +604,23 @@ class ArcString(Geometry, GeometricRelationships, GeometricOperations):
 
 
 class MultiArcString(Geometry, GeometricRelationships, GeometricOperations):
-    """
-    collection of multiple series of great circle arcs (arcstrings)
-
-    Create a `MultiArcString` from a list of `ArcString` s::
-
-        from sphersgeo import ArcString, MultiArcString
-
-        abc = ArcString([(60.0, 0.0), (60.0, 30.0), (-30.0, -30.0)], closed=True)
-        de = ArcString([(0.0, 0.0, 1.0), (0.0, 0.0, -1.0)])
-        abc_de = MultiArcString([abc, de])
-
-    """
+    """collection of multiple series of great circle arcs (arcstrings)"""
 
     def __init__(
         self,
         arcstrings: list[ArcString],
-    ): ...
+    ):
+        """
+        Create a `MultiArcString` from a list of `ArcString` s::
+
+            from sphersgeo import ArcString, MultiArcString
+
+            abc = ArcString([(60.0, 0.0), (60.0, 30.0), (-30.0, -30.0)], closed=True)
+            de = ArcString([(0.0, 0.0, 1.0), (0.0, 0.0, -1.0)])
+            abc_de = MultiArcString([abc, de])
+
+        """
+        ...
 
     @property
     def parts(
@@ -665,31 +665,32 @@ class SphericalPolygon(Geometry, GeometricRelationships, GeometricOperations):
         the **entire surface area of the sphere sans the area enclosed by the boundary**.
 
     .. attention:: `SphericalPolygon` s in `sphersgeo` do NOT have holes.
-
-    Create a `SphericalPolygon` from an `ArcString`::
-
-        from sphersgeo import ArcString, SphericalPolygon
-
-        abc = SphericalPolygon(ArcString([(60.0, 0.0), (60.0, 30.0), (-30.0, -30.0)]))
-
-    \... or from the inputs required to make an `ArcString`::
-
-        from sphersgeo import SphericalPolygon
-
-        abc = SphericalPolygon(
-            [
-                (0.43301270189221946, 0.75, 0.5),
-                (0.5, 0.8660254037844386, 0.0),
-                (0.75, -0.4330127018922193, -0.5),
-            ]
-        )
-
     """
 
     def __init__(
         self,
         polygon: ArcString | tuple[ArcString, SphericalPoint],
-    ): ...
+    ):
+        """
+        Create a `SphericalPolygon` from an `ArcString`::
+
+            from sphersgeo import ArcString, SphericalPolygon
+
+            abc = SphericalPolygon(ArcString([(60.0, 0.0), (60.0, 30.0), (-30.0, -30.0)]))
+
+        \... or from the inputs required to make an `ArcString`::
+
+            from sphersgeo import SphericalPolygon
+
+            abc = SphericalPolygon(
+                [
+                    (0.43301270189221946, 0.75, 0.5),
+                    (0.5, 0.8660254037844386, 0.0),
+                    (0.75, -0.4330127018922193, -0.5),
+                ]
+            )
+        """
+        ...
 
     @classmethod
     def from_cone(
@@ -722,54 +723,53 @@ class SphericalPolygon(Geometry, GeometricRelationships, GeometricOperations):
 
 
 class MultiSphericalPolygon(Geometry, GeometricRelationships, GeometricOperations):
-    """
-    collection of multiple polygons on the sphere
+    """collection of multiple polygons on the sphere"""
 
-    Create a `MultiSphericalPolygon` from a list of `SphericalPolygon` s::
+    def __init__(self, polygons: list[SphericalPolygon]):
+        """
+        Create a `MultiSphericalPolygon` from a list of `SphericalPolygon` s::
 
-        from sphersgeo import SphericalPolygon, MultiSphericalPolygon
+            from sphersgeo import SphericalPolygon, MultiSphericalPolygon
 
-        abc_def = MultiSphericalPolygon(
-            [
-                SphericalPolygon(
+            abc_def = MultiSphericalPolygon(
+                [
+                    SphericalPolygon(
+                        [
+                            (0.43301270189221946, 0.75, 0.5),
+                            (0.5, 0.8660254037844386, 0.0),
+                            (0.75, -0.4330127018922193, -0.5),
+                        ]
+                    ),
+                    SphericalPolygon(
+                        [
+                            (0.0, 0.0, 1.0),
+                            (0.0, 0.0, -1.0),
+                            (1.0, 1.0, 0.0),
+                        ]
+                    ),
+                ]
+            )
+
+        \... or from the inputs required to make a list of `SphericalPolygon` s::
+
+            from sphersgeo import MultiSphericalPolygon
+
+            abc_def = MultiSphericalPolygon(
+                [
                     [
                         (0.43301270189221946, 0.75, 0.5),
                         (0.5, 0.8660254037844386, 0.0),
                         (0.75, -0.4330127018922193, -0.5),
-                    ]
-                ),
-                SphericalPolygon(
+                    ],
                     [
                         (0.0, 0.0, 1.0),
                         (0.0, 0.0, -1.0),
                         (1.0, 1.0, 0.0),
-                    ]
-                ),
-            ]
-        )
-
-    \... or from the inputs required to make a list of `SphericalPolygon` s::
-
-        from sphersgeo import MultiSphericalPolygon
-
-        abc_def = MultiSphericalPolygon(
-            [
-                [
-                    (0.43301270189221946, 0.75, 0.5),
-                    (0.5, 0.8660254037844386, 0.0),
-                    (0.75, -0.4330127018922193, -0.5),
-                ],
-                [
-                    (0.0, 0.0, 1.0),
-                    (0.0, 0.0, -1.0),
-                    (1.0, 1.0, 0.0),
-                ],
-            ]
-        )
-
-    """
-
-    def __init__(self, polygons: list[SphericalPolygon]): ...
+                    ],
+                ]
+            )
+        """
+        ...
 
     @property
     def boundary(self) -> MultiArcString: ...

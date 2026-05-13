@@ -61,6 +61,7 @@ autoapi_dirs = ["../src/python/sphersgeo/"]
 autoapi_root = "api"
 autoapi_generate_api_docs = False
 autoapi_member_order = "bysource"
+autoapi_python_class_content = "both"
 
 # -- sphinx.ext.intersphinx configuration --------------------------------------------
 # https://www.sphinx-doc.org/en/master/usage/extensions/intersphinx.html#configuration
