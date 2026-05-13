@@ -27,8 +27,13 @@ Polygon     `SphericalPolygon`  MultiPolygon       `MultiSphericalPolygon`
 
 .. toctree::
    :maxdepth: 1
+   :caption: API
 
    sphericalpoint.rst
    arcstring.rst
    sphericalpolygon.rst
+
+.. toctree::
+   :maxdepth: 1
+
    changes.rst

@@ -13,7 +13,7 @@ build:
     post_checkout:
       - git fetch --unshallow --tags
     pre_build:
-      - git describe --exact-match || towncrier build --keep
+      - git describe --exact-match || towncrier build --keep --version=dev
 
 python:
   install:
