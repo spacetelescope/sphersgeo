@@ -26,8 +26,8 @@ Planar geometry packages typically classify geometries into points, linestrings,
 (along with multi-geometry collections: multi-points, multi-linestrings, and multi-polygons).
 The spherical geometry analogues to these are spherical points, arcstrings, and spherical polygons.
 
-| Planar     | Spherical                                                                                                         | Planar Collection | Spherical Collection                                                                                                        |
-| ---------- | ----------------------------------------------------------------------------------------------------------------- | ----------------- | --------------------------------------------------------------------------------------------------------------------------- |
-| Point      | [`SphericalPoint`](https://sphersgeo.readthedocs.io/en/latest/sphericalpoint.html#sphersgeo.SphericalPoint)       | MultiPoint        | [`MultiSphericalPoint`](https://sphersgeo.readthedocs.io/en/latest/sphericalpoint.html#sphersgeo.MultiSphericalPoint)       |
-| LineString | [`ArcString`](https://sphersgeo.readthedocs.io/en/latest/arcstring.html#sphersgeo.ArcString)                      | MultiLineString   | [`MultiArcString`](https://sphersgeo.readthedocs.io/en/latest/arcstring.html#sphersgeo.MultiArcString)                      |
-| Polygon    | [`SphericalPolygon`](https://sphersgeo.readthedocs.io/en/latest/sphericalpolygon.html#sphersgeo.SphericalPolygon) | MultiPolygon      | [`MultiSphericalPolygon`](https://sphersgeo.readthedocs.io/en/latest/sphericalpolygon.html#sphersgeo.MultiSphericalPolygon) |
+| Planar     | Spherical          | Planar Collection | Spherical Collection    |
+| ---------- | ------------------ | ----------------- | ----------------------- |
+| Point      | `SphericalPoint`   | MultiPoint        | `MultiSphericalPoint`   |
+| LineString | `ArcString`        | MultiLineString   | `MultiArcString`        |
+| Polygon    | `SphericalPolygon` | MultiPolygon      | `MultiSphericalPolygon` |
