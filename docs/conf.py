@@ -47,17 +47,12 @@ default_role = "obj"
 # -- Options for HTML output -------------------------------------------------
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#options-for-html-output
 
-html_theme = "sphinx_rtd_theme"
-html_theme_options = {
-    "collapse_navigation": True,
-    "sticky_navigation": False,
-    "nosidebar": "false",
-    "style_nav_header_background": "black",
-    "style_external_links": True,
-}
-
+html_theme = "furo"
 html_static_path = ["_static"]
-html_logo = "_static/stsci_logo_with_name.png"
+html_theme_options = {
+    "light_logo": "stsci_pri_combo_mark_light_bkgd.png",
+    "dark_logo": "stsci_pri_combo_mark_dark_bkgd.png",
+}
 
 # # -- sphinx-autoapi configuration --------------------------------------------
 # # https://sphinx-autoapi.readthedocs.io/en/latest/reference/config.html

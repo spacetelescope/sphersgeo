@@ -15,13 +15,7 @@ dynamic = [
 ]
 
 [dependency-groups]
-docs = [
-  "sphinx",
-  "sphinx-autoapi",
-  "sphinx_inline_tabs",
-  "sphinx-rtd-theme",
-  "towncrier"
-]
+docs = ["furo", "sphinx", "sphinx-autoapi", "sphinx_inline_tabs", "towncrier"]
 test = ["gwcs", "pytest"]
 
 [build-system]
