@@ -6,10 +6,11 @@
 # sphersgeo
 
 [![build](https://github.com/spacetelescope/sphersgeo/actions/workflows/build.yml/badge.svg)](https://github.com/spacetelescope/sphersgeo/actions/workflows/build.yml)
-[![tests](https://github.com/spacetelescope/sphersgeo/actions/workflows/test.yml/badge.svg)](https://github.com/spacetelescope/sphersgeo/actions/workflows/test.yml)
+[![tests](https://github.com/spacetelescope/sphersgeo/actions/workflows/test.yml/badge.svg)](https://github.com/spacetelescope/sphersgeo/actions/workflows/tests.yml)
+[![readthedocs](https://readthedocs.org/projects/sphersgeo/badge/?version=latest)](https://sphersgeo.readthedocs.io)
 [![Powered by STScI](https://img.shields.io/badge/powered%20by-STScI-blue.svg?colorA=707170&colorB=3e8ddd&style=flat)](https://www.stsci.edu)
 
-`sphersgeo` is an object-oriented spherical geometry package written in Rust with Python accessor classes and methods.
+[`sphersgeo`](https://sphersgeo.readthedocs.io) is an object-oriented spherical geometry package written in Rust with Python accessor classes and methods.
 
 > [!IMPORTANT]
 > `sphersgeo` is still in development and does NOT currently implement all of the functionality provided by other geo packages such as `geo` or Shapely.
@@ -20,3 +21,13 @@
 ```shell
 pip install sphersgeo
 ```
+
+Planar geometry packages typically classify geometries into points, linestrings, and polygons
+(along with multi-geometry collections: multi-points, multi-linestrings, and multi-polygons).
+The spherical geometry analogues to these are spherical points, arcstrings, and spherical polygons.
+
+| Planar     | Spherical                                                                                                         | Planar Collection | Spherical Collection                                                                                                        |
+| ---------- | ----------------------------------------------------------------------------------------------------------------- | ----------------- | --------------------------------------------------------------------------------------------------------------------------- |
+| Point      | [`SphericalPoint`](https://sphersgeo.readthedocs.io/en/latest/sphericalpoint.html#sphersgeo.SphericalPoint)       | MultiPoint        | [`MultiSphericalPoint`](https://sphersgeo.readthedocs.io/en/latest/sphericalpoint.html#sphersgeo.MultiSphericalPoint)       |
+| LineString | [`ArcString`](https://sphersgeo.readthedocs.io/en/latest/arcstring.html#sphersgeo.ArcString)                      | MultiLineString   | [`MultiArcString`](https://sphersgeo.readthedocs.io/en/latest/arcstring.html#sphersgeo.MultiArcString)                      |
+| Polygon    | [`SphericalPolygon`](https://sphersgeo.readthedocs.io/en/latest/sphericalpolygon.html#sphersgeo.SphericalPolygon) | MultiPolygon      | [`MultiSphericalPolygon`](https://sphersgeo.readthedocs.io/en/latest/sphericalpolygon.html#sphersgeo.MultiSphericalPolygon) |
