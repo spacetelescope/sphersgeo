@@ -10,30 +10,33 @@ pub trait Geometry {
     /// and the boundary of a point (and a closed arcstring) is null.
     fn boundary(&self) -> Option<impl Geometry>;
 
-    /// point guaranteed to be within the object
+    /// point guaranteed to be within this geometry
     fn representative(&self) -> crate::sphericalpoint::SphericalPoint;
 
-    // mean position of all possible points within the geometry
+    /// mean position of all possible points within this geometry
     fn centroid(&self) -> crate::sphericalpoint::SphericalPoint;
 
+    /// smallest convex polygon containing this geometry
     fn convex_hull(&self) -> Option<crate::sphericalpolygon::SphericalPolygon> {
         self.vertices().convex_hull()
     }
 
+    /// surface area of this geometry in square degrees
     fn area(&self) -> f64;
 
+    /// angular length of this geometry in degrees
     fn length(&self) -> f64;
 }
 
 pub trait MultiGeometry<G: Geometry> {
-    /// number of elements in this collection
+    /// number of geometries in this collection
     fn len(&self) -> usize;
-
-    /// extend this collection with geometries from the other collection
-    fn extend(&mut self, other: Self);
 
     /// append the geometry to this collection
     fn push(&mut self, other: G);
+
+    /// extend this collection with geometries from the other collection
+    fn extend(&mut self, other: Self);
 }
 
 /// https://developers.arcgis.com/geoanalytics/core-concepts/spatial-relationships/
