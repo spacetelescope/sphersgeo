@@ -7,8 +7,6 @@ build:
   os: ubuntu-lts-latest
   tools:
     python: latest
-  apt_packages:
-    - graphviz
   jobs:
     post_checkout:
       - git fetch --unshallow --tags
