@@ -31,3 +31,4 @@ Polygon     `SphericalPolygon`  MultiPolygon       `MultiSphericalPolygon`
    sphericalpoint.rst
    arcstring.rst
    sphericalpolygon.rst
+   changes.rst
