@@ -1,0 +1,1 @@
+move change log to its own `toctree` and distinguish Rust from Python install options
