@@ -1,0 +1,1 @@
+remove `license` from `Cargo.toml` in favor of keeping `license-file`
