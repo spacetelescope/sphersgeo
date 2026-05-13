@@ -18,7 +18,7 @@ is an object-oriented spherical geometry package written in Rust with Python acc
 
 .. attention::
    `sphersgeo` is still in development
-   and does not currently implement all of the robust functionality provided by
+   and does not currently implement all the robust functionality provided by
    planar geometry packages such as `geo <https://docs.rs/geo/>`_ or `Shapely <https://shapely.readthedocs.io/>`_.
 
 .. toctree::
