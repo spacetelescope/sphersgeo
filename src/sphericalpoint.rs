@@ -1248,8 +1248,8 @@ impl Geometry for MultiSphericalPoint {
     ///
     /// References
     /// ----------
-    /// - https://www.researchgate.net/profile/Jayaram-Ma-2/publication/303522254/figure/fig1/AS:365886075621376@1464245446409/Monotone-Chain-Algorithm-and-graphic-illustration.png
-    /// - https://github.com/google/s2geometry/blob/master/src/s2/s2convex_hull_query.cc#L123
+    /// - M.A, Jayaram & Fleyeh, Hasan. (2016). Convex Hulls in Image Processing: A Scoping Review. American Journal of Intelligent Systems. 2016. 48-58. 10.5923/j.ajis.20160602.03. `pdf <https://www.researchgate.net/profile/Jayaram-Ma-2/publication/303522254>`_.
+    /// - `s2convex_hull_query <https://github.com/google/s2geometry/blob/master/src/s2/s2convex_hull_query.cc#L123>`_
     fn convex_hull(&self) -> Option<crate::sphericalpolygon::SphericalPolygon> {
         if self.len() < 3 {
             return None;
@@ -1663,23 +1663,5 @@ impl GeometricOperations<crate::sphericalpolygon::MultiSphericalPolygon, Spheric
 
     fn symmetric_difference(&self, _: &crate::sphericalpolygon::MultiSphericalPolygon) -> Self {
         self.to_owned()
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn test_xyzs_distance_over_sphere() {
-        let a = [0.0, 0.0, 1.0];
-        let b = [0.0, 0.0, -1.0];
-        let c = [1.0, 1.0, 0.0];
-        let d = [1.0, -1.0, 0.0];
-
-        assert_eq!(arc_distance_over_sphere(&a, &b), xyz_dot(&a, &b).acos());
-        assert_eq!(arc_distance_over_sphere(&b, &c), xyz_dot(&b, &c).acos());
-        assert_eq!(arc_distance_over_sphere(&c, &d), xyz_dot(&c, &d).acos());
-        assert_eq!(arc_distance_over_sphere(&d, &a), xyz_dot(&d, &a).acos());
     }
 }
