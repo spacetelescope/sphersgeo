@@ -4,9 +4,17 @@ sphersgeo
 `sphersgeo <https://github.com/spacetelescope/sphersgeo>`_
 is an object-oriented spherical geometry package written in Rust with Python accessor classes and methods.
 
-.. code-block:: shell
+.. tab:: Python
+   
+   .. code-block:: shell
 
-   pip install sphersgeo
+      pip install sphersgeo
+
+.. tab:: Rust
+
+   .. code-block:: shell
+
+      cargo install --git https://github.com/spacetelescope/sphersgeo
 
 Planar geometry packages typically classify geometries into points, linestrings, and polygons
 (along with multi-geometry collections: multi-points, multi-linestrings, and multi-polygons).
@@ -27,8 +35,14 @@ Polygon     `SphericalPolygon`  MultiPolygon       `MultiSphericalPolygon`
 
 .. toctree::
    :maxdepth: 1
+   :caption: Python API
 
    sphericalpoint.rst
    arcstring.rst
    sphericalpolygon.rst
+
+.. toctree::
+   :maxdepth: 1
+   :caption: Other
+
    changes.rst

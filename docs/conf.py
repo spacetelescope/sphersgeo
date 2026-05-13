@@ -35,6 +35,7 @@ extensions = [
     "sphinx.ext.autodoc",
     "sphinx.ext.intersphinx",
     "sphinx.ext.viewcode",
+    "sphinx_inline_tabs",
 ]
 
 templates_path = ["_templates"]
