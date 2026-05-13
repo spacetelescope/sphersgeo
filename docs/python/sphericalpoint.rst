@@ -1,5 +1,5 @@
-Spherical Points
-================
+Spherical Points in Python
+==========================
 
 .. autoapiclass:: sphersgeo.SphericalPoint
 	:members:

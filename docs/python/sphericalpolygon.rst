@@ -1,5 +1,5 @@
-Spherical Polygons
-==================
+Spherical Polygons in Python
+============================
 
 .. autoapiclass:: sphersgeo.SphericalPolygon
 	:members:

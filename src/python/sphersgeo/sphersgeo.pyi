@@ -66,7 +66,8 @@ class GeometricRelationships:
         """
         Whether this and the other geometry's interiors are identical and the geometry types are the same.
 
-        https://developers.arcgis.com/geoanalytics/core-concepts/spatial-relationships/#equals
+        For further explanation of Equals see `ArcGIS Equals <https://developers.arcgis.com/geoanalytics/core-concepts/spatial-relationships/#equals>`_
+        or Shapely's `object.equals`.
         """
         ...
 
@@ -83,7 +84,8 @@ class GeometricRelationships:
         Whether this and the other geometry share ANY point(s).
         If this geometries contains, is within, crosses, touches, or overlaps the other geometry, they intersect.
 
-        https://developers.arcgis.com/geoanalytics/core-concepts/spatial-relationships/#intersects
+        For further explanation of Intersects see `ArcGIS Intersects <https://developers.arcgis.com/geoanalytics/core-concepts/spatial-relationships/#intersects>`_
+        or Shapely's `object.intersects`.
         """
         ...
 
@@ -99,7 +101,8 @@ class GeometricRelationships:
         """
         Whether this and the other geometry share any vertices but do not overlap.
 
-        https://developers.arcgis.com/geoanalytics/core-concepts/spatial-relationships/#touches
+        For further explanation of Touches see `ArcGIS Touches <https://developers.arcgis.com/geoanalytics/core-concepts/spatial-relationships/#touches>`_
+        or Shapely's `object.touches`.
         """
         ...
 
@@ -116,7 +119,9 @@ class GeometricRelationships:
         Whether this and the other geometry do NOT share ANY point(s).
 
         Disjoint is the inverse of Intersects.
-        https://developers.arcgis.com/geoanalytics/core-concepts/spatial-relationships/#disjoint
+
+        For further explanation of Disjoint see `ArcGIS Disjoint <https://developers.arcgis.com/geoanalytics/core-concepts/spatial-relationships/#disjoint>`_
+        or Shapely's `object.disjoint`.
         """
         ...
 
@@ -134,7 +139,9 @@ class GeometricRelationships:
 
         Two arcstrings cross if they meet at point(s) only, and at least one of the shared points is internal to both arcstrings.
         An arcstring and polygon cross if they share an arcstring on the interior of the polygon, which is NOT equal to the entire arcstring.
-        https://developers.arcgis.com/geoanalytics/core-concepts/spatial-relationships/#crosses
+
+        For further explanation of Crosses see `ArcGIS Crosses <https://developers.arcgis.com/geoanalytics/core-concepts/spatial-relationships/#crosses>`_
+        or Shapely's `object.crosses`.
         """
         ...
 
@@ -151,7 +158,9 @@ class GeometricRelationships:
         Whether the other geometry covers this geometry AND the interiors share at least one point.
 
         Within is the inverse of Contains.
-        https://developers.arcgis.com/geoanalytics/core-concepts/spatial-relationships/#contains
+
+        For further explanation of Contains see `ArcGIS Contains <https://developers.arcgis.com/geoanalytics/core-concepts/spatial-relationships/#contains>`_
+        or Shapely's `object.contains`.
         """
         ...
 
@@ -168,7 +177,9 @@ class GeometricRelationships:
         Whether this geometry covers the other geometry AND the interiors share at least one point.
 
         Contains is the inverse of Within.
-        https://developers.arcgis.com/geoanalytics/core-concepts/spatial-relationships/#contains
+
+        For further explanation of Contains see `ArcGIS Contains <https://developers.arcgis.com/geoanalytics/core-concepts/spatial-relationships/#contains>`_
+        or Shapely's `object.contains`.
         """
         ...
 
@@ -185,7 +196,8 @@ class GeometricRelationships:
         Whether this and the other geometry are of the same geometry type,
         AND their intersection is also of the same geometry type BUT is not equal to either.
 
-        https://developers.arcgis.com/geoanalytics/core-concepts/spatial-relationships/#overlaps
+        For further explanation of Overlaps see `ArcGIS Overlaps <https://developers.arcgis.com/geoanalytics/core-concepts/spatial-relationships/#overlaps>`_
+        or Shapely's `object.overlaps`.
         """
         ...
 
@@ -208,7 +220,14 @@ class GeometricRelationships:
 class GeometricOperations:
     def union(
         self, other: SphericalPoint | MultiSphericalPoint
-    ) -> MultiSphericalPoint | None: ...
+    ) -> MultiSphericalPoint | None:
+        """
+        union of points from this geometry and the other geometry
+
+        For further explanation of Union see Shapely's `object.union`.
+        """
+        ...
+
     def distance(
         self,
         other: SphericalPoint
@@ -263,7 +282,13 @@ class GeometricOperations:
         | SphericalPolygon
         | MultiSphericalPolygon
     ):
-        """split this geometry into a multi-geometry, at the crossing with the given geometry"""
+        """
+        points in this object not in the other geometric object, and the points in the other not in this geometric object.
+
+        Splits this geometry into a multi-geometry, at the crossing with the other geometry.
+
+        For further explanation of Symmetric Difference see Shapely's `object.symmetric_difference`.
+        """
         ...
 
 

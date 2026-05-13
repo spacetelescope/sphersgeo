@@ -1,5 +1,5 @@
-Arc Strings
-===========
+Arc Strings in Python
+=====================
 
 .. autoapiclass:: sphersgeo.ArcString
 	:members:
