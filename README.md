@@ -31,3 +31,7 @@ The spherical geometry analogues to these are spherical points, arcstrings, and 
 | Point      | `SphericalPoint`   | MultiPoint        | `MultiSphericalPoint`   |
 | LineString | `ArcString`        | MultiLineString   | `MultiArcString`        |
 | Polygon    | `SphericalPolygon` | MultiPolygon      | `MultiSphericalPolygon` |
+
+### Other Spherical Geometry Packages
+- [`spherical_geometry`](https://github.com/spacetelescope/spherical_geometry)
+- [`s2geometry`](https://github.com/google/s2geometry)
