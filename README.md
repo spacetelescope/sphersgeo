@@ -1,6 +1,6 @@
 <a href="https://stsci.edu">
-  <img src="docs/_static/stsci_logo.png" alt="STScI Logo" width="15%" style="margin-left: auto;"/>
-  <img src="docs/_static/stsci_name.png" alt="STScI Name" width="68%"/>
+  <img src="docs/_static/stsci_symbol_pantone279.png" alt="STScI Logo" width="15%" style="margin-left: auto;"/>
+  <img src="docs/_static/stsci_wordmark_grey.png" alt="STScI Name" width="68%"/>
 </a>
 
 # sphersgeo
