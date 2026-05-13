@@ -24,8 +24,8 @@
 pip install sphersgeo
 ```
 
-Planar geometry packages typically classify geometries into points, linestrings, and polygons
-(along with multi-geometry collections: multi-points, multi-linestrings, and multi-polygons).
+Planar geometry packages typically classify geometries into points, linestrings (also called polylines), and polygons
+(along with multi-geometry collections: multi-points, multi-linestrings / multi-polylines, and multi-polygons).
 The spherical geometry analogues to these are spherical points, arcstrings, and spherical polygons.
 
 | Planar     | Spherical          | Planar Collection | Spherical Collection    |
