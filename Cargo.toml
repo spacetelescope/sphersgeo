@@ -1,6 +1,6 @@
 [package]
 name = "sphersgeo"
-version = "0.0.4"
+version = "0.1.0"
 edition = "2024"
 description = "object-oriented spherical geometry"
 readme = "README.md"

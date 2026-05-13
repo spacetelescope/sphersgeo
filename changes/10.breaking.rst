@@ -1,1 +1,0 @@
-orientation of polygons must now be counterclockwise, such that the inside of the polygon is always to the left of the boundary

@@ -1,1 +1,0 @@
-build documentation with Sphinx and `autoapi`, and set up ReadTheDocs configuration
