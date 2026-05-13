@@ -1,3 +1,6 @@
+Spherical Polygons
+==================
+
 .. autoapiclass:: sphersgeo.SphericalPolygon
 	:members:
 	:member-order: bysource

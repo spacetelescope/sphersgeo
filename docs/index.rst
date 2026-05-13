@@ -34,7 +34,7 @@ Polygon     `SphericalPolygon`  MultiPolygon       `MultiSphericalPolygon`
    planar geometry packages such as `geo <https://docs.rs/geo/>`_ or `Shapely <https://shapely.readthedocs.io/>`_.
 
 .. toctree::
-   :maxdepth: 1
+   :maxdepth: 2
    :caption: Python API
 
    python/sphericalpoint.rst

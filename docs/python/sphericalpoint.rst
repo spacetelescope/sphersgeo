@@ -1,3 +1,6 @@
+Spherical Points
+================
+
 .. autoapiclass:: sphersgeo.SphericalPoint
 	:members:
 	:member-order: bysource

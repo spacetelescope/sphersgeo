@@ -1,3 +1,6 @@
+Arc Strings
+===========
+
 .. autoapiclass:: sphersgeo.ArcString
 	:members:
 	:member-order: bysource
