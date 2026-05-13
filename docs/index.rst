@@ -37,9 +37,9 @@ Polygon     `SphericalPolygon`  MultiPolygon       `MultiSphericalPolygon`
    :maxdepth: 1
    :caption: Python API
 
-   sphericalpoint.rst
-   arcstring.rst
-   sphericalpolygon.rst
+   python/sphericalpoint.rst
+   python/arcstring.rst
+   python/sphericalpolygon.rst
 
 .. toctree::
    :maxdepth: 1
