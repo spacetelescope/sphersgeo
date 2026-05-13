@@ -6,7 +6,7 @@
 # sphersgeo
 
 [![build](https://github.com/spacetelescope/sphersgeo/actions/workflows/build.yml/badge.svg)](https://github.com/spacetelescope/sphersgeo/actions/workflows/build.yml)
-[![tests](https://github.com/spacetelescope/sphersgeo/actions/workflows/test.yml/badge.svg)](https://github.com/spacetelescope/sphersgeo/actions/workflows/tests.yml)
+[![tests](https://github.com/spacetelescope/sphersgeo/actions/workflows/tests.yml/badge.svg)](https://github.com/spacetelescope/sphersgeo/actions/workflows/tests.yml)
 [![readthedocs](https://readthedocs.org/projects/sphersgeo/badge/?version=latest)](https://sphersgeo.readthedocs.io)
 [![Powered by STScI](https://img.shields.io/badge/powered%20by-STScI-blue.svg?colorA=707170&colorB=3e8ddd&style=flat)](https://www.stsci.edu)
 
