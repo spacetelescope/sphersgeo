@@ -2,7 +2,8 @@ use crate::{
     arcstring::{ArcString, MultiArcString, points_are_on_same_side, xyzs_turn_orientations},
     edgegraph::EdgeGraph,
     geometry::{
-        GeometricOperations, GeometricRelationships, Geometry, GeometryCollection, MultiGeometry,
+        GeometricOperations, GeometricRelationships, Geometry, MultiGeometry,
+        MultiGeometryUnaryOperations,
     },
     sphericalpoint::{MultiSphericalPoint, SphericalPoint, xyz_div_f64, xyzs_sum},
 };
@@ -449,10 +450,8 @@ impl GeometricOperations<SphericalPoint> for SphericalPolygon {
         todo!()
     }
 
-    fn symmetric_difference(&self, _: &SphericalPoint) -> MultiSphericalPolygon {
-        MultiSphericalPolygon {
-            polygons: vec![self.to_owned()],
-        }
+    fn symmetric_difference(&self, other: &SphericalPoint) -> Option<MultiSphericalPolygon> {
+        todo!()
     }
 }
 
@@ -515,10 +514,8 @@ impl GeometricOperations<MultiSphericalPoint> for SphericalPolygon {
         .ok()
     }
 
-    fn symmetric_difference(&self, _: &MultiSphericalPoint) -> MultiSphericalPolygon {
-        MultiSphericalPolygon {
-            polygons: vec![self.to_owned()],
-        }
+    fn symmetric_difference(&self, other: &MultiSphericalPoint) -> Option<MultiSphericalPolygon> {
+        todo!()
     }
 }
 
@@ -550,35 +547,16 @@ impl GeometricOperations<ArcString> for SphericalPolygon {
     }
 
     fn distance(&self, other: &ArcString) -> f64 {
-        if self.contains(other) {
-            0.0
-        } else {
-            self.boundary.distance(other)
-        }
+        other.distance(self)
     }
 
     fn intersection(&self, other: &ArcString) -> Option<MultiArcString> {
-        let mut arcstrings = vec![];
-
-        if other.within(self) {
-            arcstrings.push(other.to_owned());
-        } else if other.crosses(self) {
-            // split arcstring by the polygon boundary
-            let mut graph = EdgeGraph::<ArcString>::from(vec![&self.boundary, other]);
-            graph.split_edges();
-
-            for arcstring in Vec::<ArcString>::from(graph) {
-                // only include arcstrings inside the polygon
-                if arcstring.within(self) {
-                    arcstrings.push(arcstring);
-                }
-            }
-        }
-
-        MultiArcString::try_from(arcstrings).ok()
+        None
     }
 
-    fn symmetric_difference(&self, other: &ArcString) -> MultiSphericalPolygon {
+    fn symmetric_difference(&self, other: &ArcString) -> Option<MultiSphericalPolygon> {
+        todo!();
+
         // split this polygon into several pieces
         let mut polygons = MultiSphericalPolygon {
             polygons: vec![self.to_owned()],
@@ -631,8 +609,10 @@ impl GeometricOperations<ArcString> for SphericalPolygon {
                                                     boundary_segments[segment_index].to_owned();
                                                 segment_removal_indices.push(segment_index);
                                                 pieces[piece_index] = pieces[piece_index]
-                                                    .join(&latest_segments[piece_index])
-                                                    .unwrap();
+                                                    .union(&latest_segments[piece_index])
+                                                    .unwrap()
+                                                    .arcstrings[0]
+                                                    .to_owned();
                                                 found = true;
                                             }
                                         }
@@ -665,7 +645,7 @@ impl GeometricOperations<ArcString> for SphericalPolygon {
             }
         }
 
-        polygons
+        Some(polygons)
     }
 }
 
@@ -716,7 +696,9 @@ impl GeometricOperations<MultiArcString> for SphericalPolygon {
         MultiArcString::try_from(arcstrings).ok()
     }
 
-    fn symmetric_difference(&self, other: &MultiArcString) -> MultiSphericalPolygon {
+    fn symmetric_difference(&self, other: &MultiArcString) -> Option<MultiSphericalPolygon> {
+        todo!();
+
         let mut polygons = vec![];
 
         for arcstring in &other.arcstrings {
@@ -791,7 +773,9 @@ impl GeometricOperations<Self> for SphericalPolygon {
         MultiSphericalPolygon::try_from(polygons).ok()
     }
 
-    fn symmetric_difference(&self, other: &Self) -> MultiSphericalPolygon {
+    fn symmetric_difference(&self, other: &Self) -> Option<MultiSphericalPolygon> {
+        todo!();
+
         let mut polygons = vec![];
         if self.intersects(other) {
             let mut segments: Vec<ArcString> = self
@@ -809,7 +793,8 @@ impl GeometricOperations<Self> for SphericalPolygon {
                 for (segment_index, segment) in segments.iter().enumerate() {
                     for (other_segment_index, other_segment) in segments.iter().enumerate() {
                         if segment_index != other_segment_index && segment.adjoins(other_segment) {
-                            let joined = segment.join(other_segment).unwrap();
+                            let joined =
+                                segment.union(other_segment).unwrap().arcstrings[0].to_owned();
                             if joined.closed {
                                 polygons.push(Self::try_new(joined, None).unwrap());
                             } else {
@@ -896,7 +881,9 @@ impl GeometricOperations<MultiSphericalPolygon> for SphericalPolygon {
             .sum()
     }
 
-    fn symmetric_difference(&self, other: &MultiSphericalPolygon) -> MultiSphericalPolygon {
+    fn symmetric_difference(&self, other: &MultiSphericalPolygon) -> Option<MultiSphericalPolygon> {
+        todo!();
+
         other
             .polygons
             .iter()
@@ -1064,6 +1051,39 @@ impl MultiGeometry<SphericalPolygon> for MultiSphericalPolygon {
     }
 }
 
+impl MultiGeometryUnaryOperations<SphericalPolygon>
+    for MultiSphericalPolygon
+{
+    fn unary_union(&self) -> Self {
+        let mut graph = EdgeGraph::<SphericalPolygon>::from(self);
+        graph.split_edges();
+        graph.assign_polygons_to_edges();
+        graph.remove_degenerate_edges();
+
+        Self::try_from(Vec::<SphericalPolygon>::from(graph)).unwrap()
+    }
+
+    fn unary_intersection(&self) -> Option<Self> {
+        let mut graph = EdgeGraph::<SphericalPolygon>::from(self);
+        graph.split_edges();
+        graph.assign_polygons_to_edges();
+        graph.remove_unisourced_edges();
+        graph.remove_degenerate_edges();
+
+        Self::try_from(Vec::<SphericalPolygon>::from(graph)).ok()
+    }
+
+    fn unary_symmetric_difference(&self) -> Option<Self> {
+        let mut graph = EdgeGraph::<SphericalPolygon>::from(self);
+        graph.split_edges();
+        graph.assign_polygons_to_edges();
+        graph.remove_multisourced_edges();
+        graph.remove_degenerate_edges();
+
+        Self::try_from(Vec::<SphericalPolygon>::from(graph)).ok()
+    }
+}
+
 impl Sum for MultiSphericalPolygon {
     fn sum<I: Iterator<Item = Self>>(iter: I) -> Self {
         let mut polygons = vec![];
@@ -1109,8 +1129,8 @@ impl GeometricOperations<SphericalPoint, SphericalPolygon> for MultiSphericalPol
         todo!()
     }
 
-    fn symmetric_difference(&self, _: &SphericalPoint) -> Self {
-        self.to_owned()
+    fn symmetric_difference(&self, other: &SphericalPoint) -> Option<Self> {
+        todo!()
     }
 }
 
@@ -1157,8 +1177,8 @@ impl GeometricOperations<MultiSphericalPoint, SphericalPolygon> for MultiSpheric
             .sum()
     }
 
-    fn symmetric_difference(&self, _: &MultiSphericalPoint) -> Self {
-        self.to_owned()
+    fn symmetric_difference(&self, other: &MultiSphericalPoint) -> Option<Self >{
+        todo!()
     }
 }
 
@@ -1204,7 +1224,8 @@ impl GeometricOperations<ArcString, SphericalPolygon> for MultiSphericalPolygon 
             .sum()
     }
 
-    fn symmetric_difference(&self, other: &ArcString) -> Self {
+    fn symmetric_difference(&self, other: &ArcString) -> Option<Self> {
+        todo!()
         self.polygons
             .iter()
             .map(|polygon| polygon.symmetric_difference(other))
@@ -1257,7 +1278,9 @@ impl GeometricOperations<MultiArcString, SphericalPolygon> for MultiSphericalPol
             .sum()
     }
 
-    fn symmetric_difference(&self, other: &MultiArcString) -> Self {
+    fn symmetric_difference(&self, other: &MultiArcString) ->Option< Self >{
+        todo!()
+
         self.polygons
             .iter()
             .map(|polygon| polygon.symmetric_difference(other))
@@ -1317,7 +1340,9 @@ impl GeometricOperations<SphericalPolygon, SphericalPolygon> for MultiSphericalP
             .sum()
     }
 
-    fn symmetric_difference(&self, other: &SphericalPolygon) -> Self {
+    fn symmetric_difference(&self, other: &SphericalPolygon) -> Option<Self> {
+        todo!()
+
         self.polygons
             .iter()
             .map(|polygon| polygon.symmetric_difference(other))
@@ -1381,42 +1406,12 @@ impl GeometricOperations<Self, SphericalPolygon> for MultiSphericalPolygon {
             .sum()
     }
 
-    fn symmetric_difference(&self, other: &Self) -> Self {
+    fn symmetric_difference(&self, other: &Self) -> Option<Self> {
+        todo!()
+
         self.polygons
             .iter()
             .map(|polygon| polygon.symmetric_difference(other))
             .sum()
-    }
-}
-
-impl GeometryCollection<SphericalPolygon> for MultiSphericalPolygon {
-    fn join_self(&self) -> Self {
-        let mut graph = EdgeGraph::<SphericalPolygon>::from(self);
-        graph.split_edges();
-        graph.assign_polygons_to_edges();
-        graph.remove_multisourced_edges();
-        graph.remove_degenerate_edges();
-
-        MultiSphericalPolygon::try_from(Vec::<SphericalPolygon>::from(graph)).unwrap()
-    }
-
-    fn overlap_self(&self) -> Option<Self> {
-        let mut graph = EdgeGraph::<SphericalPolygon>::from(self);
-        graph.split_edges();
-        graph.assign_polygons_to_edges();
-        graph.remove_unisourced_edges();
-        graph.remove_degenerate_edges();
-
-        Self::try_from(Vec::<SphericalPolygon>::from(graph)).ok()
-    }
-
-    fn symmetric_difference_self(&self) -> Option<Self> {
-        let mut split_graph = EdgeGraph::<SphericalPolygon>::from(self);
-        split_graph.split_edges();
-        split_graph.assign_polygons_to_edges();
-        split_graph.remove_multisourced_edges();
-        split_graph.remove_degenerate_edges();
-
-        Self::try_from(Vec::<SphericalPolygon>::from(split_graph)).ok()
     }
 }

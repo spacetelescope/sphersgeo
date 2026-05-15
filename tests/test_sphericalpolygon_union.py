@@ -44,7 +44,7 @@ class union_test:
                 filename = "%s_union_%04d.svg" % (func.__name__, i)
                 print(filename)
 
-                union = SphericalPolygon.join(permutation)
+                union = SphericalPolygon.union(permutation)
                 unions.append(union)
                 union_area = union.area()
 

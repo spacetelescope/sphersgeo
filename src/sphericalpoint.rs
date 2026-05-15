@@ -1,4 +1,7 @@
-use crate::geometry::{GeometricOperations, GeometricRelationships, Geometry, MultiGeometry};
+use crate::geometry::{
+    GeometricOperations, GeometricRelationships, Geometry, MultiGeometry,
+    MultiGeometryUnaryOperations,
+};
 use kiddo::{ImmutableKdTree, SquaredEuclidean};
 use std::{
     fmt::Display,
@@ -252,9 +255,11 @@ pub fn xyz_two_arc_angle(a: &[f64; 3], b: &[f64; 3], c: &[f64; 3]) -> f64 {
     let bc = arc_distance_over_sphere(b, c);
     let ca = arc_distance_over_sphere(c, a);
 
-    if ab < tolerance || bc < tolerance || ca < tolerance {
-        // if any side of the triangle is negligibly small
+    if ca < tolerance {
+        // if the opposite side of the triangle is negligibly small
         0.0
+    } else if ab < tolerance || bc < tolerance {
+        std::f64::consts::PI / 2.0
     } else {
         let radians = ((ca.cos() - (bc.cos() * ab.cos())) / (bc.sin() * ab.sin())).acos();
 
@@ -707,16 +712,20 @@ impl GeometricOperations<Self> for SphericalPoint {
         arc_distance_over_sphere(&self.xyz, &other.xyz).to_degrees()
     }
 
-    fn intersection(&self, other: &Self) -> Option<SphericalPoint> {
+    fn intersection(&self, other: &Self) -> Option<Vec<Box<SphericalPoint>>> {
         if self.touches(other) {
-            Some(self.to_owned())
+            Some(vec![Box::new(self.to_owned())])
         } else {
             None
         }
     }
 
-    fn symmetric_difference(&self, _: &Self) -> MultiSphericalPoint {
-        MultiSphericalPoint::from(self.to_owned())
+    fn difference(&self, other: &Self) -> Option<MultiSphericalPoint> {
+        if self.touches(other) {
+            None
+        } else {
+            MultiSphericalPoint::try_from(vec![self.to_owned()]).ok()
+        }
     }
 }
 
@@ -763,8 +772,12 @@ impl GeometricOperations<MultiSphericalPoint> for SphericalPoint {
         }
     }
 
-    fn symmetric_difference(&self, _: &MultiSphericalPoint) -> MultiSphericalPoint {
-        MultiSphericalPoint::from(self.to_owned())
+    fn difference(&self, other: &MultiSphericalPoint) -> Option<MultiSphericalPoint> {
+        if self.touches(other) {
+            None
+        } else {
+            MultiSphericalPoint::try_from(vec![self.to_owned()]).ok()
+        }
     }
 }
 
@@ -799,8 +812,12 @@ impl GeometricOperations<crate::arcstring::ArcString> for SphericalPoint {
         }
     }
 
-    fn symmetric_difference(&self, _: &crate::arcstring::ArcString) -> MultiSphericalPoint {
-        MultiSphericalPoint::from(self.to_owned())
+    fn difference(&self, other: &crate::arcstring::ArcString) -> Option<MultiSphericalPoint> {
+        if self.touches(other) {
+            None
+        } else {
+            MultiSphericalPoint::try_from(vec![self.to_owned()]).ok()
+        }
     }
 }
 
@@ -835,8 +852,12 @@ impl GeometricOperations<crate::arcstring::MultiArcString> for SphericalPoint {
         }
     }
 
-    fn symmetric_difference(&self, _: &crate::arcstring::MultiArcString) -> MultiSphericalPoint {
-        MultiSphericalPoint::from(self.to_owned())
+    fn difference(&self, other: &crate::arcstring::MultiArcString) -> Option<MultiSphericalPoint> {
+        if self.touches(other) {
+            None
+        } else {
+            MultiSphericalPoint::try_from(vec![self.to_owned()]).ok()
+        }
     }
 }
 
@@ -874,11 +895,15 @@ impl GeometricOperations<crate::sphericalpolygon::SphericalPolygon> for Spherica
         }
     }
 
-    fn symmetric_difference(
+    fn difference(
         &self,
-        _: &crate::sphericalpolygon::SphericalPolygon,
-    ) -> MultiSphericalPoint {
-        MultiSphericalPoint::from(self.to_owned())
+        other: &crate::sphericalpolygon::SphericalPolygon,
+    ) -> Option<MultiSphericalPoint> {
+        if self.touches(other) {
+            None
+        } else {
+            MultiSphericalPoint::try_from(vec![self.to_owned()]).ok()
+        }
     }
 }
 
@@ -919,11 +944,15 @@ impl GeometricOperations<crate::sphericalpolygon::MultiSphericalPolygon> for Sph
         }
     }
 
-    fn symmetric_difference(
+    fn difference(
         &self,
-        _: &crate::sphericalpolygon::MultiSphericalPolygon,
-    ) -> MultiSphericalPoint {
-        MultiSphericalPoint::from(self.to_owned())
+        other: &crate::sphericalpolygon::MultiSphericalPolygon,
+    ) -> Option<MultiSphericalPoint> {
+        if self.touches(other) {
+            None
+        } else {
+            MultiSphericalPoint::try_from(vec![self.to_owned()]).ok()
+        }
     }
 }
 
@@ -1189,7 +1218,7 @@ impl Sum for MultiSphericalPoint {
 
 impl Display for MultiSphericalPoint {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "MultiSphericalPoint({:?})", self.xyzs)
+        write!(f, "{self}")
     }
 }
 
@@ -1396,6 +1425,98 @@ impl MultiGeometry<SphericalPoint> for MultiSphericalPoint {
 
     fn push(&mut self, point: SphericalPoint) {
         self.xyzs.push(point.xyz);
+        self.recreate_kdtree();
+    }
+}
+
+impl MultiGeometryUnaryOperations<SphericalPoint> for MultiSphericalPoint {
+    fn unary_union(&self) -> Self {
+        // find duplicate points
+        let mut duplicate_indices = vec![];
+        for (xyz_index, xyz) in self.xyzs.iter().enumerate() {
+            // skip already-found duplicates
+            if !duplicate_indices.contains(&xyz_index) {
+                let duplicates = self.kdtree.within_unsorted::<SquaredEuclidean>(xyz, 3e-11);
+                if duplicates.len() > 1 {
+                    duplicate_indices.extend(
+                        (1..duplicates.len()).map(|dup_index| duplicates[dup_index].item as usize),
+                    );
+                }
+            }
+        }
+
+        Self::try_from(
+            self.xyzs
+                .iter()
+                .enumerate()
+                .filter_map(|(index, xyz)| {
+                    if !duplicate_indices.contains(&index) {
+                        Some(xyz.to_owned())
+                    } else {
+                        None
+                    }
+                })
+                .collect::<Vec<[f64; 3]>>(),
+        )
+        .unwrap()
+    }
+
+    fn unary_intersection(&self) -> Option<Self> {
+        // find duplicate points
+        let mut duplicate_indices = vec![];
+        for (xyz_index, xyz) in self.xyzs.iter().enumerate() {
+            // skip already-found duplicates
+            if !duplicate_indices.contains(&xyz_index) {
+                let duplicates = self.kdtree.within_unsorted::<SquaredEuclidean>(xyz, 3e-11);
+                if duplicates.len() > 1 {
+                    duplicate_indices.extend(
+                        (1..duplicates.len()).map(|dup_index| duplicates[dup_index].item as usize),
+                    );
+                }
+            }
+        }
+
+        Self::try_from(
+            self.xyzs
+                .iter()
+                .enumerate()
+                .filter_map(|(index, xyz)| {
+                    if duplicate_indices.contains(&index) {
+                        Some(xyz.to_owned())
+                    } else {
+                        None
+                    }
+                })
+                .collect::<Vec<[f64; 3]>>(),
+        )
+        .ok()
+    }
+
+    fn unary_symmetric_difference(&self) -> Option<Self> {
+        // find duplicate points
+        let mut duplicate_indices = vec![];
+        for (xyz_index, xyz) in self.xyzs.iter().enumerate() {
+            // skip already-found duplicates
+            if !duplicate_indices.contains(&xyz_index) {
+                let duplicates = self.kdtree.within_unsorted::<SquaredEuclidean>(xyz, 3e-11);
+                duplicate_indices.extend(duplicates.iter().map(|dup| dup.item as usize));
+            }
+        }
+
+        Self::try_from(
+            self.xyzs
+                .iter()
+                .enumerate()
+                .filter_map(|(index, xyz)| {
+                    if !duplicate_indices.contains(&index) {
+                        Some(xyz.to_owned())
+                    } else {
+                        None
+                    }
+                })
+                .collect::<Vec<[f64; 3]>>(),
+        )
+        .ok()
     }
 }
 
@@ -1442,8 +1563,13 @@ impl GeometricOperations<SphericalPoint, SphericalPoint> for MultiSphericalPoint
         }
     }
 
-    fn symmetric_difference(&self, _: &SphericalPoint) -> Self {
-        self.to_owned()
+    fn difference(&self, other: &SphericalPoint) -> Option<Self> {
+        let mut xyzs = self.xyzs.to_owned();
+        let nearest_neighbor = self.kdtree.nearest_one::<SquaredEuclidean>(&other.xyz);
+        if nearest_neighbor.distance < 3e-11 {
+            xyzs.remove(nearest_neighbor.item as usize);
+        }
+        Self::try_from(xyzs).ok()
     }
 }
 
@@ -1540,8 +1666,20 @@ impl GeometricOperations<Self, SphericalPoint> for MultiSphericalPoint {
         .ok()
     }
 
-    fn symmetric_difference(&self, _: &Self) -> Self {
-        self.to_owned()
+    fn difference(&self, other: &Self) -> Option<Self> {
+        Self::try_from(
+            self.xyzs
+                .iter()
+                .filter_map(|xyz| {
+                    if !point_within_kdtree(xyz, &other.kdtree) {
+                        Some(*xyz)
+                    } else {
+                        None
+                    }
+                })
+                .collect::<Vec<[f64; 3]>>(),
+        )
+        .ok()
     }
 }
 
@@ -1590,8 +1728,8 @@ impl GeometricOperations<crate::arcstring::ArcString, SphericalPoint> for MultiS
         .ok()
     }
 
-    fn symmetric_difference(&self, _: &crate::arcstring::ArcString) -> Self {
-        self.to_owned()
+    fn difference(&self, other: &crate::arcstring::ArcString) -> Option<Self> {
+        todo!()
     }
 }
 
@@ -1622,8 +1760,8 @@ impl GeometricOperations<crate::arcstring::MultiArcString, SphericalPoint> for M
         other.intersection(self)
     }
 
-    fn symmetric_difference(&self, _: &crate::arcstring::MultiArcString) -> Self {
-        self.to_owned()
+    fn difference(&self, other: &crate::arcstring::MultiArcString) -> Option<Self> {
+        todo!()
     }
 }
 
@@ -1656,8 +1794,8 @@ impl GeometricOperations<crate::sphericalpolygon::SphericalPolygon, SphericalPoi
         other.intersection(self)
     }
 
-    fn symmetric_difference(&self, _: &crate::sphericalpolygon::SphericalPolygon) -> Self {
-        self.to_owned()
+    fn difference(&self, other: &crate::sphericalpolygon::SphericalPolygon) -> Option<Self> {
+        todo!()
     }
 }
 
@@ -1701,7 +1839,7 @@ impl GeometricOperations<crate::sphericalpolygon::MultiSphericalPolygon, Spheric
         other.intersection(self)
     }
 
-    fn symmetric_difference(&self, _: &crate::sphericalpolygon::MultiSphericalPolygon) -> Self {
-        self.to_owned()
+    fn difference(&self, other: &crate::sphericalpolygon::MultiSphericalPolygon) -> Option<Self> {
+        todo!()
     }
 }

@@ -18,6 +18,10 @@ mod py_sphersgeo {
     use crate::geometry::{
         AnyGeometry, GeometricOperations, GeometricRelationships, Geometry, MultiGeometry,
     };
+    use crate::geometry::{
+        GeometricOperations, GeometricRelationships, Geometry, MultiGeometry,
+        MultiGeometryUnaryOperations,
+    };
     use numpy::{
         IntoPyArray, PyArray1, PyArray2, PyReadonlyArray1, PyReadonlyArray2,
         ndarray::{Array1, Array2},
@@ -354,26 +358,16 @@ mod py_sphersgeo {
         }
 
         #[pyo3(name = "intersection")]
-        fn py_intersection(&self, other: AnyGeometry) -> Option<AnyGeometry> {
+        fn py_intersection(&self, other: AnyGeometry) -> Option<SphericalPoint> {
             match other {
-                AnyGeometry::SphericalPoint(point) => {
-                    self.intersection(&point).map(AnyGeometry::SphericalPoint)
+                AnyGeometry::SphericalPoint(point) => self.intersection(&point),
+                AnyGeometry::MultiSphericalPoint(multipoint) => self.intersection(&multipoint),
+                AnyGeometry::ArcString(arcstring) => self.intersection(&arcstring),
+                AnyGeometry::MultiArcString(multiarcstring) => self.intersection(&multiarcstring),
+                AnyGeometry::SphericalPolygon(polygon) => self.intersection(&polygon),
+                AnyGeometry::MultiSphericalPolygon(multipolygon) => {
+                    self.intersection(&multipolygon)
                 }
-                AnyGeometry::MultiSphericalPoint(multipoint) => self
-                    .intersection(&multipoint)
-                    .map(AnyGeometry::SphericalPoint),
-                AnyGeometry::ArcString(arcstring) => self
-                    .intersection(&arcstring)
-                    .map(AnyGeometry::SphericalPoint),
-                AnyGeometry::MultiArcString(multiarcstring) => self
-                    .intersection(&multiarcstring)
-                    .map(AnyGeometry::SphericalPoint),
-                AnyGeometry::SphericalPolygon(polygon) => {
-                    self.intersection(&polygon).map(AnyGeometry::SphericalPoint)
-                }
-                AnyGeometry::MultiSphericalPolygon(multipolygon) => self
-                    .intersection(&multipolygon)
-                    .map(AnyGeometry::SphericalPoint),
             }
         }
 
@@ -799,6 +793,21 @@ mod py_sphersgeo {
             Ok(())
         }
 
+        #[getter]
+        fn get_unary_union(&self) -> Self {
+            self.unary_union()
+        }
+
+        #[getter]
+        fn get_unary_intersection(&self) -> Option<Self> {
+            self.unary_intersection()
+        }
+
+        #[getter]
+        fn get_unary_symmetric_difference(&self) -> Option<Self> {
+            self.unary_symmetric_difference()
+        }
+
         fn __iadd__(&mut self, points: PyMultiSphericalPointInputs) -> PyResult<()> {
             *self += &Self::py_new(points)?;
             Ok(())
@@ -914,11 +923,6 @@ mod py_sphersgeo {
         #[pyo3(name = "adjoins")]
         fn py_adjoins(&self, other: PyArcStringInputs) -> PyResult<bool> {
             Ok(self.adjoins(&Self::py_new(other, None)?))
-        }
-
-        #[pyo3(name = "join")]
-        fn py_join(&self, other: PyArcStringInputs) -> PyResult<Option<ArcString>> {
-            Ok(self.join(&Self::py_new(other, None)?))
         }
 
         #[pyo3(name = "simplify")]
@@ -1515,6 +1519,21 @@ mod py_sphersgeo {
         fn py_extend(&mut self, arcstrings: PyMultiArcStringInputs) -> PyResult<()> {
             self.extend(Self::py_new(arcstrings)?);
             Ok(())
+        }
+
+        #[getter]
+        fn get_unary_union(&self) -> Self {
+            self.unary_union()
+        }
+
+        #[getter]
+        fn get_unary_intersection(&self) -> Option<Self> {
+            self.unary_intersection()
+        }
+
+        #[getter]
+        fn get_unary_symmetric_difference(&self) -> Option<Self> {
+            self.unary_symmetric_difference()
         }
 
         fn __iadd__(&mut self, arcstrings: PyMultiArcStringInputs) -> PyResult<()> {
@@ -2217,6 +2236,21 @@ mod py_sphersgeo {
         fn py_extend(&mut self, polygons: PyMultiSphericalPolygonInputs) -> PyResult<()> {
             self.extend(Self::py_new(polygons)?);
             Ok(())
+        }
+
+        #[getter]
+        fn get_unary_union(&self) -> Self {
+            self.unary_union()
+        }
+
+        #[getter]
+        fn get_unary_intersection(&self) -> Option<Self> {
+            self.unary_intersection()
+        }
+
+        #[getter]
+        fn get_unary_symmetric_difference(&self) -> Option<Self> {
+            self.unary_symmetric_difference()
         }
 
         fn __iadd__(&mut self, polygons: PyMultiSphericalPolygonInputs) -> PyResult<()> {

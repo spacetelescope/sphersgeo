@@ -1,7 +1,8 @@
 use crate::{
     edgegraph::EdgeGraph,
     geometry::{
-        GeometricOperations, GeometricRelationships, Geometry, GeometryCollection, MultiGeometry,
+        GeometricOperations, GeometricRelationships, Geometry, MultiGeometry,
+        MultiGeometryUnaryOperations,
     },
     sphericalpoint::{
         MultiSphericalPoint, SphericalPoint, arc_distance_over_sphere, point_within_kdtree,
@@ -545,24 +546,6 @@ impl ArcString {
         false
     }
 
-    /// join this arcstring to another
-    pub fn join(&self, other: &ArcString) -> Option<ArcString> {
-        if self.closed || other.closed {
-            None
-        } else {
-            let mut graph = EdgeGraph::<Self>::from(vec![self, other]);
-            graph.split_edges();
-            graph.remove_degenerate_edges();
-
-            let arcstrings: Vec<ArcString> = Vec::<ArcString>::from(graph);
-            if arcstrings.len() == 1 {
-                Some(arcstrings[0].to_owned())
-            } else {
-                None
-            }
-        }
-    }
-
     /// remove redundant vertices that already lie along the arcstring
     pub fn simplify(&mut self) {
         loop {
@@ -710,7 +693,7 @@ impl GeometricRelationships<SphericalPoint> for ArcString {
     }
 
     fn contains(&self, other: &SphericalPoint) -> bool {
-        if self.touches(other) {
+        if self.covers(other) {
             // endpoints are not part of the interior of an arcstring
             if let Some(boundary) = self.boundary() {
                 !boundary.contains(other)
@@ -770,8 +753,8 @@ impl GeometricOperations<SphericalPoint> for ArcString {
         }
     }
 
-    fn symmetric_difference(&self, other: &SphericalPoint) -> MultiArcString {
-        split_arcstring_at_points(self, vec![&other.xyz])
+    fn difference(&self, other: &SphericalPoint) -> Option<MultiArcString> {
+        Some(split_arcstring_at_points(self, vec![&other.xyz]))
     }
 }
 
@@ -792,7 +775,7 @@ impl GeometricRelationships<MultiSphericalPoint> for ArcString {
         if self.covers(other) {
             // endpoints are not part of the interior of an arcstring
             if let Some(boundary) = self.boundary() {
-                if self.intersects(&boundary) {
+                if boundary.intersects(other) {
                     return false;
                 }
             }
@@ -849,11 +832,11 @@ impl GeometricOperations<MultiSphericalPoint> for ArcString {
     }
 
     fn intersection(&self, other: &MultiSphericalPoint) -> Option<MultiSphericalPoint> {
-        other.intersection(self)
+        todo!()
     }
 
-    fn symmetric_difference(&self, other: &MultiSphericalPoint) -> MultiArcString {
-        split_arcstring_at_points(self, other.xyzs.iter().collect())
+    fn difference(&self, other: &MultiSphericalPoint) -> Option<impl MultiGeometry<Self>> {
+        Some(split_arcstring_at_points(self, other.xyzs.iter().collect()))
     }
 }
 
@@ -969,16 +952,31 @@ impl GeometricRelationships<Self> for ArcString {
     }
 }
 
-impl GeometricOperations<ArcString> for ArcString {
-    fn union(&self, other: &ArcString) -> Option<MultiArcString> {
-        Some(self + other)
+impl GeometricOperations<Self> for ArcString {
+    fn union(&self, other: &Self) -> Option<MultiArcString> {
+        if self.closed || other.closed {
+            Some(self + other)
+        } else {
+            let mut graph = EdgeGraph::<Self>::from(vec![self, other]);
+            graph.split_edges();
+            graph.remove_degenerate_edges();
+
+            let arcstrings: Vec<ArcString> = Vec::<ArcString>::from(graph);
+            if arcstrings.len() == 1 {
+                Some(MultiArcString {
+                    arcstrings: vec![arcstrings[0].to_owned()],
+                })
+            } else {
+                None
+            }
+        }
     }
 
-    fn distance(&self, other: &ArcString) -> f64 {
+    fn distance(&self, other: &Self) -> f64 {
         todo!()
     }
 
-    fn intersection(&self, other: &ArcString) -> Option<MultiSphericalPoint> {
+    fn intersection(&self, other: &Self) -> Option<MultiSphericalPoint> {
         let mut intersections = vec![];
 
         // we can't use the Bentley-Ottmann sweep-line algorithm here :/
@@ -1013,12 +1011,9 @@ impl GeometricOperations<ArcString> for ArcString {
         MultiSphericalPoint::try_from(intersections).ok()
     }
 
-    fn symmetric_difference(&self, other: &ArcString) -> MultiArcString {
-        if let Some(points) = self.intersection(other) {
-            split_arcstring_at_points(self, points.xyzs.iter().collect())
-        } else {
-            MultiArcString::try_from(vec![self.to_owned()]).unwrap()
-        }
+    fn difference(&self, other: &Self) -> Option<MultiArcString> {
+        self.intersection(other)
+            .map(|points| split_arcstring_at_points(self, points.xyzs.iter().collect()))
     }
 }
 
@@ -1062,7 +1057,7 @@ impl GeometricRelationships<MultiArcString> for ArcString {
 
 impl GeometricOperations<MultiArcString> for ArcString {
     fn union(&self, other: &MultiArcString) -> Option<MultiArcString> {
-        Some(other + self)
+        todo!()
     }
 
     fn distance(&self, other: &MultiArcString) -> f64 {
@@ -1070,14 +1065,17 @@ impl GeometricOperations<MultiArcString> for ArcString {
     }
 
     fn intersection(&self, other: &MultiArcString) -> Option<MultiSphericalPoint> {
-        other.intersection(self)
+        todo!()
     }
 
-    fn symmetric_difference(&self, other: &MultiArcString) -> MultiArcString {
+    fn difference(&self, other: &MultiArcString) -> Option<MultiArcString> {
         if let Some(points) = self.intersection(other) {
-            split_arcstring_at_points(self, points.xyzs.iter().collect())
+            Some(split_arcstring_at_points(
+                self,
+                points.xyzs.iter().collect(),
+            ))
         } else {
-            MultiArcString::try_from(vec![self.to_owned()]).unwrap()
+            MultiArcString::try_from(vec![self.to_owned()]).ok()
         }
     }
 }
@@ -1110,25 +1108,57 @@ impl GeometricOperations<crate::sphericalpolygon::SphericalPolygon> for ArcStrin
     }
 
     fn distance(&self, other: &crate::sphericalpolygon::SphericalPolygon) -> f64 {
-        other.distance(self)
+        if self.within(other) {
+            0.0
+        } else {
+            self.distance(&other.boundary)
+        }
     }
 
     fn intersection(
         &self,
         other: &crate::sphericalpolygon::SphericalPolygon,
     ) -> Option<MultiArcString> {
-        other.intersection(self)
+        let mut arcstrings = vec![];
+
+        if self.within(other) {
+            arcstrings.push(self.to_owned());
+        } else if let Some(points) = self.intersection(&other.boundary) {
+            // split arcstring at the polygon boundary
+            for arcstring in
+                split_arcstring_at_points(self, points.xyzs.iter().collect()).arcstrings
+            {
+                // only include arcstrings inside the polygon
+                if arcstring.within(self) {
+                    arcstrings.push(arcstring);
+                }
+            }
+        }
+
+        MultiArcString::try_from(arcstrings).ok()
     }
 
-    fn symmetric_difference(
+    fn difference(
         &self,
         other: &crate::sphericalpolygon::SphericalPolygon,
-    ) -> MultiArcString {
-        if let Some(points) = self.intersection(&other.boundary) {
-            split_arcstring_at_points(self, points.xyzs.iter().collect())
-        } else {
-            MultiArcString::try_from(vec![self.to_owned()]).unwrap()
+    ) -> Option<MultiArcString> {
+        let mut arcstrings = vec![];
+
+        if !self.within(other) {
+            arcstrings.push(self.to_owned());
+        } else if let Some(points) = self.intersection(&other.boundary) {
+            // split arcstring at the polygon boundary
+            for arcstring in
+                split_arcstring_at_points(self, points.xyzs.iter().collect()).arcstrings
+            {
+                // only include arcstrings outside the polygon
+                if !arcstring.within(self) {
+                    arcstrings.push(arcstring);
+                }
+            }
         }
+
+        MultiArcString::try_from(arcstrings).ok()
     }
 }
 
@@ -1167,22 +1197,28 @@ impl GeometricOperations<crate::sphericalpolygon::MultiSphericalPolygon> for Arc
         &self,
         other: &crate::sphericalpolygon::MultiSphericalPolygon,
     ) -> Option<MultiArcString> {
-        other.intersection(self)
+        todo!()
     }
 
-    fn symmetric_difference(
+    fn difference(
         &self,
         other: &crate::sphericalpolygon::MultiSphericalPolygon,
-    ) -> MultiArcString {
+    ) -> Option<MultiArcString> {
+        let mut arcstrings = vec![];
         if let Some(other_boundary) = other.boundary() {
             if let Some(points) = self.intersection(&other_boundary) {
-                split_arcstring_at_points(self, points.xyzs.iter().collect())
+                return Some(split_arcstring_at_points(
+                    self,
+                    points.xyzs.iter().collect(),
+                ));
             } else {
-                MultiArcString::try_from(vec![self.to_owned()]).unwrap()
+                arcstrings.push(self.to_owned());
             }
         } else {
-            MultiArcString::try_from(vec![self.to_owned()]).unwrap()
+            arcstrings.push(self.to_owned());
         }
+
+        MultiArcString::try_from(arcstrings).ok()
     }
 }
 
@@ -1370,6 +1406,60 @@ impl MultiGeometry<ArcString> for MultiArcString {
     }
 }
 
+impl MultiGeometryUnaryOperations<ArcString> for MultiArcString {
+    fn unary_union(&self) -> Self {
+        // add all nodes to graph
+        let mut graph =
+            EdgeGraph::<ArcString>::from(self.arcstrings.iter().collect::<Vec<&ArcString>>());
+
+        // split edges based on overlapping nodes / intersecting edges
+        graph.split_edges();
+
+        // prune 0-length edges and nodes without edges
+        graph.remove_degenerate_edges();
+        graph.remove_orphaned_nodes();
+
+        // trace arcstrings from graph
+        Self::try_from(Vec::<ArcString>::from(graph)).unwrap()
+    }
+
+    fn unary_intersection(&self) -> Option<Self> {
+        // add all nodes to graph
+        let mut graph =
+            EdgeGraph::<ArcString>::from(self.arcstrings.iter().collect::<Vec<&ArcString>>());
+
+        // split edges based on overlapping nodes / intersecting edges
+        graph.split_edges();
+
+        // remove all edges that only came from a single arcstring
+        graph.remove_unisourced_edges();
+
+        // prune 0-length edges and nodes without edges
+        graph.remove_degenerate_edges();
+        graph.remove_orphaned_nodes();
+
+        Self::try_from(Vec::<ArcString>::from(graph)).ok()
+    }
+
+    fn unary_symmetric_difference(&self) -> Option<Self> {
+        // add all nodes to graph
+        let mut graph =
+            EdgeGraph::<ArcString>::from(self.arcstrings.iter().collect::<Vec<&ArcString>>());
+
+        // split edges based on overlapping nodes / intersecting edges
+        graph.split_edges();
+
+        // remove all edges shared by multiple arcstrings
+        graph.remove_multisourced_edges();
+
+        // prune 0-length edges and nodes without edges
+        graph.remove_degenerate_edges();
+        graph.remove_orphaned_nodes();
+
+        Self::try_from(Vec::<ArcString>::from(graph)).ok()
+    }
+}
+
 impl GeometricRelationships<SphericalPoint> for MultiArcString {
     fn intersects(&self, other: &SphericalPoint) -> bool {
         self.contains(other)
@@ -1406,16 +1496,16 @@ impl GeometricOperations<SphericalPoint, ArcString> for MultiArcString {
     }
 
     fn intersection(&self, other: &SphericalPoint) -> Option<SphericalPoint> {
-        other.intersection(self)
+        todo!()
     }
 
-    fn symmetric_difference(&self, other: &SphericalPoint) -> Self {
-        let mut arcstrings = vec![];
-        for arcstring in &self.arcstrings {
+    fn difference(&self, other: &SphericalPoint) -> Option<impl MultiGeometry<ArcString>> {
+        let mut arcstrings = self.arcstrings.to_owned();
+        for (index, arcstring) in self.arcstrings.iter().enumerate().rev() {
             arcstrings.extend(split_arcstring_at_points(arcstring, vec![&other.xyz]).arcstrings);
         }
 
-        MultiArcString::try_from(arcstrings).unwrap()
+        MultiArcString::try_from(arcstrings).ok()
     }
 }
 
@@ -1468,7 +1558,7 @@ impl GeometricOperations<MultiSphericalPoint, ArcString> for MultiArcString {
         }
     }
 
-    fn symmetric_difference(&self, other: &MultiSphericalPoint) -> Self {
+    fn symmetric_difference(&self, other: &MultiSphericalPoint) -> Option<Self> {
         let mut arcstrings = vec![];
         for arcstring in &self.arcstrings {
             arcstrings.extend(
@@ -1476,7 +1566,7 @@ impl GeometricOperations<MultiSphericalPoint, ArcString> for MultiArcString {
             );
         }
 
-        MultiArcString::try_from(arcstrings).unwrap()
+        MultiArcString::try_from(arcstrings).ok()
     }
 }
 
@@ -1558,7 +1648,7 @@ impl GeometricOperations<ArcString, ArcString> for MultiArcString {
         }
     }
 
-    fn symmetric_difference(&self, other: &ArcString) -> Self {
+    fn symmetric_difference(&self, other: &ArcString) -> Option<Self> {
         let mut arcstrings = vec![];
         if let Some(points) = self.intersection(other) {
             for arcstring in &self.arcstrings {
@@ -1568,7 +1658,7 @@ impl GeometricOperations<ArcString, ArcString> for MultiArcString {
             }
         }
 
-        MultiArcString::try_from(arcstrings).unwrap()
+        MultiArcString::try_from(arcstrings).ok()
     }
 }
 
@@ -1658,7 +1748,7 @@ impl GeometricOperations<Self, ArcString> for MultiArcString {
         }
     }
 
-    fn symmetric_difference(&self, other: &Self) -> Self {
+    fn symmetric_difference(&self, other: &Self) -> Option<Self> {
         let mut arcstrings = vec![];
         if let Some(points) = self.intersection(other) {
             for arcstring in &self.arcstrings {
@@ -1668,7 +1758,7 @@ impl GeometricOperations<Self, ArcString> for MultiArcString {
             }
         }
 
-        Self::try_from(arcstrings).unwrap()
+        Self::try_from(arcstrings).ok()
     }
 }
 
@@ -1718,7 +1808,10 @@ impl GeometricOperations<crate::sphericalpolygon::SphericalPolygon, ArcString> f
             .sum()
     }
 
-    fn symmetric_difference(&self, other: &crate::sphericalpolygon::SphericalPolygon) -> Self {
+    fn symmetric_difference(
+        &self,
+        other: &crate::sphericalpolygon::SphericalPolygon,
+    ) -> Option<Self> {
         let mut arcstrings = vec![];
         if let Some(points) = self.intersection(&other.boundary) {
             for arcstring in &self.arcstrings {
@@ -1728,7 +1821,7 @@ impl GeometricOperations<crate::sphericalpolygon::SphericalPolygon, ArcString> f
             }
         }
 
-        Self::try_from(arcstrings).unwrap()
+        Self::try_from(arcstrings).ok()
     }
 }
 
@@ -1780,7 +1873,10 @@ impl GeometricOperations<crate::sphericalpolygon::MultiSphericalPolygon, ArcStri
             .sum()
     }
 
-    fn symmetric_difference(&self, other: &crate::sphericalpolygon::MultiSphericalPolygon) -> Self {
+    fn symmetric_difference(
+        &self,
+        other: &crate::sphericalpolygon::MultiSphericalPolygon,
+    ) -> Option<Self> {
         let mut arcstrings = vec![];
         if let Some(other_boundary) = other.boundary() {
             if let Some(points) = self.intersection(&other_boundary) {
@@ -1792,43 +1888,6 @@ impl GeometricOperations<crate::sphericalpolygon::MultiSphericalPolygon, ArcStri
                 }
             }
         }
-
-        Self::try_from(arcstrings).unwrap()
-    }
-}
-
-impl GeometryCollection<ArcString> for MultiArcString {
-    fn join_self(&self) -> Self {
-        let mut graph =
-            EdgeGraph::<ArcString>::from(self.arcstrings.iter().collect::<Vec<&ArcString>>());
-        graph.split_edges();
-        graph.remove_multisourced_edges();
-        graph.remove_degenerate_edges();
-
-        Self::try_from(Vec::<ArcString>::from(graph)).unwrap()
-    }
-
-    fn overlap_self(&self) -> Option<Self> {
-        let mut graph =
-            EdgeGraph::<ArcString>::from(self.arcstrings.iter().collect::<Vec<&ArcString>>());
-        graph.split_edges();
-        graph.remove_unisourced_edges();
-        graph.remove_degenerate_edges();
-
-        Self::try_from(Vec::<ArcString>::from(graph)).ok()
-    }
-
-    fn symmetric_difference_self(&self) -> Option<Self> {
-        let mut split_graph =
-            EdgeGraph::<ArcString>::from(self.arcstrings.iter().collect::<Vec<&ArcString>>());
-        split_graph.split_edges();
-
-        let mut overlap_graph = split_graph.to_owned();
-        overlap_graph.remove_unisourced_edges();
-        overlap_graph.remove_degenerate_edges();
-
-        let mut arcstrings = Vec::<ArcString>::from(split_graph);
-        arcstrings.extend(Vec::<ArcString>::from(overlap_graph));
 
         Self::try_from(arcstrings).ok()
     }

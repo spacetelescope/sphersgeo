@@ -1,4 +1,4 @@
-from typing import Any, TypeAlias
+from typing import Any, TypeAlias, overload
 
 import numpy as np
 
@@ -63,6 +63,110 @@ class Geometry:
     @property
     def wkt(self) -> str:
         """well-known text representation of this geometry in degrees"""
+        ...
+
+
+class MultiGeometry:
+    @overload
+    def parts(self: MultiSphericalPoint) -> list[SphericalPoint]: ...
+    @overload
+    def parts(self: MultiArcString) -> list[ArcString]: ...
+    @overload
+    def parts(self: MultiSphericalPolygon) -> list[MultiSphericalPolygon]: ...
+    @property
+    def parts(
+        self,
+    ) -> list[SphericalPoint] | list[ArcString] | list[SphericalPolygon]:
+        """geometries comprising this collection"""
+        ...
+
+    def __len__(self) -> int:
+        """number of geometries in this collection"""
+        ...
+
+    @overload
+    def __getitem__(
+        self: MultiSphericalPoint, index
+    ) -> SphericalPoint | MultiSphericalPoint | None: ...
+    @overload
+    def __getitem__(
+        self: MultiArcString, index
+    ) -> ArcString | MultiArcString | None: ...
+    @overload
+    def __getitem__(
+        self: MultiSphericalPolygon, index
+    ) -> SphericalPolygon | MultiSphericalPolygon | None: ...
+    def __getitem__(self, index: int) -> None: ...
+    @overload
+    def append(self: MultiSphericalPoint, other: SphericalPoint): ...
+    @overload
+    def append(self: MultiArcString, other: ArcString): ...
+    @overload
+    def append(self: MultiSphericalPolygon, other: SphericalPolygon): ...
+    def append(self, other):
+        """append the geometry to this collection"""
+        ...
+
+    @overload
+    def extend(self: MultiSphericalPoint, other: MultiSphericalPoint): ...
+    @overload
+    def extend(self: MultiArcString, other: MultiArcString): ...
+    @overload
+    def extend(self: MultiSphericalPolygon, other: MultiSphericalPolygon): ...
+    def extend(self, other):
+        """extend this collection with geometries from the other collection"""
+        ...
+
+    @overload
+    def unary_union(self: MultiSphericalPoint) -> MultiSphericalPoint: ...
+    @overload
+    def unary_union(self: MultiArcString) -> MultiArcString: ...
+    @overload
+    def unary_union(self: MultiSphericalPolygon) -> MultiSphericalPolygon: ...
+    def unary_union(
+        self,
+    ) -> MultiSphericalPoint | MultiArcString | MultiSphericalPolygon:
+        """
+        dissolved union of these geometries
+
+        For further explanation of Unary Union see Shapely's `unary_union`.
+        """
+        ...
+
+    @overload
+    def unary_intersection(self: MultiSphericalPoint) -> MultiSphericalPoint: ...
+    @overload
+    def unary_intersection(self: MultiArcString) -> MultiArcString: ...
+    @overload
+    def unary_intersection(self: MultiSphericalPolygon) -> MultiSphericalPolygon: ...
+    def unary_intersection(
+        self,
+    ) -> MultiSphericalPoint | MultiArcString | MultiSphericalPolygon | None:
+        """
+        overlapping regions between these geometries, if any
+
+        For further explanation of Intersection see Shapely's `object.intersection`.
+        """
+        ...
+
+    @overload
+    def unary_symmetric_difference(
+        self: MultiSphericalPoint,
+    ) -> MultiSphericalPoint: ...
+    @overload
+    def unary_symmetric_difference(self: MultiArcString) -> MultiArcString: ...
+    @overload
+    def unary_symmetric_difference(
+        self: MultiSphericalPolygon,
+    ) -> MultiSphericalPolygon: ...
+    def unary_symmetric_difference(
+        self,
+    ) -> MultiSphericalPoint | MultiArcString | MultiSphericalPolygon | None:
+        """
+        non-overlapping regions between these geometries
+
+        For further explanation of Symmetric Difference see Shapely's `object.symmetric_difference`.
+        """
         ...
 
 
@@ -186,9 +290,21 @@ class GeometricRelationships:
 
 
 class GeometricOperations:
+    @overload
     def union(
-        self, other: SphericalPoint | MultiSphericalPoint
-    ) -> MultiSphericalPoint | None:
+        self: SphericalPoint | MultiSphericalPoint,
+        other: SphericalPoint | MultiSphericalPoint,
+    ) -> MultiSphericalPoint: ...
+    @overload
+    def union(
+        self: ArcString | MultiArcString, other: ArcString | MultiArcString
+    ) -> MultiArcString: ...
+    @overload
+    def union(
+        self: SphericalPolygon | MultiSphericalPolygon,
+        other: SphericalPolygon | MultiSphericalPolygon,
+    ) -> MultiSphericalPolygon: ...
+    def union(self, other: AnyGeometry) -> None:
         """
         union of points from this geometry and the other geometry
 
@@ -203,27 +319,97 @@ class GeometricOperations:
         """shortest great-circle distance over the sphere from any part of this geometry to another"""
         ...
 
+    @overload
+    def intersection(self: SphericalPoint, other) -> SphericalPoint | None: ...
+    @overload
+    def intersection(self, other: SphericalPoint) -> SphericalPoint | None: ...
+    @overload
+    def intersection(
+        self: MultiSphericalPoint, other
+    ) -> SphericalPoint | MultiSphericalPoint | None: ...
+    @overload
+    def intersection(
+        self, other: MultiSphericalPoint
+    ) -> SphericalPoint | MultiSphericalPoint | None: ...
+    @overload
+    def intersection(
+        self: ArcString, other
+    ) -> SphericalPoint | MultiSphericalPoint | ArcString | MultiArcString | None: ...
+    @overload
+    def intersection(
+        self, other: ArcString
+    ) -> SphericalPoint | MultiSphericalPoint | ArcString | MultiArcString | None: ...
+    @overload
+    def intersection(
+        self: MultiArcString, other
+    ) -> SphericalPoint | MultiSphericalPoint | ArcString | MultiArcString | None: ...
+    @overload
+    def intersection(
+        self, other: MultiArcString
+    ) -> SphericalPoint | MultiSphericalPoint | ArcString | MultiArcString | None: ...
     def intersection(
         self,
         other: AnyGeometry,
-    ) -> AnyGeometry | None:
+    ) -> None:
         """
         any part of this geometry that is within another
 
         NOTE: this function is NOT rigorous;
         it will ONLY return the lower order of geometry being compared
         and will NOT handle touching, colinear overlap, or degenerate cases
+
+        Intersection is the inverse of Difference .
+
+        For further explanation of Intersection see Shapely's `object.intersection`.
         """
         ...
 
+    @overload
+    def difference(
+        self: SphericalPoint | MultiSphericalPoint, other
+    ) -> SphericalPoint | MultiSphericalPoint | None: ...
+    @overload
+    def difference(
+        self: ArcString | MultiArcString, other
+    ) -> ArcString | MultiArcString | None: ...
+    @overload
+    def difference(
+        self: SphericalPolygon | MultiSphericalPolygon, other
+    ) -> SphericalPolygon | MultiSphericalPolygon | None: ...
+    def difference(
+        self,
+        other: AnyGeometry,
+    ) -> AnyGeometry | None:
+        """
+        regions of this geometry that do not intersect or overlap with the other geometry
+
+        Difference is the inverse of Intersection.
+
+        For further explanation of Difference see Shapely's `object.difference`.
+        """
+        ...
+
+    @overload
+    def symmetric_difference(
+        self: SphericalPoint | MultiSphericalPoint,
+        other: SphericalPoint | MultiSphericalPoint,
+    ) -> MultiSphericalPoint | None: ...
+    @overload
+    def symmetric_difference(
+        self: ArcString | MultiArcString,
+        other: ArcString | MultiArcString,
+    ) -> MultiArcString | None: ...
+    @overload
+    def symmetric_difference(
+        self: SphericalPolygon | MultiSphericalPolygon,
+        other: SphericalPolygon | MultiSphericalPolygon,
+    ) -> MultiSphericalPolygon | None: ...
     def symmetric_difference(
         self,
         other: AnyGeometry,
-    ) -> AnyGeometry:
+    ) -> None:
         """
-        points in this object not in the other geometric object, and the points in the other not in this geometric object.
-
-        Splits this geometry into a multi-geometry, at the crossing with the other geometry.
+        regions of this geometry and the other geometry that do not intersect or overlap
 
         For further explanation of Symmetric Difference see Shapely's `object.symmetric_difference`.
         """
@@ -351,7 +537,9 @@ MultiSphericalPointInputs: TypeAlias = (
 )
 
 
-class MultiSphericalPoint(Geometry, GeometricRelationships, GeometricOperations):
+class MultiSphericalPoint(
+    Geometry, MultiGeometry, GeometricRelationships, GeometricOperations
+):
     """collection of multiple points on the sphere"""
 
     def __init__(
@@ -419,25 +607,6 @@ class MultiSphericalPoint(Geometry, GeometricRelationships, GeometricOperations)
         ...
 
     @property
-    def parts(
-        self,
-    ) -> list[SphericalPoint]: ...
-    def __len__(self) -> int:
-        """number of geometries in this collection"""
-        ...
-
-    def __getitem__(
-        self, index: int
-    ) -> SphericalPoint | MultiSphericalPoint | None: ...
-    def append(self, other: SphericalPoint):
-        """append the geometry to this collection"""
-        ...
-
-    def extend(self, other: MultiSphericalPoint):
-        """extend this collection with geometries from the other collection"""
-        ...
-
-    @property
     def boundary(self) -> None: ...
     def __iadd__(self, other: MultiSphericalPoint): ...
     def __add__(self, other: MultiSphericalPoint) -> MultiSphericalPoint: ...
@@ -485,10 +654,6 @@ class ArcString(Geometry, GeometricRelationships, GeometricOperations):
         """
         ...
 
-    def __len__(self) -> int:
-        """number of arcs in this arcstring"""
-        ...
-
     @property
     def lengths(self) -> np.ndarray[tuple[Any], np.dtype[np.float64]]:
         """angle subtended on the sphere by each arc"""
@@ -528,10 +693,6 @@ class ArcString(Geometry, GeometricRelationships, GeometricOperations):
         """whether this arcstring shares endpoints with another (ignoring closed arcstrings which have no endpoints)"""
         ...
 
-    def join(self, other: ArcString) -> ArcString | None:
-        """join this arcstring to another"""
-        ...
-
     def simplify(self):
         """remove redundant vertices that already lie along an arc in this arcstring"""
         ...
@@ -563,23 +724,6 @@ class MultiArcString(Geometry, GeometricRelationships, GeometricOperations):
             abc_de = MultiArcString([abc, de])
 
         """
-        ...
-
-    @property
-    def parts(
-        self,
-    ) -> list[ArcString]: ...
-    def __len__(self) -> int:
-        """number of geometries in this collection"""
-        ...
-
-    def __getitem__(self, index: int) -> ArcString | MultiArcString | None: ...
-    def append(self, other: ArcString):
-        """append the geometry to this collection"""
-        ...
-
-    def extend(self, other: MultiArcString):
-        """extend this collection with geometries from the other collection"""
         ...
 
     @property
@@ -717,25 +861,6 @@ class MultiSphericalPolygon(Geometry, GeometricRelationships, GeometricOperation
 
     @property
     def boundary(self) -> MultiArcString: ...
-    @property
-    def parts(
-        self,
-    ) -> list[SphericalPolygon]: ...
-    def __len__(self) -> int:
-        """number of geometries in this collection"""
-        ...
-
-    def __getitem__(
-        self, index: int
-    ) -> SphericalPolygon | MultiSphericalPolygon | None: ...
-    def append(self, other: SphericalPolygon):
-        """append the geometry to this collection"""
-        ...
-
-    def extend(self, other: MultiSphericalPolygon):
-        """extend this collection with geometries from the other collection"""
-        ...
-
     def __iadd__(self, other: MultiSphericalPolygon): ...
     def __add__(self, other: MultiSphericalPolygon) -> MultiSphericalPolygon: ...
     def __eq__(self, other) -> bool: ...
