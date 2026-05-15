@@ -150,7 +150,7 @@ fn xyz_to_lonlat(xyz: &[f64; 3]) -> [f64; 2] {
     [lon.to_degrees(), lat.to_degrees()]
 }
 
-/// rotate xyz vector by theta angle (in radians) around another xyz vector
+/// rotate xyz vector by theta radians around another xyz vector
 fn xyz_rotate_around(a: &[f64; 3], b: &[f64; 3], theta: &f64) -> [f64; 3] {
     let theta_sin = theta.sin();
     let theta_cos = theta.cos();
@@ -605,7 +605,7 @@ impl SphericalPoint {
         xyz_dot(&self.xyz, &other.xyz)
     }
 
-    /// rotate this xyz vector by theta angle around another xyz vector
+    /// rotate this xyz vector by theta radians around another xyz vector
     pub fn vector_rotate_around(&self, other: &Self, theta: &f64) -> Self {
         Self::from(xyz_rotate_around(
             &self.xyz,

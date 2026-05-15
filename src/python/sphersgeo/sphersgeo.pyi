@@ -378,7 +378,7 @@ class SphericalPoint(Geometry, GeometricRelationships, GeometricOperations):
     def vector_rotate_around(
         self, other: SphericalPoint, theta: float
     ) -> SphericalPoint:
-        """rotate this xyz vector by theta angle around another xyz vector"""
+        """rotate this xyz vector by theta radians around another xyz vector"""
         ...
 
     def to(self, other: SphericalPoint) -> ArcString:
