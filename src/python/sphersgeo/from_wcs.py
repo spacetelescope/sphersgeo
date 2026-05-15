@@ -7,7 +7,7 @@ from sphersgeo import SphericalPolygon
 __all__ = ["polygon_from_wcs"]
 
 
-def polygon_from_wcs(cls, wcs, steps: Optional[int] = None) -> SphericalPolygon:
+def polygon_from_wcs(wcs, steps: Optional[int] = None) -> SphericalPolygon:
     """
     Infer the image footprint of a world coordinate system (WCS) from `wcs.array_shape` (and its intersection with `wcs.bounding_box`, if available).
 
