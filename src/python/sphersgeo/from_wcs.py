@@ -116,5 +116,8 @@ def polygon_from_wcs(wcs, steps: Optional[int] = None) -> SphericalPolygon:
 
     # pass the sky coordinates to a new polygon object as degrees
     return SphericalPolygon(
-        ((vertex_skycoords.ra.degree, vertex_skycoords.dec.degree), center)
+        (
+            np.stack([vertex_skycoords.ra.degree, vertex_skycoords.dec.degree], axis=1),
+            center,
+        )
     )
