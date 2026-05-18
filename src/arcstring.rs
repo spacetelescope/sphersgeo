@@ -98,7 +98,7 @@ pub fn points_are_on_same_side(
     arcstring: &ArcString,
 ) -> bool {
     arc_crossings_with_arcstring((point_a, point_b), arcstring)
-        .map_or(true, |crossings| crossings.len() % 2 == 0)
+        .is_none_or(|crossings| crossings.len() % 2 == 0)
 }
 
 pub fn point_is_along_arcstring(xyz: &[f64; 3], arcstring: &ArcString) -> bool {
