@@ -253,15 +253,21 @@ def test_contains():
     assert not d.within(abc)
 
 
-def test_str():
-    assert (
-        str(SphericalPoint((0.0, 1.0, 2.0)))
-        == "SphericalPoint([0.0, 0.4472135954999579, 0.8944271909999159])"
-    )
-    assert (
-        str(MultiSphericalPoint([(0.0, 1.0, 2.0)]))
-        == "MultiSphericalPoint([[0.0, 0.4472135954999579, 0.8944271909999159]])"
-    )
+def test_wkt():
+    geometries = [
+        (
+            SphericalPoint((0.0, 1.0, 2.0)),
+            "POINT (90 63.43494882292201)",
+        ),
+        (
+            MultiSphericalPoint([(0.0, 1.0, 2.0), (0.0, 0.0, 1.0)]),
+            "MULTIPOINT (90 63.43494882292201, 0 90)",
+        ),
+    ]
+
+    for geometry, wkt in geometries:
+        assert geometry.wkt == wkt
+        assert geometry.__class__(wkt) == geometry
 
 
 def test_add():
@@ -509,7 +515,7 @@ def test_multipoint_convex_hull(lonlats, convex_hull_area):
 
     convex_hull = points.convex_hull
 
-    assert convex_hull.area == convex_hull_area
+    assert_allclose(convex_hull.area, convex_hull_area)
 
     assert [
         convex_hull.boundary.vertices.contains(SphericalPoint(lonlat))

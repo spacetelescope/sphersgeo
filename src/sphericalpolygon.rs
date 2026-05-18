@@ -250,13 +250,17 @@ pub struct SphericalPolygon {
     pub interior_point: SphericalPoint,
 }
 
+impl TryFrom<ArcString> for SphericalPolygon {
+    type Error = String;
+
+    fn try_from(boundary: ArcString) -> Result<Self, Self::Error> {
+        Self::try_new(boundary, None)
+    }
+}
+
 impl Display for SphericalPolygon {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(
-            f,
-            "SphericalPolygon({}, {})",
-            self.boundary, self.interior_point
-        )
+        write!(f, "SphericalPolygon({})", self.boundary)
     }
 }
 
@@ -398,6 +402,14 @@ impl Geometry for SphericalPolygon {
             .unwrap()
             .to_degrees()
     }
+
+    fn to_wkt(&self, angular: bool) -> String {
+        // no holes
+        format!(
+            "POLYGON ({})",
+            self.boundary.to_wkt(angular).replace("LINESTRING ", "")
+        )
+    }
 }
 
 impl GeometricRelationships<SphericalPoint> for SphericalPolygon {
@@ -434,7 +446,7 @@ impl GeometricOperations<SphericalPoint> for SphericalPolygon {
     }
 
     fn intersection(&self, other: &SphericalPoint) -> Option<SphericalPoint> {
-        other.intersection(self)
+        todo!()
     }
 
     fn symmetric_difference(&self, _: &SphericalPoint) -> MultiSphericalPolygon {
@@ -914,7 +926,7 @@ impl TryFrom<Vec<SphericalPolygon>> for MultiSphericalPolygon {
 
 impl Display for MultiSphericalPolygon {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "MultiAngularPolygon({:?})", self.polygons)
+        write!(f, "MultiSphericalPolygon({:?})", self.polygons)
     }
 }
 
@@ -1025,6 +1037,17 @@ impl Geometry for MultiSphericalPolygon {
     fn length(&self) -> f64 {
         self.boundary().map_or(0.0, |boundary| boundary.length())
     }
+
+    fn to_wkt(&self, angular: bool) -> String {
+        format!(
+            "MULTIPOLYGON ({})",
+            self.polygons
+                .iter()
+                .map(|polygon| polygon.to_wkt(angular).replace("POLYGON ", ""))
+                .collect::<Vec<String>>()
+                .join("), (")
+        )
+    }
 }
 
 impl MultiGeometry<SphericalPolygon> for MultiSphericalPolygon {
@@ -1083,7 +1106,7 @@ impl GeometricOperations<SphericalPoint, SphericalPolygon> for MultiSphericalPol
     }
 
     fn intersection(&self, other: &SphericalPoint) -> Option<SphericalPoint> {
-        other.intersection(self)
+        todo!()
     }
 
     fn symmetric_difference(&self, _: &SphericalPoint) -> Self {

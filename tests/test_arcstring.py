@@ -43,6 +43,37 @@ def test_init():
     assert MultiArcString(multi_from_list_of_arrays) == multi_from_list_of_arrays
 
 
+def test_wkt():
+    xyzs_a = [
+        (0.0, 0.0, 1.0),
+        (0.0, 0.0, -1.0),
+        (1.0, 1.0, 0.0),
+        (1.0, -1.0, 0.0),
+    ]
+
+    xyzs_b = [
+        (0.2, 0.5, 0.7),
+        (0.0, 0.0, 0.0),
+        (1.0, 1.2, 0.3),
+        (4.0, -1.0, 0.0),
+    ]
+
+    geometries = [
+        (
+            ArcString(xyzs_a),
+            "LINESTRING (0.0 0.0 1.0, 0.0 0.0 -1.0, 1.0 1.0 0.0, 1.0 -1.0 0.0)",
+        ),
+        (
+            MultiArcString([xyzs_a, xyzs_b]),
+            "MULTILINESTRING ((0.0 0.0 1.0, 0.0 0.0 -1.0, 1.0 1.0 0.0, 1.0 -1.0 0.0), (0.2 0.5 0.7, 0.0 0.0 0.0, 1.0 1.2 0.3, 4.0 -1.0 0.0))",
+        ),
+    ]
+
+    for geometry, wkt in geometries:
+        assert geometry.wkt == wkt
+        assert geometry.__class__(wkt) == geometry
+
+
 def test_closed():
     xyzs_a = [
         (0.0, 0.0, 1.0),

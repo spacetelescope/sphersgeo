@@ -14,25 +14,10 @@ extern crate numpy;
 #[cfg(feature = "py")]
 #[pymodule(name = "sphersgeo")]
 mod py_sphersgeo {
-    #[cfg(feature = "py")]
-    #[derive(FromPyObject, IntoPyObject, Debug, Clone, PartialEq)]
-    enum AnyGeometry {
-        #[pyo3(transparent)]
-        SphericalPoint(crate::sphericalpoint::SphericalPoint),
-        #[pyo3(transparent)]
-        MultiSphericalPoint(crate::sphericalpoint::MultiSphericalPoint),
-        #[pyo3(transparent)]
-        ArcString(crate::arcstring::ArcString),
-        #[pyo3(transparent)]
-        MultiArcString(crate::arcstring::MultiArcString),
-        #[pyo3(transparent)]
-        SphericalPolygon(crate::sphericalpolygon::SphericalPolygon),
-        #[pyo3(transparent)]
-        MultiSphericalPolygon(crate::sphericalpolygon::MultiSphericalPolygon),
-    }
-
     use super::*;
-    use crate::geometry::{GeometricOperations, GeometricRelationships, Geometry, MultiGeometry};
+    use crate::geometry::{
+        AnyGeometry, GeometricOperations, GeometricRelationships, Geometry, MultiGeometry,
+    };
     use numpy::{
         IntoPyArray, PyArray1, PyArray2, PyReadonlyArray1, PyReadonlyArray2,
         ndarray::{Array1, Array2},
@@ -68,30 +53,39 @@ mod py_sphersgeo {
         LonLatTuple((f64, f64)),
         NumpyArray(PyReadonlyArray1<'py, f64>),
         List(Vec<f64>),
+        WellKnownText(String),
     }
 
     #[pymethods]
     impl SphericalPoint {
         #[new]
         fn py_new(point: PySphericalPointInputs) -> PyResult<Self> {
-            Ok(match point {
+            match point {
                 PySphericalPointInputs::Geometry(geometry) => match geometry {
                     AnyGeometry::SphericalPoint(point) => Ok(point),
                     _ => Err(PyValueError::new_err(format!(
                         "cannot derive point from {geometry:?}",
                     ))),
-                }?,
-                PySphericalPointInputs::XYZArray(xyz) => Self::from(xyz),
-                PySphericalPointInputs::XYZTuple(xyz) => Self::from(&xyz),
-                PySphericalPointInputs::LonLatArray(lonlat) => Self::from(&lonlat),
-                PySphericalPointInputs::LonLatTuple(lonlat) => Self::from(&[lonlat.0, lonlat.1]),
+                },
+                PySphericalPointInputs::XYZArray(xyz) => Ok(Self::from(xyz)),
+                PySphericalPointInputs::XYZTuple(xyz) => Ok(Self::from(&xyz)),
+                PySphericalPointInputs::LonLatArray(lonlat) => Ok(Self::from(&lonlat)),
+                PySphericalPointInputs::LonLatTuple(lonlat) => {
+                    Ok(Self::from(&[lonlat.0, lonlat.1]))
+                }
                 PySphericalPointInputs::NumpyArray(xyz) => {
-                    Self::try_from(&xyz.as_array()).map_err(PyValueError::new_err)?
+                    Self::try_from(&xyz.as_array()).map_err(PyValueError::new_err)
                 }
                 PySphericalPointInputs::List(xyz) => {
-                    Self::try_from(&xyz).map_err(PyValueError::new_err)?
+                    Self::try_from(&xyz).map_err(PyValueError::new_err)
                 }
-            })
+                PySphericalPointInputs::WellKnownText(wkt) => {
+                    Self::py_new(PySphericalPointInputs::Geometry(
+                        crate::geometry::try_from_wkt(wkt.as_str())
+                            .map_err(PyValueError::new_err)?,
+                    ))
+                }
+            }
         }
 
         #[getter]
@@ -208,6 +202,11 @@ mod py_sphersgeo {
         #[getter]
         fn get_length(&self) -> f64 {
             self.length()
+        }
+
+        #[getter]
+        fn get_wkt(&self) -> String {
+            self.to_wkt(true)
         }
 
         #[pyo3(name = "equals")]
@@ -422,10 +421,6 @@ mod py_sphersgeo {
             Ok(self == &Self::py_new(other)?)
         }
 
-        fn __str__(&self) -> String {
-            self.to_string()
-        }
-
         fn __repr__(&self) -> String {
             self.to_string()
         }
@@ -446,6 +441,7 @@ mod py_sphersgeo {
         ListOfLonLatTuples(Vec<(f64, f64)>),
         NumpyArray(PyReadonlyArray2<'py, f64>),
         NestedList(Vec<Vec<f64>>),
+        WellKnownText(String),
     }
 
     #[pymethods]
@@ -479,6 +475,12 @@ mod py_sphersgeo {
                 }
                 PyMultiSphericalPointInputs::NestedList(xyzs) => {
                     Self::try_from(&xyzs).map_err(PyValueError::new_err)
+                }
+                PyMultiSphericalPointInputs::WellKnownText(wkt) => {
+                    Self::py_new(PyMultiSphericalPointInputs::Geometry(
+                        crate::geometry::try_from_wkt(wkt.as_str())
+                            .map_err(PyValueError::new_err)?,
+                    ))
                 }
             }
         }
@@ -537,6 +539,11 @@ mod py_sphersgeo {
         #[getter]
         fn get_length(&self) -> f64 {
             self.length()
+        }
+
+        #[getter]
+        fn get_wkt(&self) -> String {
+            self.to_wkt(true)
         }
 
         #[pyo3(name = "equals")]
@@ -744,7 +751,6 @@ mod py_sphersgeo {
             let length = self.xyzs.len() as isize;
             match index {
                 PyIndex::Int(index) => {
-                    let length = length;
                     // wrap negative index
                     let index = if index < 0 { index + length } else { index };
 
@@ -811,7 +817,7 @@ mod py_sphersgeo {
         }
 
         fn __repr__(&self) -> String {
-            self.to_string()
+            format!("SphericalPoint({:?})", self.xyzs)
         }
     }
 
@@ -824,6 +830,7 @@ mod py_sphersgeo {
         // NOTE: AnyGeometry MUST be the first option in this enum, otherwise it will attempt to match another pattern
         Geometry(AnyGeometry),
         MultiPointInput(PyMultiSphericalPointInputs<'py>),
+        WellKnownText(String),
     }
 
     #[pymethods]
@@ -838,16 +845,15 @@ mod py_sphersgeo {
                             ArcString::try_from(multipoint).map_err(PyValueError::new_err)
                         }
                         AnyGeometry::ArcString(arcstring) => Ok(arcstring),
-                        AnyGeometry::SphericalPolygon(polygon) => Ok(polygon.boundary),
                         _ => Err(PyValueError::new_err(format!(
                             "cannot derive arcstring from {geometry:?}",
                         ))),
                     }?;
 
-                    if let Some(is_closed) = closed {
-                        if is_closed != instance.closed {
-                            instance.closed = is_closed;
-                        }
+                    if let Some(is_closed) = closed
+                        && is_closed != instance.closed
+                    {
+                        instance.closed = is_closed;
                     }
 
                     Ok(instance)
@@ -856,6 +862,13 @@ mod py_sphersgeo {
                     Self::try_new(MultiSphericalPoint::py_new(points)?, closed)
                         .map_err(PyValueError::new_err)
                 }
+                PyArcStringInputs::WellKnownText(wkt) => Self::py_new(
+                    PyArcStringInputs::Geometry(
+                        crate::geometry::try_from_wkt(wkt.as_str())
+                            .map_err(PyValueError::new_err)?,
+                    ),
+                    closed,
+                ),
             }
         }
 
@@ -946,6 +959,11 @@ mod py_sphersgeo {
         #[getter]
         fn get_length(&self) -> f64 {
             self.length()
+        }
+
+        #[getter]
+        fn get_wkt(&self) -> String {
+            self.to_wkt(true)
         }
 
         #[pyo3(name = "equals")]
@@ -1168,6 +1186,7 @@ mod py_sphersgeo {
         // NOTE: AnyGeometry MUST be the first option in this enum, otherwise it will attempt to match another pattern
         Geometry(AnyGeometry),
         ListOfArcStrings(Vec<PyArcStringInputs<'py>>),
+        WellKnownText(String),
     }
 
     #[pymethods]
@@ -1175,34 +1194,31 @@ mod py_sphersgeo {
         #[new]
         fn py_new(arcstrings: PyMultiArcStringInputs) -> PyResult<Self> {
             match arcstrings {
-                PyMultiArcStringInputs::Geometry(geometry) => {
-                    match geometry {
-                        AnyGeometry::MultiSphericalPoint(multipoint) => Self::try_from(vec![
-                            ArcString::try_from(multipoint).map_err(PyValueError::new_err)?,
-                        ])
-                        .map_err(PyValueError::new_err),
-                        AnyGeometry::ArcString(arcstring) => {
-                            Ok(Self::try_from(vec![arcstring]).expect("invalid arcstring"))
-                        }
-                        AnyGeometry::MultiArcString(multiarcstring) => Ok(multiarcstring),
-                        AnyGeometry::SphericalPolygon(polygon) => {
-                            Ok(Self::try_from(vec![polygon.boundary])
-                                .expect("polygon has no boundary"))
-                        }
-                        AnyGeometry::MultiSphericalPolygon(multipolygon) => Ok(multipolygon
-                            .boundary()
-                            .expect("multipolygon has no boundary")),
-                        _ => Err(PyValueError::new_err(format!(
-                            "cannot derive multiarcstring from {geometry:?}"
-                        ))),
+                PyMultiArcStringInputs::Geometry(geometry) => match geometry {
+                    AnyGeometry::MultiSphericalPoint(multipoint) => Self::try_from(vec![
+                        ArcString::try_from(multipoint).map_err(PyValueError::new_err)?,
+                    ])
+                    .map_err(PyValueError::new_err),
+                    AnyGeometry::ArcString(arcstring) => {
+                        Self::try_from(vec![arcstring]).map_err(PyValueError::new_err)
                     }
-                }
+                    AnyGeometry::MultiArcString(multiarcstring) => Ok(multiarcstring),
+                    _ => Err(PyValueError::new_err(format!(
+                        "cannot derive multiarcstring from {geometry:?}"
+                    ))),
+                },
                 PyMultiArcStringInputs::ListOfArcStrings(arcstring_inputs) => {
                     let mut arcstrings = vec![];
                     for arcstring_input in arcstring_inputs {
                         arcstrings.push(ArcString::py_new(arcstring_input, None)?);
                     }
                     Self::try_from(arcstrings).map_err(PyValueError::new_err)
+                }
+                PyMultiArcStringInputs::WellKnownText(wkt) => {
+                    Self::py_new(PyMultiArcStringInputs::Geometry(
+                        crate::geometry::try_from_wkt(wkt.as_str())
+                            .map_err(PyValueError::new_err)?,
+                    ))
                 }
             }
         }
@@ -1240,6 +1256,11 @@ mod py_sphersgeo {
         #[getter]
         fn get_length(&self) -> f64 {
             self.length()
+        }
+
+        #[getter]
+        fn get_wkt(&self) -> String {
+            self.to_wkt(true)
         }
 
         #[pyo3(name = "equals")]
@@ -1528,6 +1549,7 @@ mod py_sphersgeo {
         Geometry(AnyGeometry),
         ArcStringInput(PyArcStringInputs<'py>),
         ArcStringInputWithInteriorPoint(PyArcStringInputs<'py>, PySphericalPointInputs<'py>),
+        WellKnownText(String),
     }
 
     #[pymethods]
@@ -1561,6 +1583,12 @@ mod py_sphersgeo {
                     Some(SphericalPoint::py_new(interior_point)?),
                 )
                 .map_err(PyValueError::new_err),
+                PySphericalPolygonInputs::WellKnownText(wkt) => {
+                    Self::py_new(PySphericalPolygonInputs::Geometry(
+                        crate::geometry::try_from_wkt(wkt.as_str())
+                            .map_err(PyValueError::new_err)?,
+                    ))
+                }
             }
         }
 
@@ -1622,6 +1650,11 @@ mod py_sphersgeo {
         #[getter]
         fn get_length(&self) -> f64 {
             self.length()
+        }
+
+        #[getter]
+        fn py_to_wkt(&self) -> String {
+            self.to_wkt(true)
         }
 
         #[pyo3(name = "equals")]
@@ -1844,6 +1877,7 @@ mod py_sphersgeo {
         // NOTE: AnyGeometry MUST be the first option in this enum, otherwise it will attempt to match another pattern
         Geometry(AnyGeometry),
         ListOfPolygons(Vec<PySphericalPolygonInputs<'py>>),
+        WellKnownText(String),
     }
 
     #[pymethods]
@@ -1879,6 +1913,12 @@ mod py_sphersgeo {
                         );
                     }
                     polygons
+                }
+                PyMultiSphericalPolygonInputs::WellKnownText(wkt) => {
+                    return Self::py_new(PyMultiSphericalPolygonInputs::Geometry(
+                        crate::geometry::try_from_wkt(wkt.as_str())
+                            .map_err(PyValueError::new_err)?,
+                    ));
                 }
             };
 
@@ -1918,6 +1958,11 @@ mod py_sphersgeo {
         #[getter]
         fn get_length(&self) -> f64 {
             self.length()
+        }
+
+        #[getter]
+        fn get_wkt(&self) -> String {
+            self.to_wkt(true)
         }
 
         #[pyo3(name = "equals")]

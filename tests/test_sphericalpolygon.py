@@ -54,6 +54,37 @@ def test_init():
     assert MultiSphericalPolygon(multi_from_list_of_arrays) == multi_from_list_of_arrays
 
 
+def test_wkt():
+    xyzs_a = [
+        (0.0, 0.0, 1.0),
+        (0.0, 0.0, -1.0),
+        (1.0, 1.0, 0.0),
+        (1.0, -1.0, 0.0),
+    ]
+
+    xyzs_b = [
+        (0.2, 0.5, 0.7),
+        (0.0, 0.0, 0.0),
+        (1.0, 1.2, 0.3),
+        (4.0, -1.0, 0.0),
+    ]
+
+    geometries = [
+        (
+            SphericalPolygon(xyzs_a),
+            "POLYGON ((0.0 0.0 1.0, 0.0 0.0 -1.0, 1.0 1.0 0.0, 1.0 -1.0 0.0))",
+        ),
+        (
+            MultiSphericalPolygon([xyzs_a, xyzs_b]),
+            "MULTIPOLYGON (((0.0 0.0 1.0, 0.0 0.0 -1.0, 1.0 1.0 0.0, 1.0 -1.0 0.0)), ((0.2 0.5 0.7, 0.0 0.0 0.0, 1.0 1.2 0.3, 4.0 -1.0 0.0)))",
+        ),
+    ]
+
+    for geometry, wkt in geometries:
+        assert geometry.wkt == wkt
+        assert geometry.__class__(wkt) == geometry
+
+
 @pytest.mark.parametrize("lon", (0, 120, 240))
 @pytest.mark.parametrize("lat", (0, 30, 60, 90))
 def test_from_cone(lon, lat):
