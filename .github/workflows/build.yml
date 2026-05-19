@@ -47,7 +47,8 @@ jobs:
     permissions:
       id-token: write
       attestations: write
-    # Requires environment protection rules in GitHub Settings:
+    # To add required reviewers before deployment,
+    # edit the protection rules in GitHub Settings:
     # Settings > Environments > pypi > Add required reviewers
     environment:
       name: pypi
