@@ -82,7 +82,7 @@ def test_midpoint():
         A = SphericalPoint(a)
         for b in bvec:
             B = SphericalPoint(b)
-            mid = ArcString([A, B]).midpoints.parts[0]
+            mid = ArcString([A, B]).midpoints[0]
             assert_allclose(A.distance(mid), mid.distance(B), atol=tolerance)
             assert_allclose(mid.two_arc_angle(A, B), 180, rtol=tolerance)
 
@@ -116,7 +116,7 @@ def test_interpolate_points(a, b):
     b = SphericalPoint(b)
     ab = ArcString([a, b])
 
-    interpolated_points = a.interpolate_points(b, n=10).parts
+    interpolated_points = a.interpolate_points(b, n=10)
 
     assert interpolated_points[0] == a
     assert interpolated_points[-1] == b

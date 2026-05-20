@@ -34,16 +34,28 @@ mod py_sphersgeo {
     use super::*;
     use crate::geometry::{GeometricOperations, GeometricRelationships, Geometry, MultiGeometry};
     use numpy::{
-        ndarray::{Array1, Array2},
         IntoPyArray, PyArray1, PyArray2, PyReadonlyArray1, PyReadonlyArray2,
+        ndarray::{Array1, Array2},
     };
     use pyo3::{
-        exceptions::{PyKeyError, PyValueError},
-        types::PyType,
+        exceptions::{PyIndexError, PyRuntimeError, PyValueError},
+        types::{PySlice, PyType},
     };
 
+    #[derive(FromPyObject)]
+    enum PyIndex<'py> {
+        Int(isize),
+        Slice(Bound<'py, PySlice>),
+    }
+
     #[pymodule_export]
-    use super::sphericalpoint::SphericalPoint;
+    use crate::sphericalpoint::SphericalPoint;
+
+    #[derive(IntoPyObject)]
+    enum PySingleOrMultiPoint {
+        Single(SphericalPoint),
+        Multi(MultiSphericalPoint),
+    }
 
     #[derive(FromPyObject)]
     #[allow(clippy::large_enum_variant)]
@@ -420,7 +432,7 @@ mod py_sphersgeo {
     }
 
     #[pymodule_export]
-    use super::sphericalpoint::MultiSphericalPoint;
+    use crate::sphericalpoint::MultiSphericalPoint;
 
     #[derive(FromPyObject)]
     #[allow(clippy::large_enum_variant)]
@@ -728,9 +740,44 @@ mod py_sphersgeo {
             self.len()
         }
 
-        fn __getitem__(&self, index: usize) -> SphericalPoint {
-            SphericalPoint {
-                xyz: self.xyzs[index],
+        fn __getitem__(&self, index: PyIndex) -> PyResult<Option<PySingleOrMultiPoint>> {
+            let length = self.xyzs.len() as isize;
+            match index {
+                PyIndex::Int(index) => {
+                    let length = length;
+                    // wrap negative index
+                    let index = if index < 0 { index + length } else { index };
+
+                    if index < length {
+                        Ok(Some(PySingleOrMultiPoint::Single(SphericalPoint {
+                            xyz: self.xyzs[index as usize],
+                        })))
+                    } else {
+                        Err(PyIndexError::new_err(String::from("index out of range")))
+                    }
+                }
+                PyIndex::Slice(slice) => {
+                    let indices = slice.indices(length).map_err(PyIndexError::new_err)?;
+
+                    Ok(if indices.slicelength > 0 {
+                        Some(PySingleOrMultiPoint::Multi(
+                            if indices.slicelength as isize == length {
+                                self.to_owned()
+                            } else {
+                                let mut xyzs = vec![];
+                                let mut index = indices.start;
+                                while index < indices.stop {
+                                    xyzs.push(self.xyzs[index as usize]);
+                                    index += indices.step;
+                                }
+
+                                Self::try_from(xyzs).map_err(PyRuntimeError::new_err)?
+                            },
+                        ))
+                    } else {
+                        None
+                    })
+                }
             }
         }
 
@@ -769,7 +816,7 @@ mod py_sphersgeo {
     }
 
     #[pymodule_export]
-    use super::arcstring::ArcString;
+    use crate::arcstring::ArcString;
 
     #[derive(FromPyObject)]
     #[allow(clippy::large_enum_variant)]
@@ -1107,7 +1154,13 @@ mod py_sphersgeo {
     }
 
     #[pymodule_export]
-    use super::arcstring::MultiArcString;
+    use crate::arcstring::MultiArcString;
+
+    #[derive(IntoPyObject)]
+    enum PySingleOrMultiArcString {
+        Single(ArcString),
+        Multi(MultiArcString),
+    }
 
     #[derive(FromPyObject)]
     #[allow(clippy::large_enum_variant)]
@@ -1390,14 +1443,45 @@ mod py_sphersgeo {
             self.len()
         }
 
-        fn __getitem__(&self, index: usize) -> PyResult<ArcString> {
-            self.arcstrings
-                .get(index)
-                .map(|arcstring| arcstring.to_owned())
-                .ok_or(PyKeyError::new_err(format!(
-                    "invalid arcstring index for list of length {}",
-                    self.arcstrings.len()
-                )))
+        fn __getitem__(&self, index: PyIndex) -> PyResult<Option<PySingleOrMultiArcString>> {
+            let length = self.arcstrings.len() as isize;
+            match index {
+                PyIndex::Int(index) => {
+                    let length = length as isize;
+                    // wrap negative index
+                    let index = if index < 0 { index + length } else { index };
+
+                    if index < length {
+                        Ok(Some(PySingleOrMultiArcString::Single(
+                            self.arcstrings[index as usize].to_owned(),
+                        )))
+                    } else {
+                        Err(PyIndexError::new_err(String::from("index out of range")))
+                    }
+                }
+                PyIndex::Slice(slice) => {
+                    let indices = slice.indices(length).map_err(PyIndexError::new_err)?;
+
+                    Ok(if indices.slicelength > 0 {
+                        Some(PySingleOrMultiArcString::Multi(
+                            if indices.slicelength as isize == length {
+                                self.to_owned()
+                            } else {
+                                let mut arcstrings = vec![];
+                                let mut index = indices.start;
+                                while index < indices.stop {
+                                    arcstrings.push(self.arcstrings[index as usize].to_owned());
+                                    index += indices.step;
+                                }
+
+                                Self::try_from(arcstrings).map_err(PyRuntimeError::new_err)?
+                            },
+                        ))
+                    } else {
+                        None
+                    })
+                }
+            }
         }
 
         #[pyo3(name = "append")]
@@ -1748,6 +1832,12 @@ mod py_sphersgeo {
     #[pymodule_export]
     use crate::sphericalpolygon::MultiSphericalPolygon;
 
+    #[derive(IntoPyObject)]
+    enum PySingleOrMultiPolygon {
+        Single(SphericalPolygon),
+        Multi(MultiSphericalPolygon),
+    }
+
     #[derive(FromPyObject)]
     #[allow(clippy::large_enum_variant)]
     enum PyMultiSphericalPolygonInputs<'py> {
@@ -2031,14 +2121,45 @@ mod py_sphersgeo {
             self.len()
         }
 
-        fn __getitem__(&self, index: usize) -> PyResult<SphericalPolygon> {
-            self.polygons
-                .get(index)
-                .map(|polygon| polygon.to_owned())
-                .ok_or(PyKeyError::new_err(format!(
-                    "invalid polygon index for list of length {}",
-                    self.polygons.len()
-                )))
+        fn __getitem__(&self, index: PyIndex) -> PyResult<Option<PySingleOrMultiPolygon>> {
+            let length = self.polygons.len() as isize;
+            match index {
+                PyIndex::Int(index) => {
+                    let length = length as isize;
+                    // wrap negative index
+                    let index = if index < 0 { index + length } else { index };
+
+                    if index < length {
+                        Ok(Some(PySingleOrMultiPolygon::Single(
+                            self.polygons[index as usize].to_owned(),
+                        )))
+                    } else {
+                        Err(PyIndexError::new_err(String::from("index out of range")))
+                    }
+                }
+                PyIndex::Slice(slice) => {
+                    let indices = slice.indices(length).map_err(PyIndexError::new_err)?;
+
+                    Ok(if indices.slicelength > 0 {
+                        Some(PySingleOrMultiPolygon::Multi(
+                            if indices.slicelength as isize == length {
+                                self.to_owned()
+                            } else {
+                                let mut polygons = vec![];
+                                let mut index = indices.start;
+                                while index < indices.stop {
+                                    polygons.push(self.polygons[index as usize].to_owned());
+                                    index += indices.step;
+                                }
+
+                                Self::try_from(polygons).map_err(PyRuntimeError::new_err)?
+                            },
+                        ))
+                    } else {
+                        None
+                    })
+                }
+            }
         }
 
         #[pyo3(name = "append")]
