@@ -5,7 +5,7 @@ sphersgeo
 is an object-oriented spherical geometry package written in Rust with Python accessor classes and methods.
 
 .. tab:: Python
-   
+
    .. code-block:: shell
 
       pip install sphersgeo

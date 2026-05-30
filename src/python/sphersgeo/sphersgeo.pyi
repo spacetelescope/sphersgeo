@@ -11,11 +11,9 @@ __all__ = [
     "MultiSphericalPolygon",
 ]
 
-
 class Geometry:
     @property
     def vertices(self) -> MultiSphericalPoint: ...
-
     @property
     def boundary(self) -> MultiArcString | ArcString | MultiSphericalPoint | None:
         """
@@ -51,7 +49,6 @@ class Geometry:
     def length(self) -> float:
         """angular length of this geometry in degrees"""
         ...
-
 
 class GeometricRelationships:
     def equals(
@@ -216,7 +213,6 @@ class GeometricRelationships:
         """
         ...
 
-
 class GeometricOperations:
     def union(
         self, other: SphericalPoint | MultiSphericalPoint
@@ -290,7 +286,6 @@ class GeometricOperations:
         For further explanation of Symmetric Difference see Shapely's `object.symmetric_difference`.
         """
         ...
-
 
 class SphericalPoint(Geometry, GeometricRelationships, GeometricOperations):
     """single point on the sphere, represented internally as a 3-dimensional Cartesian point (X, Y, Z) with origin at the center of the unit sphere"""
@@ -387,21 +382,13 @@ class SphericalPoint(Geometry, GeometricRelationships, GeometricOperations):
 
     @property
     def boundary(self) -> None: ...
-
     def __add__(self, other: SphericalPoint) -> SphericalPoint: ...
-
     def __sub__(self, other: SphericalPoint) -> SphericalPoint: ...
-
     def __mul__(self, other: SphericalPoint) -> SphericalPoint: ...
-
     def __div__(self, other: SphericalPoint) -> SphericalPoint: ...
-
     def __eq__(self, other) -> bool: ...
-
     def __str__(self) -> str: ...
-
     def __repr__(self) -> str: ...
-
 
 class MultiSphericalPoint(Geometry, GeometricRelationships, GeometricOperations):
     """collection of multiple points on the sphere"""
@@ -477,13 +464,13 @@ class MultiSphericalPoint(Geometry, GeometricRelationships, GeometricOperations)
     def parts(
         self,
     ) -> list[SphericalPoint]: ...
-
     def __len__(self) -> int:
         """number of geometries in this collection"""
         ...
 
-    def __getitem__(self, index: int) -> SphericalPoint | MultiSphericalPoint | None: ...
-
+    def __getitem__(
+        self, index: int
+    ) -> SphericalPoint | MultiSphericalPoint | None: ...
     def append(self, other: SphericalPoint):
         """append the geometry to this collection"""
         ...
@@ -494,17 +481,11 @@ class MultiSphericalPoint(Geometry, GeometricRelationships, GeometricOperations)
 
     @property
     def boundary(self) -> None: ...
-
     def __iadd__(self, other: MultiSphericalPoint): ...
-
     def __add__(self, other: MultiSphericalPoint) -> MultiSphericalPoint: ...
-
     def __eq__(self, other) -> bool: ...
-
     def __str__(self) -> str: ...
-
     def __repr__(self) -> str: ...
-
 
 class ArcString(Geometry, GeometricRelationships, GeometricOperations):
     """
@@ -595,13 +576,9 @@ class ArcString(Geometry, GeometricRelationships, GeometricOperations):
 
     @property
     def boundary(self) -> MultiSphericalPoint | None: ...
-
     def __eq__(self, other) -> bool: ...
-
     def __str__(self) -> str: ...
-
     def __repr__(self) -> str: ...
-
 
 class MultiArcString(Geometry, GeometricRelationships, GeometricOperations):
     """collection of multiple series of great circle arcs (arcstrings)"""
@@ -626,13 +603,11 @@ class MultiArcString(Geometry, GeometricRelationships, GeometricOperations):
     def parts(
         self,
     ) -> list[ArcString]: ...
-
     def __len__(self) -> int:
         """number of geometries in this collection"""
         ...
 
     def __getitem__(self, index: int) -> ArcString | MultiArcString | None: ...
-
     def append(self, other: ArcString):
         """append the geometry to this collection"""
         ...
@@ -643,17 +618,11 @@ class MultiArcString(Geometry, GeometricRelationships, GeometricOperations):
 
     @property
     def boundary(self) -> MultiSphericalPoint | None: ...
-
     def __iadd__(self, other: MultiArcString): ...
-
     def __add__(self, other: MultiArcString) -> MultiArcString: ...
-
     def __eq__(self, other) -> bool: ...
-
     def __str__(self) -> str: ...
-
     def __repr__(self) -> str: ...
-
 
 class SphericalPolygon(Geometry, GeometricRelationships, GeometricOperations):
     """
@@ -699,7 +668,6 @@ class SphericalPolygon(Geometry, GeometricRelationships, GeometricOperations):
         radius: float,
         steps: int = 16,
     ) -> SphericalPolygon: ...
-
     @property
     def convex() -> bool:
         """whether this polygon is convex, that is, all possible arcs between points inside the polygon can never leave the enclosed space"""
@@ -707,20 +675,15 @@ class SphericalPolygon(Geometry, GeometricRelationships, GeometricOperations):
 
     @property
     def inverse(self) -> SphericalPolygon: ...
-
     def simplify(self):
         """remove redundant vertices that already lie along an arc in the boundary"""
         ...
 
     @property
     def boundary(self) -> ArcString: ...
-
     def __eq__(self, other) -> bool: ...
-
     def __str__(self) -> str: ...
-
     def __repr__(self) -> str: ...
-
 
 class MultiSphericalPolygon(Geometry, GeometricRelationships, GeometricOperations):
     """collection of multiple polygons on the sphere"""
@@ -773,18 +736,17 @@ class MultiSphericalPolygon(Geometry, GeometricRelationships, GeometricOperation
 
     @property
     def boundary(self) -> MultiArcString: ...
-
     @property
     def parts(
         self,
     ) -> list[SphericalPolygon]: ...
-
     def __len__(self) -> int:
         """number of geometries in this collection"""
         ...
 
-    def __getitem__(self, index: int) -> SphericalPolygon | MultiSphericalPolygon | None: ...
-
+    def __getitem__(
+        self, index: int
+    ) -> SphericalPolygon | MultiSphericalPolygon | None: ...
     def append(self, other: SphericalPolygon):
         """append the geometry to this collection"""
         ...
@@ -794,11 +756,7 @@ class MultiSphericalPolygon(Geometry, GeometricRelationships, GeometricOperation
         ...
 
     def __iadd__(self, other: MultiSphericalPolygon): ...
-
     def __add__(self, other: MultiSphericalPolygon) -> MultiSphericalPolygon: ...
-
     def __eq__(self, other) -> bool: ...
-
     def __str__(self) -> str: ...
-
     def __repr__(self) -> str: ...

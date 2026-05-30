@@ -45,4 +45,3 @@ Documentation Changes
 
 - fix reference to `src/sphersgeo.pyi` in README (`#5
   <https://github.com/spacetelescope/sphersgeo/issues/5>`_)
-
