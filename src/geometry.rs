@@ -1,5 +1,3 @@
-use kiddo::traits::DistanceMetric;
-
 pub trait Geometry {
     fn vertices(&self) -> crate::sphericalpoint::MultiSphericalPoint;
 
@@ -138,7 +136,7 @@ pub trait GeometryCollection<G: Geometry, M: MultiGeometry<G> = Self> {
 /// define angular separation between 3D vectors
 pub struct AngularSeparation {}
 
-impl DistanceMetric<f64, 3> for AngularSeparation {
+impl kiddo::traits::DistanceMetric<f64, 3> for AngularSeparation {
     #[inline]
     fn dist(a: &[f64; 3], b: &[f64; 3]) -> f64 {
         // radians subtended
