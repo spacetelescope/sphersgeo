@@ -28,5 +28,4 @@ test-requires = ["abi3audit"]
 test-command = "python -c 'from sphersgeo import SphericalPoint, MultiSphericalPoint, ArcString, MultiArcString, SphericalPolygon, MultiSphericalPolygon' && abi3audit --strict --report dist/*.whl"
 
 [tool.maturin]
-features = ["pyo3/extension-module", "py"]
-python-source = "src/python/"
+features = ["py"]
