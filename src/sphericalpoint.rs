@@ -332,7 +332,7 @@ pub fn arc_interpolate_points(
 }
 
 /// single point on the unit sphere, represented internally as a 3-dimensional Cartesian point (X, Y, Z) with origin at the center of the unit sphere
-#[cfg_attr(feature = "py", pyclass(from_py_object))]
+#[cfg_attr(feature = "py", pyclass(from_py_object, str))]
 #[derive(Clone, Debug)]
 pub struct SphericalPoint {
     pub xyz: [f64; 3],
@@ -662,6 +662,21 @@ impl Geometry for SphericalPoint {
 
     fn length(&self) -> f64 {
         0.
+    }
+
+    fn to_wkt(&self, angular: bool) -> String {
+        format!(
+            "POINT ({})",
+            if angular {
+                xyz_to_lonlat(&self.xyz).to_vec()
+            } else {
+                self.xyz.to_vec()
+            }
+            .into_iter()
+            .map(|v| format!("{v}"))
+            .collect::<Vec<String>>()
+            .join(" ")
+        )
     }
 }
 
@@ -1341,6 +1356,31 @@ impl Geometry for MultiSphericalPoint {
 
     fn length(&self) -> f64 {
         0.
+    }
+
+    fn to_wkt(&self, angular: bool) -> String {
+        format!(
+            "MULTIPOINT ({})",
+            if angular {
+                self.to_lonlats()
+                    .into_iter()
+                    .map(|lonlat| lonlat.to_vec())
+                    .collect::<Vec<Vec<f64>>>()
+            } else {
+                self.xyzs
+                    .iter()
+                    .map(|xyz| xyz.to_vec())
+                    .collect::<Vec<Vec<f64>>>()
+            }
+            .into_iter()
+            .map(|point| point
+                .iter()
+                .map(|v| format!("{v}"))
+                .collect::<Vec<String>>()
+                .join(" "))
+            .collect::<Vec<String>>()
+            .join(", ")
+        )
     }
 }
 

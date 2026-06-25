@@ -1,3 +1,6 @@
+#[cfg(feature = "py")]
+use pyo3::prelude::*;
+
 pub trait Geometry {
     fn vertices(&self) -> crate::sphericalpoint::MultiSphericalPoint;
 
@@ -24,6 +27,9 @@ pub trait Geometry {
 
     /// angular length of this geometry in degrees
     fn length(&self) -> f64;
+
+    /// well-known text representation of this geometry
+    fn to_wkt(&self, angular: bool) -> String;
 }
 
 pub trait MultiGeometry<G: Geometry> {
@@ -146,5 +152,111 @@ impl kiddo::traits::DistanceMetric<f64, 3> for AngularSeparation {
     #[inline]
     fn dist1(a: f64, b: f64) -> f64 {
         (a - b).abs()
+    }
+}
+
+#[cfg_attr(feature = "py", derive(FromPyObject, IntoPyObject))]
+#[derive(Debug, Clone, PartialEq)]
+pub enum AnyGeometry {
+    #[cfg_attr(feature = "py", pyo3(transparent))]
+    SphericalPoint(crate::sphericalpoint::SphericalPoint),
+    #[cfg_attr(feature = "py", pyo3(transparent))]
+    MultiSphericalPoint(crate::sphericalpoint::MultiSphericalPoint),
+    #[cfg_attr(feature = "py", pyo3(transparent))]
+    ArcString(crate::arcstring::ArcString),
+    #[cfg_attr(feature = "py", pyo3(transparent))]
+    MultiArcString(crate::arcstring::MultiArcString),
+    #[cfg_attr(feature = "py", pyo3(transparent))]
+    SphericalPolygon(crate::sphericalpolygon::SphericalPolygon),
+    #[cfg_attr(feature = "py", pyo3(transparent))]
+    MultiSphericalPolygon(crate::sphericalpolygon::MultiSphericalPolygon),
+}
+
+fn try_point_from_wkt_fragment(wkt_fragment: &str) -> Result<Vec<f64>, String> {
+    let mut point = vec![];
+    for coordinate in wkt_fragment.split_whitespace() {
+        point.push(coordinate.parse::<f64>().map_err(|err| format!("{err}"))?);
+    }
+    Ok(point)
+}
+
+fn try_points_from_wkt_fragment(wkt_fragment: &str) -> Result<Vec<Vec<f64>>, String> {
+    let mut points = vec![];
+    for point_fragment in wkt_fragment.split(", ") {
+        points.push(try_point_from_wkt_fragment(point_fragment)?);
+    }
+    Ok(points)
+}
+
+fn try_multipoints_from_wkt_fragment(wkt_fragment: &str) -> Result<Vec<Vec<Vec<f64>>>, String> {
+    let mut multipoints = vec![];
+    for multipoint_fragment in wkt_fragment.split("), (") {
+        multipoints.push(try_points_from_wkt_fragment(multipoint_fragment)?);
+    }
+    Ok(multipoints)
+}
+
+/// construct geometry from well-known text representation
+pub fn try_from_wkt(wkt: &str) -> Result<AnyGeometry, String> {
+    if wkt.starts_with("POINT (") {
+        crate::sphericalpoint::SphericalPoint::try_from(&try_point_from_wkt_fragment(
+            &wkt[7..wkt.len() - 1],
+        )?)
+        .map(|point| AnyGeometry::SphericalPoint(point))
+    } else if wkt.starts_with("MULTIPOINT (") || wkt.starts_with("LINESTRING (") {
+        let points = crate::sphericalpoint::MultiSphericalPoint::try_from(
+            &try_points_from_wkt_fragment(&wkt[12..wkt.len() - 1])?,
+        )?;
+
+        if wkt.starts_with("MULTIPOINT (") {
+            Ok(AnyGeometry::MultiSphericalPoint(points))
+        } else {
+            crate::arcstring::ArcString::try_from(points)
+                .map(|arcstring| AnyGeometry::ArcString(arcstring))
+        }
+    } else if wkt.starts_with("MULTILINESTRING ((") || wkt.starts_with("POLYGON ((") {
+        let mut linestrings = vec![];
+        for multipoint in try_multipoints_from_wkt_fragment(
+            &wkt[if wkt.starts_with("MULTILINESTRING ((") {
+                18
+            } else {
+                10
+            }..wkt.len() - 2],
+        )? {
+            linestrings.push(crate::arcstring::ArcString::try_from(
+                crate::sphericalpoint::MultiSphericalPoint::try_from(&multipoint)?,
+            )?);
+        }
+
+        if wkt.starts_with("MULTILINESTRING ((") {
+            crate::arcstring::MultiArcString::try_from(linestrings)
+                .map(|multiarcstring| AnyGeometry::MultiArcString(multiarcstring))
+        } else {
+            if linestrings.len() == 1 {
+                crate::sphericalpolygon::SphericalPolygon::try_from(linestrings[0].to_owned())
+                    .map(|polygon| AnyGeometry::SphericalPolygon(polygon))
+            } else {
+                Err(String::from(
+                    "multiple linestrings provided in WKT for a single polygon; `sphersgeo` does not currently support holes",
+                ))
+            }
+        }
+    } else if wkt.starts_with("MULTIPOLYGON (((") {
+        let mut polygons = vec![];
+        for polygon_fragment in wkt[16..wkt.len() - 3].split(")), ((") {
+            polygons.push(
+                match try_from_wkt(format!("POLYGON (({polygon_fragment}))").as_str())? {
+                    AnyGeometry::SphericalPolygon(polygon) => polygon,
+                    _ => {
+                        return Err(String::from("invalid WKT"));
+                    }
+                },
+            );
+        }
+
+        crate::sphericalpolygon::MultiSphericalPolygon::try_from(polygons)
+            .map(|multipolygon| AnyGeometry::MultiSphericalPolygon(multipolygon))
+    } else {
+        Err(String::from("unknown well-known text"))
     }
 }

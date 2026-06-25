@@ -1,4 +1,4 @@
-from typing import Any
+from typing import Any, TypeAlias
 
 import numpy as np
 
@@ -10,6 +10,16 @@ __all__ = [
     "SphericalPolygon",
     "MultiSphericalPolygon",
 ]
+
+AnyGeometry: TypeAlias = (
+    SphericalPoint
+    | MultiSphericalPoint
+    | ArcString
+    | MultiArcString
+    | SphericalPolygon
+    | MultiSphericalPolygon
+)
+
 
 class Geometry:
     @property
@@ -50,15 +60,16 @@ class Geometry:
         """angular length of this geometry in degrees"""
         ...
 
+    @property
+    def wkt(self) -> str:
+        """well-known text representation of this geometry in degrees"""
+        ...
+
+
 class GeometricRelationships:
     def equals(
         self,
-        other: SphericalPoint
-        | MultiSphericalPoint
-        | ArcString
-        | MultiArcString
-        | SphericalPolygon
-        | MultiSphericalPolygon,
+        other: AnyGeometry,
     ) -> bool:
         """
         Whether this and the other geometry's interiors are identical and the geometry types are the same.
@@ -70,12 +81,7 @@ class GeometricRelationships:
 
     def intersects(
         self,
-        other: SphericalPoint
-        | MultiSphericalPoint
-        | ArcString
-        | MultiArcString
-        | SphericalPolygon
-        | MultiSphericalPolygon,
+        other: AnyGeometry,
     ) -> bool:
         """
         Whether this and the other geometry share ANY point(s).
@@ -88,12 +94,7 @@ class GeometricRelationships:
 
     def touches(
         self,
-        other: SphericalPoint
-        | MultiSphericalPoint
-        | ArcString
-        | MultiArcString
-        | SphericalPolygon
-        | MultiSphericalPolygon,
+        other: AnyGeometry,
     ) -> bool:
         """
         Whether this and the other geometry share any vertices but do not overlap.
@@ -105,12 +106,7 @@ class GeometricRelationships:
 
     def disjoint(
         self,
-        other: SphericalPoint
-        | MultiSphericalPoint
-        | ArcString
-        | MultiArcString
-        | SphericalPolygon
-        | MultiSphericalPolygon,
+        other: AnyGeometry,
     ) -> bool:
         """
         Whether this and the other geometry do NOT share ANY point(s).
@@ -124,12 +120,7 @@ class GeometricRelationships:
 
     def crosses(
         self,
-        other: SphericalPoint
-        | MultiSphericalPoint
-        | ArcString
-        | MultiArcString
-        | SphericalPolygon
-        | MultiSphericalPolygon,
+        other: AnyGeometry,
     ) -> bool:
         """
         Whether this arcstring / polygon and the other arcstring / polygon share only SOME (not all) interior points, but do NOT overlap.
@@ -144,12 +135,7 @@ class GeometricRelationships:
 
     def within(
         self,
-        other: SphericalPoint
-        | MultiSphericalPoint
-        | ArcString
-        | MultiArcString
-        | SphericalPolygon
-        | MultiSphericalPolygon,
+        other: AnyGeometry,
     ) -> bool:
         """
         Whether the other geometry covers this geometry AND the interiors share at least one point.
@@ -163,12 +149,7 @@ class GeometricRelationships:
 
     def contains(
         self,
-        other: SphericalPoint
-        | MultiSphericalPoint
-        | ArcString
-        | MultiArcString
-        | SphericalPolygon
-        | MultiSphericalPolygon,
+        other: AnyGeometry,
     ) -> bool:
         """
         Whether this geometry covers the other geometry AND the interiors share at least one point.
@@ -182,12 +163,7 @@ class GeometricRelationships:
 
     def overlaps(
         self,
-        other: SphericalPoint
-        | MultiSphericalPoint
-        | ArcString
-        | MultiArcString
-        | SphericalPolygon
-        | MultiSphericalPolygon,
+        other: AnyGeometry,
     ) -> bool:
         """
         Whether this and the other geometry are of the same geometry type,
@@ -200,18 +176,14 @@ class GeometricRelationships:
 
     def covers(
         self,
-        other: SphericalPoint
-        | MultiSphericalPoint
-        | ArcString
-        | MultiArcString
-        | SphericalPolygon
-        | MultiSphericalPolygon,
+        other: AnyGeometry,
     ) -> bool:
         """
         Whether the other geometry is a subset of this geometry
         (every point of the other geometry is a point on the interior OR boundary of this geometry).
         """
         ...
+
 
 class GeometricOperations:
     def union(
@@ -226,33 +198,15 @@ class GeometricOperations:
 
     def distance(
         self,
-        other: SphericalPoint
-        | MultiSphericalPoint
-        | ArcString
-        | MultiArcString
-        | SphericalPolygon
-        | MultiSphericalPolygon,
+        other: AnyGeometry,
     ) -> float:
         """shortest great-circle distance over the sphere from any part of this geometry to another"""
         ...
 
     def intersection(
         self,
-        other: SphericalPoint
-        | MultiSphericalPoint
-        | ArcString
-        | MultiArcString
-        | SphericalPolygon
-        | MultiSphericalPolygon,
-    ) -> (
-        SphericalPoint
-        | MultiSphericalPoint
-        | ArcString
-        | MultiArcString
-        | SphericalPolygon
-        | MultiSphericalPolygon
-        | None
-    ):
+        other: AnyGeometry,
+    ) -> AnyGeometry | None:
         """
         any part of this geometry that is within another
 
@@ -264,20 +218,8 @@ class GeometricOperations:
 
     def symmetric_difference(
         self,
-        other: SphericalPoint
-        | MultiSphericalPoint
-        | ArcString
-        | MultiArcString
-        | SphericalPolygon
-        | MultiSphericalPolygon,
-    ) -> (
-        SphericalPoint
-        | MultiSphericalPoint
-        | ArcString
-        | MultiArcString
-        | SphericalPolygon
-        | MultiSphericalPolygon
-    ):
+        other: AnyGeometry,
+    ) -> AnyGeometry:
         """
         points in this object not in the other geometric object, and the points in the other not in this geometric object.
 
@@ -287,16 +229,25 @@ class GeometricOperations:
         """
         ...
 
+
+SphericalPointInputs: TypeAlias = (
+    tuple[float, float]
+    | np.ndarray[tuple[np.typing.Literal[2]], np.dtype[np.float64]]
+    | tuple[float, float, float]
+    | np.ndarray[tuple[np.typing.Literal[3]], np.dtype[np.float64]]
+    | list[float]
+    | str
+    | SphericalPoint
+)
+
+
 class SphericalPoint(Geometry, GeometricRelationships, GeometricOperations):
     """single point on the sphere, represented internally as a 3-dimensional Cartesian point (X, Y, Z) with origin at the center of the unit sphere"""
 
     def __init__(
         self,
-        point: tuple[float, float, float]
-        | np.ndarray[tuple[np.typing.Literal[3]], np.dtype[np.float64]]
-        | tuple[float, float]
-        | list[float],
-    ):
+        point: SphericalPointInputs,
+    ) -> SphericalPoint:
         """
         Create a `SphericalPoint` from angular coordinates (longitude, latitude)::
 
@@ -390,16 +341,23 @@ class SphericalPoint(Geometry, GeometricRelationships, GeometricOperations):
     def __str__(self) -> str: ...
     def __repr__(self) -> str: ...
 
+
+MultiSphericalPointInputs: TypeAlias = (
+    list[SphericalPointInputs]
+    | np.ndarray[tuple[Any, np.typing.Literal[2]], np.dtype[np.float64]]
+    | np.ndarray[tuple[Any, np.typing.Literal[3]], np.dtype[np.float64]]
+    | str
+    | MultiSphericalPoint
+)
+
+
 class MultiSphericalPoint(Geometry, GeometricRelationships, GeometricOperations):
     """collection of multiple points on the sphere"""
 
     def __init__(
         self,
-        points: list[tuple[float, float, float]]
-        | list[SphericalPoint]
-        | tuple[float, float]
-        | np.ndarray[tuple[Any, np.typing.Literal[3]], np.dtype[np.float64]],
-    ):
+        points: MultiSphericalPointInputs,
+    ) -> MultiSphericalPoint:
         """
         Create a `MultiSphericalPoint` from a list of `SphericalPoint` s::
 
@@ -487,6 +445,10 @@ class MultiSphericalPoint(Geometry, GeometricRelationships, GeometricOperations)
     def __str__(self) -> str: ...
     def __repr__(self) -> str: ...
 
+
+ArcStringInputs: TypeAlias = MultiSphericalPointInputs | ArcString
+
+
 class ArcString(Geometry, GeometricRelationships, GeometricOperations):
     """
     series of great circle arcs across the sphere, which can be open at the end or closed (returns to the initial point)
@@ -498,9 +460,9 @@ class ArcString(Geometry, GeometricRelationships, GeometricOperations):
 
     def __init__(
         self,
-        points: MultiSphericalPoint,
+        points: ArcStringInputs,
         closed: bool = False,
-    ):
+    ) -> ArcString:
         """
         Create an `ArcString` from a `MultiSphericalPoint`::
 
@@ -580,13 +542,17 @@ class ArcString(Geometry, GeometricRelationships, GeometricOperations):
     def __str__(self) -> str: ...
     def __repr__(self) -> str: ...
 
+
+MultiArcStringInputs: TypeAlias = list[ArcStringInputs] | str | MultiArcString
+
+
 class MultiArcString(Geometry, GeometricRelationships, GeometricOperations):
     """collection of multiple series of great circle arcs (arcstrings)"""
 
     def __init__(
         self,
-        arcstrings: list[ArcString],
-    ):
+        arcstrings: MultiArcStringInputs,
+    ) -> MultiArcString:
         """
         Create a `MultiArcString` from a list of `ArcString` s::
 
@@ -624,6 +590,15 @@ class MultiArcString(Geometry, GeometricRelationships, GeometricOperations):
     def __str__(self) -> str: ...
     def __repr__(self) -> str: ...
 
+
+SphericalPolygonInputs: TypeAlias = (
+    ArcStringInputs
+    | tuple[ArcStringInputs, SphericalPointInputs]
+    | str
+    | SphericalPolygon
+)
+
+
 class SphericalPolygon(Geometry, GeometricRelationships, GeometricOperations):
     """
     polygon on the sphere, represented by a **counterclockwise** `ArcString` (assumed to be closed) to form the boundary, and a `SphericalPoint` guaranteed to be inside the polygon (inferred if not provided)
@@ -638,8 +613,8 @@ class SphericalPolygon(Geometry, GeometricRelationships, GeometricOperations):
 
     def __init__(
         self,
-        polygon: ArcString | tuple[ArcString, SphericalPoint],
-    ):
+        polygon: SphericalPolygonInputs,
+    ) -> SphericalPolygon:
         """
         Create a `SphericalPolygon` from an `ArcString`::
 
@@ -669,7 +644,7 @@ class SphericalPolygon(Geometry, GeometricRelationships, GeometricOperations):
         steps: int = 16,
     ) -> SphericalPolygon: ...
     @property
-    def convex() -> bool:
+    def convex(self) -> bool:
         """whether this polygon is convex, that is, all possible arcs between points inside the polygon can never leave the enclosed space"""
         ...
 
@@ -685,10 +660,16 @@ class SphericalPolygon(Geometry, GeometricRelationships, GeometricOperations):
     def __str__(self) -> str: ...
     def __repr__(self) -> str: ...
 
+
+MultiSphericalPolygonInputs: TypeAlias = (
+    list[SphericalPolygonInputs] | str | MultiSphericalPolygon
+)
+
+
 class MultiSphericalPolygon(Geometry, GeometricRelationships, GeometricOperations):
     """collection of multiple polygons on the sphere"""
 
-    def __init__(self, polygons: list[SphericalPolygon]):
+    def __init__(self, polygons: MultiSphericalPolygonInputs) -> MultiSphericalPolygon:
         """
         Create a `MultiSphericalPolygon` from a list of `SphericalPolygon` s::
 

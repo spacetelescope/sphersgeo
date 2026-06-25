@@ -685,6 +685,15 @@ impl Geometry for ArcString {
     fn length(&self) -> f64 {
         self.lengths().iter().sum()
     }
+
+    fn to_wkt(&self, angular: bool) -> String {
+        let mut points = self.points.to_owned();
+        if self.closed {
+            // wrap around original point if closed
+            points.xyzs.push(points.xyzs[0]);
+        }
+        points.to_wkt(angular).replace("MULTIPOINT", "LINESTRING")
+    }
 }
 
 impl GeometricRelationships<SphericalPoint> for ArcString {
@@ -1323,6 +1332,17 @@ impl Geometry for MultiArcString {
             .iter()
             .map(|arcstring| arcstring.length())
             .sum()
+    }
+
+    fn to_wkt(&self, angular: bool) -> String {
+        format!(
+            "MULTILINESTRING ({})",
+            self.arcstrings
+                .iter()
+                .map(|arcstring| arcstring.to_wkt(angular).replace("LINESTRING ", ""))
+                .collect::<Vec<String>>()
+                .join("), (")
+        )
     }
 }
 
