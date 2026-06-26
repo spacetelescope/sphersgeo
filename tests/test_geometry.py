@@ -1,4 +1,9 @@
 import pytest
+from sphersgeo import SphericalPoint, MultiSphericalPoint, ArcString, MultiArcString, SphericalPolygon, MultiSphericalPolygon
+
+TEST_GEOMETRIES = [
+    ()
+]
 
 
 @pytest.mark.parametrize("geometry,expected", [])

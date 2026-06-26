@@ -60,8 +60,13 @@ pub trait MultiGeometryUnaryOperations<S: Geometry> {
     fn unary_symmetric_difference(&self) -> Option<impl MultiGeometry<S>>;
 }
 
+/// Relationships between geometries of arbitrary types.
+///
 /// https://developers.arcgis.com/geoanalytics/core-concepts/spatial-relationships/
 pub trait GeometricRelationships<O: Geometry = Self> {
+    /// shortest geodesic from this geometry to another
+    fn distance(&self, other: &O) -> f64;
+
     /// Whether this and the other geometry's interiors are identical and the geometry types are the same.
     ///
     /// For further explanation of Equals see `ArcGIS Equals <https://developers.arcgis.com/geoanalytics/core-concepts/spatial-relationships/#equals>`_
@@ -69,13 +74,6 @@ pub trait GeometricRelationships<O: Geometry = Self> {
     fn equals(&self, other: &O) -> bool {
         false
     }
-
-    /// Whether this and the other geometry share ANY point(s).
-    /// If this geometries contains, is within, crosses, touches, or overlaps the other geometry, they intersect.
-    ///
-    /// For further explanation of Intersects see `ArcGIS Intersects <https://developers.arcgis.com/geoanalytics/core-concepts/spatial-relationships/#intersects>`_
-    /// or Shapely's `object.intersects`.
-    fn intersects(&self, other: &O) -> bool;
 
     /// Whether the other geometry is a subset of this geometry
     /// (every point of the other geometry is a point on the interior OR boundary of this geometry).
@@ -132,6 +130,13 @@ pub trait GeometricRelationships<O: Geometry = Self> {
         false
     }
 
+    /// Whether this and the other geometry share ANY point(s).
+    /// If this geometries contains, is within, crosses, touches, or overlaps the other geometry, they intersect.
+    ///
+    /// For further explanation of Intersects see `ArcGIS Intersects <https://developers.arcgis.com/geoanalytics/core-concepts/spatial-relationships/#intersects>`_
+    /// or Shapely's `object.intersects`.
+    fn intersects(&self, other: &O) -> bool;
+
     /// Whether this and the other geometry do NOT share ANY point(s).
     ///
     /// Disjoint is the inverse of Intersects.
@@ -143,21 +148,20 @@ pub trait GeometricRelationships<O: Geometry = Self> {
     }
 }
 
+pub type GeometryCollection = (
+    Option<crate::sphericalpoint::MultiSphericalPoint>,
+    Option<crate::arcstring::MultiArcString>,
+    Option<crate::sphericalpolygon::MultiSphericalPolygon>,
+);
+
+/// operations between geometries of the same order (point, arcstring, polygon)
 pub trait GeometricOperations<O: Geometry = Self, S: Geometry = Self> {
-    /// dissolved union of this geometry and the other geometry
-    ///
-    /// For further explanation of Union see Shapely's `object.union`.
-    fn union(&self, other: &O) -> Option<Vec<Box<impl Geometry>>>;
-
-    /// shortest great-circle distance over the sphere from any part of this geometry to another
-    fn distance(&self, other: &O) -> f64;
-
     /// regions of this geometry that overlap the other geometry
     ///
     /// Intersection is the inverse of Difference.
     ///
     /// For further explanation of Intersection see Shapely's `object.intersection`.
-    fn intersection(&self, other: &O) -> Option<Vec<Box<impl Geometry>>>;
+    fn intersection(&self, other: &O) -> GeometryCollection;
 
     /// regions of this geometry that do not intersect or overlap with the other geometry
     ///
@@ -165,6 +169,11 @@ pub trait GeometricOperations<O: Geometry = Self, S: Geometry = Self> {
     ///
     /// For further explanation of Difference see Shapely's `object.difference`.
     fn difference(&self, other: &O) -> Option<impl MultiGeometry<S>>;
+
+    /// dissolved union of this geometry and the other geometry
+    ///
+    /// For further explanation of Union see Shapely's `object.union`.
+    fn union(&self, other: &O) -> GeometryCollection;
 }
 
 /// define angular separation between 3D vectors
@@ -284,6 +293,8 @@ pub fn try_from_wkt(wkt: &str) -> Result<AnyGeometry, String> {
 
         crate::sphericalpolygon::MultiSphericalPolygon::try_from(polygons)
             .map(|multipolygon| AnyGeometry::MultiSphericalPolygon(multipolygon))
+    } else if wkt.starts_with("GEOMETRYCOLLECTION (") {
+        Err(String::from("GEOMETRYCOLLECTION not implemented"))
     } else {
         Err(String::from("unknown well-known text"))
     }
