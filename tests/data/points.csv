@@ -1,0 +1,11 @@
+name,			angular,			cartesian
+north_pole,		POINT (0 90),		POINT (0.0 0.0 1.0)
+south_pole,		POINT (0 -90),		POINT (0.0 0.0 -1.0)
+equatorial_1,	POINT (90.0 0.0),	POINT (0.0 1.0 0.0))
+equatorial_2,	POINT (-90.0 0.0),	POINT (0.0 -1.0 0.0))
+other_1,		POINT (45 0),		POINT (1.0 1.0 0.0)
+other_2,		POINT (315 0),		POINT (1.0 -1.0 0.0)
+other_3,		POINT (0.0 0),		POINT (1.0 0.0 0.0)
+other_4,		POINT (60.0 0.0),	POINT (0.5 0.8660254037844386 0.0))
+other_5,		POINT (60.0 30.0),	POINT (0.43301270189221946 0.75 0.5))
+other_6,		POINT (135.0 0.0),	POINT (-0.7071067811865475 0.7071067811865476 0.0))

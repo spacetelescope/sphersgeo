@@ -1,97 +1,7 @@
-import numpy as np
 import pytest
+import numpy as np
 from numpy.testing import assert_allclose
 from sphersgeo import ArcString, MultiArcString, MultiSphericalPoint, SphericalPoint
-
-
-def test_init():
-    xyzs_a = [
-        (0.0, 0.0, 1.0),
-        (0.0, 0.0, -1.0),
-        (1.0, 1.0, 0.0),
-        (1.0, -1.0, 0.0),
-    ]
-
-    xyzs_b = [
-        (0.2, 0.5, 0.7),
-        (0.0, 0.0, 0.0),
-        (1.0, 1.2, 0.3),
-        (4.0, -1.0, 0.0),
-    ]
-
-    single_from_array = ArcString(np.array(xyzs_a))
-    single_from_tuple = ArcString([tuple(vector) for vector in xyzs_a])
-    single_from_list = ArcString(xyzs_a)
-
-    assert single_from_tuple == single_from_list
-    assert single_from_tuple == single_from_array
-    assert single_from_list == single_from_array
-
-    assert ArcString(single_from_array) == single_from_array
-
-    multi_from_list_of_arrays = MultiArcString(
-        [vectors for vectors in (xyzs_a, xyzs_b)]
-    )
-    multi_from_lists_of_tuples = MultiArcString(
-        [[tuple(vector) for vector in vectors] for vectors in (xyzs_a, xyzs_b)]
-    )
-    multi_from_nested_lists = MultiArcString([xyzs_a, xyzs_b])
-
-    assert multi_from_lists_of_tuples == multi_from_nested_lists
-    assert multi_from_lists_of_tuples == multi_from_list_of_arrays
-
-    assert MultiArcString(multi_from_list_of_arrays) == multi_from_list_of_arrays
-
-
-def test_wkt():
-    xyzs_a = [
-        (0.0, 0.0, 1.0),
-        (0.0, 0.0, -1.0),
-        (1.0, 1.0, 0.0),
-        (1.0, -1.0, 0.0),
-    ]
-
-    xyzs_b = [
-        (0.2, 0.5, 0.7),
-        (0.0, 0.0, 0.0),
-        (1.0, 1.2, 0.3),
-        (4.0, -1.0, 0.0),
-    ]
-
-    geometries = [
-        (
-            ArcString(xyzs_a),
-            "LINESTRING (0.0 0.0 1.0, 0.0 0.0 -1.0, 1.0 1.0 0.0, 1.0 -1.0 0.0)",
-        ),
-        (
-            MultiArcString([xyzs_a, xyzs_b]),
-            "MULTILINESTRING ((0.0 0.0 1.0, 0.0 0.0 -1.0, 1.0 1.0 0.0, 1.0 -1.0 0.0), (0.2 0.5 0.7, 0.0 0.0 0.0, 1.0 1.2 0.3, 4.0 -1.0 0.0))",
-        ),
-    ]
-
-    for geometry, wkt in geometries:
-        assert geometry.wkt == wkt
-        assert geometry.__class__(wkt) == geometry
-
-
-def test_closed():
-    xyzs_a = [
-        (0.0, 0.0, 1.0),
-        (0.0, 0.0, -1.0),
-        (1.0, 1.0, 0.0),
-        (1.0, -1.0, 0.0),
-    ]
-    xyzs_b = [
-        (0.0, 0.0, 1.0),
-        (0.0, 0.0, -1.0),
-        (1.0, 1.0, 0.0),
-        (1.0, -1.0, 0.0),
-        (0.0, 0.0, 1.0),
-    ]
-
-    assert not ArcString(xyzs_a).closed
-    assert ArcString(xyzs_b).closed
-    assert ArcString(xyzs_a + [xyzs_a[0]]).closed
 
 
 def test_midpoint():
@@ -116,19 +26,6 @@ def test_midpoint():
             mid = ArcString([A, B]).midpoints[0]
             assert_allclose(A.distance(mid), mid.distance(B), atol=tolerance)
             assert_allclose(mid.two_arc_angle(A, B), 180, rtol=tolerance)
-
-
-def test_contains():
-    diagonal_arc = ArcString(MultiSphericalPoint([(-30.0, -30.0), (30.0, 30.0)]))
-    assert diagonal_arc.contains(SphericalPoint((0, 0)))
-
-    vertical_arc = ArcString(MultiSphericalPoint([(60.0, 0.0), (60.0, 30.0)]))
-    for latitude in np.arange(1.0, 29.0, 1.0):
-        assert vertical_arc.contains(SphericalPoint((60.0, latitude)))
-
-    horizontal_arc = ArcString(MultiSphericalPoint([(0.0, 0.0), (30.0, 0.0)]))
-    for longitude in np.arange(1.0, 29.0, 1.0):
-        assert horizontal_arc.contains(SphericalPoint((longitude, 0.0)))
 
 
 @pytest.mark.parametrize("a", [(0.0, 0.0), (60.0, 0.0), (23.44, 79.9999)])
@@ -166,67 +63,261 @@ def test_interpolate_points(a, b):
     )
 
 
-def test_adjoins_join():
-    segment1 = ArcString([(20.0, 5.0), (25.0, 5.0)])
-    segment2 = ArcString([(25.0, 5.0), (25.0, 6.0)])
-    segment3 = ArcString([(25.0, 5.0), (25.0, 6.0), (25.0, 7.0)])
-    segment4 = ArcString([(25.0, 6.0), (25.0, 7.0)])
+TEST_ARCSTRINGS = [
+    (
+        [
+            (0.0, 0.0, 1.0),
+            (0.0, 0.0, -1.0),
+            (1.0, 1.0, 0.0),
+            (1.0, -1.0, 0.0),
+        ],
+        False,
+        6.283185307179586,
+        [[np.nan, 0.0], [45.0, -45.0], [0.0, 0.0]],
+    ),
+    (
+        [
+            (0.0, 0.0, 1.0),
+            (0.0, 0.0, -1.0),
+            (1.0, 1.0, 0.0),
+            (1.0, -1.0, 0.0),
+            (0.0, 0.0, 1.0),
+        ],
+        True,
+        7.853981633974483,
+        [[np.nan, 0.0], [45.0, -45.0], [0.0, 0.0], [315.0, 45.0]],
+    ),
+    (
+        [
+            (0.2, 0.5, 0.7),
+            (0.0, 0.5, 0.0),
+            (1.0, 1.2, 0.3),
+            (4.0, -1.0, 0.0),
+        ],
+        False,
+        2.8146713482124115,
+        [
+            [81.77235508, 26.60503776],
+            [70.28505151, 5.77878756],
+            [17.75344926, 6.41019422],
+        ],
+    ),
+    # diagonal arc
+    ([(-30.0, -30.0), (30.0, 30.0)], False, 1.4454684956268309, [(0.0, 0.0)]),
+    # meridional arc
+    ([(60.0, 0.0), (60.0, 30.0)], False, 0.5235987755982985, [(60.0, 15.0)]),
+    # equatorial arc
+    ([(0.0, 0.0), (30.0, 0.0)], False, 0.5235987755982988, [(15.0, 0.0)]),
+]
 
-    reference12 = ArcString([(20.0, 5.0), (25.0, 5.0), (25.0, 6.0)])
-    reference34 = ArcString([(25.0, 5.0), (25.0, 6.0), (25.0, 7.0)])
-    reference1234 = ArcString([(20.0, 5.0), (25.0, 5.0), (25.0, 6.0), (25.0, 7.0)])
-
-    assert segment1.adjoins(segment2)
-    assert segment2.adjoins(segment3)
-    assert segment3.adjoins(segment1)
-    assert not segment4.adjoins(segment1)
-
-    assert segment1.join(segment2) == reference12
-    assert segment2.join(segment1) == reference12
-    assert segment3.join(segment4) == reference34
-    assert segment4.join(segment3) == reference34
-    assert reference12.join(reference34) == reference1234
+ids = [
+    "arcstring_1",
+    "arcstring_2",
+    "arcstring_3",
+    "diagonal_arc",
+    "meridional_arc",
+    "equatorial_arc",
+]
 
 
-def test_intersection():
-    A = SphericalPoint((-10.0, -10.0))
-    B = SphericalPoint((10.0, 10.0))
-    C = SphericalPoint((-25.0, 10.0))
-    D = SphericalPoint((15.0, -10.0))
-    E = SphericalPoint((-20.0, 40.0))
-    F = SphericalPoint((20.0, 40.0))
+@pytest.mark.parametrize("arcstring", TEST_ARCSTRINGS, ids=ids)
+def test_init(arcstring):
+    xyzs = arcstring[0]
 
-    # simple intersection
-    AB = ArcString([A, B])
-    CD = ArcString([C, D])
-    EF = ArcString([E, F])
-    assert AB.intersects(CD)
-    assert not AB.intersects(EF)
-    assert_allclose(AB.intersection(CD).lonlats, [(358.316743, -1.708471)])
+    from_list_of_tuples = ArcString(xyzs)
+    from_nested_list = ArcString([list(xyz) for xyz in xyzs])
+    from_array = ArcString(np.array(xyzs))
 
-    # intersection with later part
-    ABE = ArcString([A, B, E])
-    CF = ArcString([C, F])
-    assert ABE.intersects(CF)
+    assert from_list_of_tuples == from_nested_list
+    assert from_list_of_tuples == from_array
+    assert from_nested_list == from_array
 
-    # multi-part geometry intersection
-    AB_EF = MultiArcString([AB, EF])
-    assert AB_EF.intersects(CD)
-    assert_allclose(AB_EF.intersection(CD).lonlats, [(358.316743, -1.708471)])
+    assert ArcString(from_array) == from_array
 
-    # ensure non-intersection of non-parallel pre-terminated arcs
-    CE = ArcString([C, E])
-    assert not CE.intersects(AB)
-    assert CE.intersection(AB) is None
 
-    # intersection with non-closed and closed arcstring
-    DFE = ArcString([D, F, E])
-    assert not AB.intersects(DFE)
-    DFEc = ArcString([D, F, E], closed=True)
-    assert AB.intersects(DFEc)
+def test_init_multi():
+    arcstrings = [arcstring[0] for arcstring in TEST_ARCSTRINGS]
 
-    # intersection with self
-    assert AB.intersects(AB)
+    from_lists_of_tuples = MultiArcString(arcstrings)
+    from_nested_lists = MultiArcString(
+        [[list(xyz) for xyz in xyzs] for xyzs in arcstrings]
+    )
+    from_list_of_arrays = MultiArcString([np.array(xyzs) for xyzs in arcstrings])
+
+    assert from_lists_of_tuples == from_nested_lists
+    assert from_lists_of_tuples == from_list_of_arrays
+
+    assert MultiArcString(from_list_of_arrays) == from_list_of_arrays
+
+
+@pytest.mark.parametrize(
+    "geometry,wkt",
+    [
+        (
+            ArcString(TEST_ARCSTRINGS[0][0]),
+            "LINESTRING (0 90, 0 -90, 45 0, 315 0)",
+        ),
+        (
+            ArcString(TEST_ARCSTRINGS[1][0]),
+            "LINESTRING (0 90, 0 -90, 45 0, 315 0, 0 90)",
+        ),
+        (
+            ArcString(TEST_ARCSTRINGS[2][0]),
+            "LINESTRING (68.19859051364818 52.42858277246188, 90 0, 50.19442890773481 10.871582215789932, 345.9637565320735 0)",
+        ),
+        (
+            ArcString(TEST_ARCSTRINGS[3][0]),
+            "LINESTRING (330 -29.999999999999993, 29.999999999999996 29.999999999999993)",
+        ),
+        (
+            ArcString(TEST_ARCSTRINGS[4][0]),
+            "LINESTRING (59.99999999999999 0, 59.99999999999999 29.999999999999996)",
+        ),
+        (
+            ArcString(TEST_ARCSTRINGS[5][0]),
+            "LINESTRING (0 0, 29.999999999999996 0)",
+        ),
+        (
+            MultiArcString([TEST_ARCSTRINGS[1][0], TEST_ARCSTRINGS[2][0]]),
+            "MULTILINESTRING ((0 90, 0 -90, 45 0, 315 0, 0 90)), ((68.19859051364818 52.42858277246188, 90 0, 50.19442890773481 10.871582215789932, 345.9637565320735 0))",
+        ),
+    ],
+    ids=ids + [f"{ids[1]}+{ids[2]}"],
+)
+def test_wkt(geometry, wkt):
+    assert geometry.wkt == wkt
+
+
+@pytest.mark.parametrize("arcstring", TEST_ARCSTRINGS, ids=ids)
+def test_closed(arcstring):
+    xyzs = arcstring[0]
+    closed = arcstring[1]
+
+    assert ArcString(xyzs).closed == closed
+
+    if not closed:
+        assert ArcString(xyzs, True).closed
+        assert ArcString(xyzs + [xyzs[0]]).closed
+    else:
+        assert not ArcString(xyzs, False).closed
+
+
+@pytest.mark.parametrize("arcstring", TEST_ARCSTRINGS, ids=ids)
+def test_length(arcstring):
+    xyzs = arcstring[0]
+    length = arcstring[2]
+
+    assert ArcString(xyzs).length == length
+
+
+@pytest.mark.parametrize("arcstring", TEST_ARCSTRINGS, ids=ids)
+def test_midpoints(arcstring):
+    xyzs = arcstring[0]
+    midpoints = arcstring[3]
+
+    ArcString(xyzs).midpoints == midpoints
+
+
+@pytest.mark.parametrize("arcstring", TEST_ARCSTRINGS, ids=ids)
+def test_contains(arcstring):
+    xyzs = arcstring[0]
+    midpoints = arcstring[3]
+
+    arcstring = ArcString(xyzs)
+
+    for midpoint in midpoints:
+        assert arcstring.contains(SphericalPoint(midpoint))
+
+    assert arcstring.contains(MultiSphericalPoint(midpoints))
+
+
+TEST_SEGMENTS = [
+    [(20.0, 5.0), (25.0, 5.0)],
+    [(25.0, 5.0), (25.0, 6.0)],
+    [(25.0, 5.0), (25.0, 6.0), (25.0, 7.0)],
+    [(25.0, 6.0), (25.0, 7.0)],
+]
+
+
+@pytest.mark.parametrize(
+    "segments,joined,adjoins",
+    [
+        (
+            (TEST_SEGMENTS[0], TEST_SEGMENTS[1]),
+            [[(20.0, 5.0), (25.0, 5.0), (25.0, 6.0)]],
+            True,
+        ),
+        (
+            (TEST_SEGMENTS[2], TEST_SEGMENTS[3]),
+            [[(25.0, 5.0), (25.0, 6.0), (25.0, 7.0)]],
+            True,
+        ),
+        (
+            TEST_SEGMENTS[:],
+            [[(20.0, 5.0), (25.0, 5.0), (25.0, 6.0), (25.0, 7.0)]],
+            False,
+        ),
+    ],
+)
+def test_adjoins_union(segments, joined, adjoins):
+    segments = MultiArcString(segments)
+    assert segments.unary_union == joined
+    assert segments[0].adjoins(segments[-1]) == adjoins
+
+
+TEST_POINTS = [
+    (-10.0, -10.0),
+    (10.0, 10.0),
+    (-25.0, 10.0),
+    (15.0, -10.0),
+    (-20.0, 40.0),
+    (20.0, 40.0),
+]
+
+
+@pytest.mark.parametrize(
+    "a,b,intersection",
+    [
+        (
+            ArcString(TEST_POINTS[:2]),
+            ArcString(TEST_POINTS[2:4]),
+            (358.316743, -1.708471),
+        ),
+        (ArcString(TEST_POINTS[:2]), ArcString(TEST_POINTS[4:]), None),
+        # intersection with later part
+        (
+            ArcString((TEST_POINTS[0], TEST_POINTS[1], TEST_POINTS[4])),
+            ArcString((TEST_POINTS[2], TEST_POINTS[5])),
+            (0, 0),
+        ),
+        # multi-part geometry intersection
+        (
+            MultiArcString((TEST_POINTS[:2], TEST_POINTS[4:6])),
+            ArcString(TEST_POINTS[2:4]),
+            [(358.316743, -1.708471)],
+        ),
+        # ensure non-intersection of non-parallel pre-terminated arcs
+        (ArcString((TEST_POINTS[2], TEST_POINTS[4])), ArcString(TEST_POINTS[:2]), None),
+        # intersection with non-closed and closed arcstring
+        (
+            ArcString((TEST_POINTS[3], TEST_POINTS[5], TEST_POINTS[4]), closed=True),
+            ArcString(TEST_POINTS[:2]),
+            (0, 0),
+        ),
+        # intersection with self
+        (
+            ArcString(TEST_POINTS[:2]),
+            ArcString(TEST_POINTS[:2]),
+            (0, 0),
+        ),
+    ],
+)
+def test_intersection(a, b, intersection):
+    a = ArcString(a)
+    b = ArcString(b)
+
+    assert a.intersects(b) == (intersection is not None)
+    assert a.intersection(b) == intersection
 
 
 def test_closed_not_crosses_self():

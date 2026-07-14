@@ -43,20 +43,37 @@ pub trait MultiGeometry<G: Geometry> {
     fn extend(&mut self, other: Self);
 }
 
+pub trait MultiGeometryUnaryOperations<S: Geometry> {
+    /// dissolved union of these geometries
+    ///
+    /// For further explanation of Unary Union see Shapely's `unary_union`.
+    fn unary_union(&self) -> impl MultiGeometry<S>;
+
+    /// overlapping regions between these geometries, if any
+    ///
+    /// For further explanation of Intersection see Shapely's `object.intersection`.
+    fn unary_intersection(&self) -> Option<impl MultiGeometry<S>>;
+
+    /// non-overlapping regions between these geometries
+    ///
+    /// For further explanation of Symmetric Difference see Shapely's `object.symmetric_difference`.
+    fn unary_symmetric_difference(&self) -> Option<impl MultiGeometry<S>>;
+}
+
+/// Relationships between geometries of arbitrary types.
+///
 /// https://developers.arcgis.com/geoanalytics/core-concepts/spatial-relationships/
 pub trait GeometricRelationships<O: Geometry = Self> {
+    /// shortest geodesic from this geometry to another
+    fn distance(&self, other: &O) -> f64;
+
     /// Whether this and the other geometry's interiors are identical and the geometry types are the same.
     ///
-    /// https://developers.arcgis.com/geoanalytics/core-concepts/spatial-relationships/#equals
+    /// For further explanation of Equals see `ArcGIS Equals <https://developers.arcgis.com/geoanalytics/core-concepts/spatial-relationships/#equals>`_
+    /// or Shapely's `object.equals`.
     fn equals(&self, other: &O) -> bool {
         false
     }
-
-    /// Whether this and the other geometry share ANY point(s).
-    /// If this geometries contains, is within, crosses, touches, or overlaps the other geometry, they intersect.
-    ///
-    /// https://developers.arcgis.com/geoanalytics/core-concepts/spatial-relationships/#intersects
-    fn intersects(&self, other: &O) -> bool;
 
     /// Whether the other geometry is a subset of this geometry
     /// (every point of the other geometry is a point on the interior OR boundary of this geometry).
@@ -67,7 +84,9 @@ pub trait GeometricRelationships<O: Geometry = Self> {
     /// Whether this geometry covers the other geometry AND the interiors share at least one point.
     ///
     /// Contains is the inverse of Within.
-    /// https://developers.arcgis.com/geoanalytics/core-concepts/spatial-relationships/#contains
+    ///
+    /// For further explanation of Contains see `ArcGIS Contains <https://developers.arcgis.com/geoanalytics/core-concepts/spatial-relationships/#contains>`_
+    /// or Shapely's `object.contains`.
     fn contains(&self, other: &O) -> bool {
         false
     }
@@ -75,7 +94,9 @@ pub trait GeometricRelationships<O: Geometry = Self> {
     /// Whether the other geometry covers this geometry AND the interiors share at least one point.
     ///
     /// Within is the inverse of Contains.
-    /// https://developers.arcgis.com/geoanalytics/core-concepts/spatial-relationships/#contains
+    ///
+    /// For further explanation of Contains see `ArcGIS Contains <https://developers.arcgis.com/geoanalytics/core-concepts/spatial-relationships/#contains>`_
+    /// or Shapely's `object.contains`.
     fn within(&self, other: &O) -> bool {
         false
     }
@@ -84,59 +105,75 @@ pub trait GeometricRelationships<O: Geometry = Self> {
     ///
     /// Two arcstrings cross if they meet at point(s) only, and at least one of the shared points is internal to both arcstrings.
     /// An arcstring and polygon cross if they share an arcstring on the interior of the polygon, which is NOT equal to the entire arcstring.
-    /// https://developers.arcgis.com/geoanalytics/core-concepts/spatial-relationships/#crosses
+    ///
+    /// For further explanation of Crosses see `ArcGIS Crosses <https://developers.arcgis.com/geoanalytics/core-concepts/spatial-relationships/#crosses>`_
+    /// or Shapely's `object.crosses`.
     fn crosses(&self, other: &O) -> bool {
         false
     }
 
     /// Whether this and the other geometry share any vertices but do not overlap.
     ///
-    /// https://developers.arcgis.com/geoanalytics/core-concepts/spatial-relationships/#touches
+    /// For further explanation of Touches see `ArcGIS Touches <https://developers.arcgis.com/geoanalytics/core-concepts/spatial-relationships/#touches>`_
+    /// or Shapely's `object.touches`.
     fn touches(&self, other: &O) -> bool;
 
-    /// Whether this and the other geometry are of the same geometry type,
-    /// AND their intersection is also of the same geometry type BUT is not equal to either.
+    /// whether any region of this geometry overlaps the other geometry
     ///
-    /// https://developers.arcgis.com/geoanalytics/core-concepts/spatial-relationships/#overlaps
+    /// This and the other geometry must be of the same geometry type,
+    /// AND their intersection also of the same geometry type
+    /// BUT not equal to either (in which case this would be `within` or `contains`).
+    ///
+    /// For further explanation of Overlaps see `ArcGIS Overlaps <https://developers.arcgis.com/geoanalytics/core-concepts/spatial-relationships/#overlaps>`_
+    /// or Shapely's `object.overlaps`.
     fn overlaps(&self, other: &O) -> bool {
         false
     }
 
+    /// Whether this and the other geometry share ANY point(s).
+    /// If this geometries contains, is within, crosses, touches, or overlaps the other geometry, they intersect.
+    ///
+    /// For further explanation of Intersects see `ArcGIS Intersects <https://developers.arcgis.com/geoanalytics/core-concepts/spatial-relationships/#intersects>`_
+    /// or Shapely's `object.intersects`.
+    fn intersects(&self, other: &O) -> bool;
+
     /// Whether this and the other geometry do NOT share ANY point(s).
     ///
     /// Disjoint is the inverse of Intersects.
-    /// https://developers.arcgis.com/geoanalytics/core-concepts/spatial-relationships/#disjoint
+    ///
+    /// For further explanation of Disjoint see `ArcGIS Disjoint <https://developers.arcgis.com/geoanalytics/core-concepts/spatial-relationships/#disjoint>`_
+    /// or Shapely's `object.disjoint`.
     fn disjoint(&self, other: &O) -> bool {
         !self.intersects(other)
     }
 }
 
+pub type GeometryCollection = (
+    Option<crate::sphericalpoint::MultiSphericalPoint>,
+    Option<crate::arcstring::MultiArcString>,
+    Option<crate::sphericalpolygon::MultiSphericalPolygon>,
+);
+
+/// operations between geometries of the same order (point, arcstring, polygon)
 pub trait GeometricOperations<O: Geometry = Self, S: Geometry = Self> {
-    fn union(&self, other: &O) -> Option<impl MultiGeometry<S>>;
-
-    /// shortest great-circle distance over the sphere from any part of this geometry to another
-    fn distance(&self, other: &O) -> f64;
-
-    /// any part of this geometry that is within another
+    /// regions of this geometry that overlap the other geometry
     ///
-    /// NOTE: this function is NOT rigorous;
-    /// it will ONLY return the lower order of geometry being compared
-    /// and will NOT handle touching, colinear overlap, or degenerate cases
-    fn intersection(&self, other: &O) -> Option<impl Geometry>;
+    /// Intersection is the inverse of Difference.
+    ///
+    /// For further explanation of Intersection see Shapely's `object.intersection`.
+    fn intersection(&self, other: &O) -> GeometryCollection;
 
-    /// split this geometry into a multi-geometry, at the crossing with the given geometry
-    fn symmetric_difference(&self, other: &O) -> impl MultiGeometry<S>;
-}
+    /// regions of this geometry that do not intersect or overlap with the other geometry
+    ///
+    /// Difference is the inverse of Intersection.
+    ///
+    /// For further explanation of Difference see Shapely's `object.difference`.
+    fn difference(&self, other: &O) -> Option<impl MultiGeometry<S>>;
 
-pub trait GeometryCollection<G: Geometry, M: MultiGeometry<G> = Self> {
-    /// join geometries into one
-    fn join_self(&self) -> M;
-
-    /// find overlapping regions between geometries, if any
-    fn overlap_self(&self) -> Option<M>;
-
-    /// only return non-overlapping regions between geometries
-    fn symmetric_difference_self(&self) -> Option<M>;
+    /// dissolved union of this geometry and the other geometry
+    ///
+    /// For further explanation of Union see Shapely's `object.union`.
+    fn union(&self, other: &O) -> GeometryCollection;
 }
 
 /// define angular separation between 3D vectors
@@ -256,6 +293,8 @@ pub fn try_from_wkt(wkt: &str) -> Result<AnyGeometry, String> {
 
         crate::sphericalpolygon::MultiSphericalPolygon::try_from(polygons)
             .map(|multipolygon| AnyGeometry::MultiSphericalPolygon(multipolygon))
+    } else if wkt.starts_with("GEOMETRYCOLLECTION (") {
+        Err(String::from("GEOMETRYCOLLECTION not implemented"))
     } else {
         Err(String::from("unknown well-known text"))
     }

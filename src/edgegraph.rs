@@ -251,6 +251,7 @@ where
         removed
     }
 
+    /// remove nodes not associated with any edge
     pub fn remove_orphaned_nodes(&mut self) -> Vec<Node> {
         let mut removed = vec![];
         // iterate over node list backwards to minimize index shuffling
@@ -263,7 +264,7 @@ where
         removed
     }
 
-    // split all overlapping and intersecting edges
+    /// split all overlapping and intersecting edges
     pub fn split_edges(&mut self) -> bool {
         let mut changed = false;
 
