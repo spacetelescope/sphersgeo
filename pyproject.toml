@@ -1,6 +1,6 @@
 [project]
 name = "sphersgeo"
-requires-python = ">=3.11"
+requires-python = ">=3.10"
 authors = [{ name = "Zach Burnett", email = "zburnett@stsci.edu" }]
 classifiers = [
   "Programming Language :: Rust",
