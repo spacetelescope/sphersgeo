@@ -296,6 +296,6 @@ pub fn try_from_wkt(wkt: &str) -> Result<AnyGeometry, String> {
     } else if wkt.starts_with("GEOMETRYCOLLECTION (") {
         Err(String::from("GEOMETRYCOLLECTION not implemented"))
     } else {
-        Err(String::from("unknown well-known text"))
+        Err(format!("unknown well-known text: {wkt}"))
     }
 }

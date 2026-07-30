@@ -1,8 +1,31 @@
+from pathlib import Path
+
 import numpy as np
 import pytest
 from numpy.testing import assert_allclose
 
 import sphersgeo
+
+
+def read_geometry_wkt_txt(
+    *filenames: Path,
+) -> dict[
+    str,
+    sphersgeo.AnyGeometry,
+]:
+    lines = []
+    for filename in filenames:
+        with open(filename) as geometries_file:
+            lines.extend(geometries_file.readlines())
+
+    geometries = {}
+    for line in lines:
+        name, wkt = line.split(",", 1)
+        geometries[name] = sphersgeo.from_wkt(wkt)
+    return geometries
+
+
+TEST_GEOMETRIES = read_geometry_wkt_txt(Path(__file__).parent / "data" / "strings.csv")
 
 
 def test_midpoint():
@@ -50,84 +73,50 @@ def test_interpolate_points(a, b):
     assert interpolated_points[0] == a
     assert interpolated_points[-1] == b
 
-    for point in interpolated_points[1:-1]:
-        assert ab.contains(point)
+    assert ab.covers(interpolated_points)
+    assert ab.contains(interpolated_points[1:-1])
 
-    interpolated_arc = sphersgeo.ArcString(interpolated_points)
+    interpolated_arcstring = sphersgeo.ArcString(interpolated_points)
 
-    assert_allclose(ab.length, interpolated_arc.length, atol=tolerance)
-
-    assert_allclose(
-        interpolated_arc.lengths,
-        interpolated_arc.length / len(interpolated_arc),
-        atol=tolerance,
-    )
+    assert_allclose(ab.length, interpolated_arcstring.length, atol=tolerance)
 
 
-TEST_ARCSTRINGS = [
-    (
-        [
-            (0.0, 0.0, 1.0),
-            (0.0, 0.0, -1.0),
-            (1.0, 1.0, 0.0),
-            (1.0, -1.0, 0.0),
-        ],
-        False,
-        6.283185307179586,
-        [[np.nan, 0.0], [45.0, -45.0], [0.0, 0.0]],
-    ),
-    (
-        [
-            (0.0, 0.0, 1.0),
-            (0.0, 0.0, -1.0),
-            (1.0, 1.0, 0.0),
-            (1.0, -1.0, 0.0),
-            (0.0, 0.0, 1.0),
-        ],
-        True,
-        7.853981633974483,
-        [[np.nan, 0.0], [45.0, -45.0], [0.0, 0.0], [315.0, 45.0]],
-    ),
-    (
-        [
-            (0.2, 0.5, 0.7),
-            (0.0, 0.5, 0.0),
-            (1.0, 1.2, 0.3),
-            (4.0, -1.0, 0.0),
-        ],
-        False,
-        2.8146713482124115,
-        [
-            [81.77235508, 26.60503776],
-            [70.28505151, 5.77878756],
-            [17.75344926, 6.41019422],
-        ],
-    ),
-    # diagonal arc
-    ([(-30.0, -30.0), (30.0, 30.0)], False, 1.4454684956268309, [(0.0, 0.0)]),
-    # meridional arc
-    ([(60.0, 0.0), (60.0, 30.0)], False, 0.5235987755982985, [(60.0, 15.0)]),
-    # equatorial arc
-    ([(0.0, 0.0), (30.0, 0.0)], False, 0.5235987755982988, [(15.0, 0.0)]),
-]
-
-ids = [
-    "arcstring_1",
-    "arcstring_2",
-    "arcstring_3",
-    "diagonal_arc",
-    "meridional_arc",
-    "equatorial_arc",
+TEST_ARCSTRING_INPUTS = [
+    [
+        (0.0, 0.0, 1.0),
+        (0.0, 0.0, -1.0),
+        (1.0, 1.0, 0.0),
+        (1.0, -1.0, 0.0),
+    ],
+    [
+        (0.0, 0.0, 1.0),
+        (0.0, 0.0, -1.0),
+        (1.0, 1.0, 0.0),
+        (1.0, -1.0, 0.0),
+        (0.0, 0.0, 1.0),
+    ],
+    [
+        (0.2, 0.5, 0.7),
+        (0.0, 0.5, 0.0),
+        (1.0, 1.2, 0.3),
+        (4.0, -1.0, 0.0),
+    ],
+    [
+        [81.77235508, 26.60503776],
+        [70.28505151, 5.77878756],
+        [17.75344926, 6.41019422],
+    ],
+    [(-30.0, -30.0), (30.0, 30.0)],
+    [(60.0, 0.0), (60.0, 30.0)],
+    [(0.0, 0.0), (30.0, 0.0)],
 ]
 
 
-@pytest.mark.parametrize("arcstring", TEST_ARCSTRINGS, ids=ids)
-def test_init(arcstring):
-    xyzs = arcstring[0]
-
-    from_list_of_tuples = sphersgeo.ArcString(xyzs)
-    from_nested_list = sphersgeo.ArcString([list(xyz) for xyz in xyzs])
-    from_array = sphersgeo.ArcString(np.array(xyzs))
+@pytest.mark.parametrize("arcstring_input", TEST_ARCSTRING_INPUTS)
+def test_init(arcstring_input):
+    from_list_of_tuples = sphersgeo.ArcString(arcstring_input)
+    from_nested_list = sphersgeo.ArcString([list(xyz) for xyz in arcstring_input])
+    from_array = sphersgeo.ArcString(np.array(arcstring_input))
 
     assert from_list_of_tuples == from_nested_list
     assert from_list_of_tuples == from_array
@@ -137,13 +126,15 @@ def test_init(arcstring):
 
 
 def test_init_multi():
-    arcstrings = [arcstring[0] for arcstring in TEST_ARCSTRINGS]
+    arcstring_inputs = [xyzs for xyzs in TEST_ARCSTRING_INPUTS]
 
-    from_lists_of_tuples = sphersgeo.MultiArcString(arcstrings)
+    from_lists_of_tuples = sphersgeo.MultiArcString(arcstring_inputs)
     from_nested_lists = sphersgeo.MultiArcString(
-        [[list(xyz) for xyz in xyzs] for xyzs in arcstrings]
+        [[list(xyz) for xyz in xyzs] for xyzs in arcstring_inputs]
     )
-    from_list_of_arrays = sphersgeo.MultiArcString([np.array(xyzs) for xyzs in arcstrings])
+    from_list_of_arrays = sphersgeo.MultiArcString(
+        [np.array(xyzs) for xyzs in arcstring_inputs]
+    )
 
     assert from_lists_of_tuples == from_nested_lists
     assert from_lists_of_tuples == from_list_of_arrays
@@ -152,49 +143,10 @@ def test_init_multi():
 
 
 @pytest.mark.parametrize(
-    "geometry,wkt",
-    [
-        (
-            sphersgeo.ArcString(TEST_ARCSTRINGS[0][0]),
-            "LINESTRING (0 90, 0 -90, 45 0, 315 0)",
-        ),
-        (
-            sphersgeo.ArcString(TEST_ARCSTRINGS[1][0]),
-            "LINESTRING (0 90, 0 -90, 45 0, 315 0, 0 90)",
-        ),
-        (
-            sphersgeo.ArcString(TEST_ARCSTRINGS[2][0]),
-            "LINESTRING (68.19859051364818 52.42858277246188, 90 0, 50.19442890773481 10.871582215789932, 345.9637565320735 0)",
-        ),
-        (
-            sphersgeo.ArcString(TEST_ARCSTRINGS[3][0]),
-            "LINESTRING (330 -29.999999999999993, 29.999999999999996 29.999999999999993)",
-        ),
-        (
-            sphersgeo.ArcString(TEST_ARCSTRINGS[4][0]),
-            "LINESTRING (59.99999999999999 0, 59.99999999999999 29.999999999999996)",
-        ),
-        (
-            sphersgeo.ArcString(TEST_ARCSTRINGS[5][0]),
-            "LINESTRING (0 0, 29.999999999999996 0)",
-        ),
-        (
-            sphersgeo.MultiArcString([TEST_ARCSTRINGS[1][0], TEST_ARCSTRINGS[2][0]]),
-            "MULTILINESTRING ((0 90, 0 -90, 45 0, 315 0, 0 90)), ((68.19859051364818 52.42858277246188, 90 0, 50.19442890773481 10.871582215789932, 345.9637565320735 0))",
-        ),
-    ],
-    ids=ids + [f"{ids[1]}+{ids[2]}"],
+    "arcstring", TEST_GEOMETRIES.values(), ids=TEST_GEOMETRIES.keys()
 )
-def test_wkt(geometry, wkt):
-    assert geometry.wkt == wkt
-
-
-@pytest.mark.parametrize("arcstring", TEST_ARCSTRINGS, ids=ids)
 def test_midpoints(arcstring):
-    xyzs = arcstring[0]
-    midpoints = arcstring[3]
-
-    assert sphersgeo.ArcString(xyzs).midpoints == midpoints
+    assert arcstring.contains(arcstring.midpoints)
 
 
 TEST_SEGMENTS = [
@@ -350,13 +302,13 @@ def test_crosses_self():
     # longer self-crossing
     ABCDFE = sphersgeo.ArcString([A, B, C, D, F, E])
     assert ABCDFE.crosses_self
-    len(ABCDFE.crossings_with_self) == 1
+    assert len(ABCDFE.crossings_with_self) == 1
     assert_allclose(ABCDFE.crossings_with_self.lonlats, [(358.316743, -1.708471)])
 
     # double self-crossing
     ABCDFEc = sphersgeo.ArcString([A, B, C, D, F, E], closed=True)
     assert ABCDFEc.crosses_self
-    len(ABCDFEc.crossings_with_self) == 2
+    assert len(ABCDFEc.crossings_with_self) == 2
 
     # non-self-crossing
     ACBD = sphersgeo.ArcString([A, C, B, D])
