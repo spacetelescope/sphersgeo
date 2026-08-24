@@ -278,7 +278,7 @@ where
                     let end_node = &nodes[*end_node_index];
                     // check if any other nodes lie on this edge...
                     for (middle_node_index, middle_node) in self.nodes.iter().enumerate() {
-                        if crate::sphericalpoint::xyzs_colinear(
+                        if crate::sphericalpoint::xyzs_coplanar(
                             &start_node.xyz,
                             &middle_node.xyz,
                             &end_node.xyz,

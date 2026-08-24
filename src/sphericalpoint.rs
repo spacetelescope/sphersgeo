@@ -28,12 +28,12 @@ pub fn linspace(x0: f64, xend: f64, n: usize) -> Vec<f64> {
 /// length of the underlying xyz vector
 ///
 ///     r = sqrt(x^2 + y^2 + z^2)
-fn xyz_length(xyz: &[f64; 3]) -> f64 {
+fn xyz_norm(xyz: &[f64; 3]) -> f64 {
     (xyz[0].powi(2) + xyz[1].powi(2) + xyz[2].powi(2)).sqrt()
 }
 
 fn normalize(xyz: &[f64; 3]) -> [f64; 3] {
-    let length = xyz_length(&xyz);
+    let length = xyz_norm(&xyz);
     [xyz[0] / length, xyz[1] / length, xyz[2] / length]
 }
 
@@ -293,22 +293,28 @@ fn xyz_two_arc_is_clockwise(a: &[f64; 3], b: &[f64; 3], c: &[f64; 3]) -> bool {
 }
 
 /// whether the three xyz points exist on the same great-circle arc
-pub fn xyzs_colinear(a: &[f64; 3], b: &[f64; 3], c: &[f64; 3]) -> bool {
+pub fn xyzs_coplanar(a: &[f64; 3], b: &[f64; 3], c: &[f64; 3]) -> bool {
     if xyz_eq(a, b) || xyz_eq(b, c) {
         true
     } else {
         let tolerance = 2e-8;
 
-        let abc = xyz_two_arc_angle(a, b, c);
-        let cab = xyz_two_arc_angle(c, a, b);
-        let bca = xyz_two_arc_angle(b, c, a);
+        let normal = xyz_cross(a, b);
+        let normal_length = xyz_norm(&normal);
 
-        abc < tolerance
-            || cab < tolerance
-            || bca < tolerance
-            || (abc - std::f64::consts::PI).abs() < tolerance
-            || (cab - std::f64::consts::PI).abs() < tolerance
-            || (bca - std::f64::consts::PI).abs() < tolerance
+        if normal_length < tolerance {
+            return false;
+        }
+
+        let coplanar = xyz_dot(&c, &normal).abs() / &normal_length < tolerance;
+
+        let ab = xyz_dot(a, b);
+        let ac = xyz_dot(a, c);
+        let bc = xyz_dot(b, c);
+
+        let not_antipodal = ab > -1.0 + tolerance;
+        let interior_of_minor_arc = (ac >= ab) & (bc >= ab);
+        coplanar & interior_of_minor_arc & not_antipodal
     }
 }
 
@@ -353,7 +359,7 @@ pub struct SphericalPoint {
 
 impl From<[f64; 3]> for SphericalPoint {
     fn from(xyz: [f64; 3]) -> Self {
-        let length = xyz_length(&xyz);
+        let length = xyz_norm(&xyz);
         let xyz = if length < 2e-11 { xyz } else { normalize(&xyz) };
         Self { xyz }
     }
@@ -586,7 +592,7 @@ impl SphericalPoint {
 
     /// whether this point lies on an arc between two other points
     pub fn colinear(&self, a: &SphericalPoint, b: &SphericalPoint) -> bool {
-        xyzs_colinear(&a.xyz, &self.xyz, &b.xyz)
+        xyzs_coplanar(&a.xyz, &self.xyz, &b.xyz)
     }
 
     /// whether the angle formed between this point and two other points is a clockwise turn
@@ -601,7 +607,7 @@ impl SphericalPoint {
 
     /// length of the underlying xyz vector
     pub fn vector_length(&self) -> f64 {
-        xyz_length(&self.xyz)
+        xyz_norm(&self.xyz)
     }
 
     /// cross product of this xyz vector with another xyz vector
@@ -959,7 +965,7 @@ impl TryFrom<Vec<[f64; 3]>> for MultiSphericalPoint {
             let xyzs: Vec<[f64; 3]> = xyzs
                 .into_iter()
                 .map(|xyz| {
-                    let length = xyz_length(&xyz);
+                    let length = xyz_norm(&xyz);
                     if length < 3e-11 {
                         xyz
                     } else {
@@ -1186,7 +1192,7 @@ impl MultiSphericalPoint {
 
     /// lengths of the underlying xyz vectors
     pub fn vectors_lengths(&self) -> Vec<f64> {
-        self.xyzs.iter().map(xyz_length).collect()
+        self.xyzs.iter().map(xyz_norm).collect()
     }
 
     fn recreate_kdtree(&mut self) {

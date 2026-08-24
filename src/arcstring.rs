@@ -7,7 +7,7 @@ use crate::{
     sphericalpoint::{
         MultiSphericalPoint, SphericalPoint, arc_distance_over_sphere, point_within_kdtree,
         xyz_add_xyz, xyz_cross, xyz_div_f64, xyz_dot, xyz_eq, xyz_mul_xyz, xyz_neg, xyz_sub_xyz,
-        xyz_sum, xyzs_colinear,
+        xyz_sum, xyzs_coplanar,
     },
 };
 use std::{
@@ -119,7 +119,7 @@ pub fn point_is_along_arcstring(xyz: &[f64; 3], arcstring: &ArcString) -> bool {
             0
         }];
 
-        if xyzs_colinear(&arc_0, xyz, &arc_1) {
+        if xyzs_coplanar(&arc_0, xyz, &arc_1) {
             return true;
         }
     }
@@ -142,7 +142,7 @@ pub fn split_arc_at_points<'a>(
                 continue;
             }
 
-            if xyzs_colinear(arc_0, point, arc_1) {
+            if xyzs_coplanar(arc_0, point, arc_1) {
                 // replace arc with the arc split in two at the colinear point
                 arcs[arc_index] = vec![arcs[arc_index][0], point];
                 arcs.insert(arc_index + 1, vec![point, arcs[arc_index][1]]);
@@ -170,7 +170,7 @@ pub fn split_arcstring_at_points(arcstring: &ArcString, points: Vec<&[f64; 3]>) 
                 let arc_0 = arcstring.points.xyzs[arc_a_index];
                 let arc_1 = arcstring.points.xyzs[arc_b_index];
 
-                if xyzs_colinear(&arc_0, point, &arc_1) {
+                if xyzs_coplanar(&arc_0, point, &arc_1) {
                     // replace arc with the arc split in two at the colinear point
 
                     // add the first segment up to the colinear point
@@ -572,7 +572,7 @@ impl ArcString {
                     self.points.xyzs.len() - index + 1
                 }];
 
-                if xyzs_colinear(&a, &b, &c) {
+                if xyzs_coplanar(&a, &b, &c) {
                     unecessary_indices.push(index);
                 }
             }
@@ -602,7 +602,7 @@ impl ArcString {
                 let arc_0 = vertices[vertex_index];
                 let arc_1 = vertices[next_vertex_index];
 
-                if xyzs_colinear(&arc_0, &point.xyz, &arc_1) {
+                if xyzs_coplanar(&arc_0, &point.xyz, &arc_1) {
                     // insert the new vertex in between the existing ones
                     vertices.insert(vertex_index, point.xyz);
                     vertex_index += 1;
