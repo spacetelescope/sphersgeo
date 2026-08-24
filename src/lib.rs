@@ -2077,4 +2077,9 @@ mod py_sphersgeo {
             self.to_string()
         }
     }
+
+    #[pyfunction]
+    fn from_wkt(wkt: &str) -> PyResult<AnyGeometry> {
+        crate::geometry::try_from_wkt(wkt).map_err(PyValueError::new_err)
+    }
 }

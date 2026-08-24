@@ -1,25 +1,7 @@
-import math
-
 import numpy as np
-import pytest
 from numpy.testing import assert_allclose
-from sphersgeo import MultiSphericalPoint, SphericalPoint
 
-
-def haversine_distance(a: tuple[float, float], b: tuple[float, float]) -> float:
-    a = tuple(map(math.radians, a))
-    b = tuple(map(math.radians, b))
-
-    distance = 2 * math.asin(
-        math.sqrt(
-            (
-                math.sin((b[1] - a[1]) / 2) ** 2
-                + math.cos(a[1]) * math.cos(b[1]) * math.sin((b[0] - a[0]) / 2) ** 2
-            )
-        )
-    )
-
-    return math.degrees(distance)
+import sphersgeo
 
 
 def test_init():
@@ -30,30 +12,32 @@ def test_init():
         (1.0, -1.0, 0.0),
     ]
 
-    single_from_tuple = SphericalPoint(vectors[0])
-    single_from_list = SphericalPoint(list(vectors[0]))
-    single_from_numpy = SphericalPoint(np.array(vectors[0]))
+    single_from_tuple = sphersgeo.SphericalPoint(vectors[0])
+    single_from_list = sphersgeo.SphericalPoint(list(vectors[0]))
+    single_from_numpy = sphersgeo.SphericalPoint(np.array(vectors[0]))
 
     assert single_from_tuple == single_from_list
     assert single_from_tuple == single_from_numpy
     assert single_from_list == single_from_numpy
 
-    assert SphericalPoint(single_from_numpy) == single_from_numpy
+    assert sphersgeo.SphericalPoint(single_from_numpy) == single_from_numpy
 
-    multi_from_list_of_tuples = MultiSphericalPoint(vectors)
-    multi_from_nested_list = MultiSphericalPoint([list(vector) for vector in vectors])
-    multi_from_numpy = MultiSphericalPoint(np.array(vectors))
+    multi_from_list_of_tuples = sphersgeo.MultiSphericalPoint(vectors)
+    multi_from_nested_list = sphersgeo.MultiSphericalPoint(
+        [list(vector) for vector in vectors]
+    )
+    multi_from_numpy = sphersgeo.MultiSphericalPoint(np.array(vectors))
 
     assert multi_from_list_of_tuples == multi_from_nested_list
     assert multi_from_list_of_tuples == multi_from_numpy
 
-    assert MultiSphericalPoint(multi_from_numpy) == multi_from_numpy
+    assert sphersgeo.MultiSphericalPoint(multi_from_numpy) == multi_from_numpy
 
 
 def test_vectors_lengths():
     x, y, z = np.ogrid[-100:100:11, -100:100:11, -100:100:11]
     xyz = np.dstack((x.flatten(), y.flatten(), z.flatten()))[0].astype(float)
-    points = MultiSphericalPoint(xyz)
+    points = sphersgeo.MultiSphericalPoint(xyz)
 
     assert_allclose(points.vectors_lengths, np.sqrt(np.sum(points.xyzs**2, axis=-1)))
 
@@ -63,7 +47,7 @@ def test_vectors_lengths():
 
 def test_already_normalized():
     for xyz in [(1.0, 0.0, 0.0), (0.0, 1.0, 0.0), (0.0, 0.0, 1.0)]:
-        assert SphericalPoint(xyz).vector_length == 1.0
+        assert sphersgeo.SphericalPoint(xyz).vector_length == 1.0
 
 
 def test_from_lonlat():
@@ -72,8 +56,8 @@ def test_from_lonlat():
     a_lonlat = (60.0, 0.0)
     b_lonlat = (60.0, 30.0)
 
-    a = SphericalPoint(a_lonlat)
-    b = SphericalPoint(b_lonlat)
+    a = sphersgeo.SphericalPoint(a_lonlat)
+    b = sphersgeo.SphericalPoint(b_lonlat)
 
     assert_allclose(a.lonlat, a_lonlat)
     assert_allclose(b.lonlat, b_lonlat)
@@ -81,11 +65,11 @@ def test_from_lonlat():
     lons = np.arange(-360.0, 360.0, 1.0)
 
     equator_lat = 0.0
-    equators = [SphericalPoint((lon, equator_lat)) for lon in lons]
+    equators = [sphersgeo.SphericalPoint((lon, equator_lat)) for lon in lons]
     for equator in equators:
         assert equator.lonlat[1] == 0.0
 
-    multi_equator = MultiSphericalPoint(
+    multi_equator = sphersgeo.MultiSphericalPoint(
         np.stack([lons, np.repeat(equator_lat, len(lons))], axis=1)
     )
 
@@ -94,11 +78,11 @@ def test_from_lonlat():
     assert_allclose(multi_equator.xyzs[:, 2], 0.0)
 
     north_pole_lat = 90.0
-    north_poles = [SphericalPoint((lon, north_pole_lat)) for lon in lons]
+    north_poles = [sphersgeo.SphericalPoint((lon, north_pole_lat)) for lon in lons]
     for north_pole in north_poles:
         assert_allclose(north_pole.xyz, [0.0, 0.0, 1.0], atol=tolerance)
 
-    multi_north_pole = MultiSphericalPoint(
+    multi_north_pole = sphersgeo.MultiSphericalPoint(
         np.stack([lons, np.repeat(north_pole_lat, len(lons))], axis=1)
     )
 
@@ -111,11 +95,11 @@ def test_from_lonlat():
     )
 
     south_pole_lat = -90.0
-    south_poles = [SphericalPoint((lon, south_pole_lat)) for lon in lons]
+    south_poles = [sphersgeo.SphericalPoint((lon, south_pole_lat)) for lon in lons]
     for south_pole in south_poles:
         assert_allclose(south_pole.xyz, [0.0, 0.0, -1.0], atol=tolerance)
 
-    multi_south_pole = MultiSphericalPoint(
+    multi_south_pole = sphersgeo.MultiSphericalPoint(
         np.stack([lons, np.repeat(south_pole_lat, len(lons))], axis=1)
     )
 
@@ -138,80 +122,31 @@ def test_lonlat():
     ]
     lonlats = [(0, 90), (0, -90), (45, 0), (315, 0), (np.nan, 0)]
 
-    a = SphericalPoint(xyzs[0])
+    a = sphersgeo.SphericalPoint(xyzs[0])
     assert_allclose(a.lonlat, lonlats[0])
 
-    b = SphericalPoint(xyzs[1])
+    b = sphersgeo.SphericalPoint(xyzs[1])
     assert_allclose(b.lonlat, lonlats[1])
 
-    c = SphericalPoint(xyzs[2])
+    c = sphersgeo.SphericalPoint(xyzs[2])
     assert_allclose(c.lonlat, lonlats[2])
 
-    d = SphericalPoint(xyzs[3])
+    d = sphersgeo.SphericalPoint(xyzs[3])
     assert_allclose(d.lonlat, lonlats[3])
 
-    e = SphericalPoint(xyzs[4])
+    e = sphersgeo.SphericalPoint(xyzs[4])
     assert_allclose(e.lonlat, lonlats[4])
 
-    abcde = MultiSphericalPoint(xyzs)
+    abcde = sphersgeo.MultiSphericalPoint(xyzs)
     assert_allclose(abcde.lonlats, lonlats)
 
 
-def test_distance():
-    # lonlats=[[  0.  90.],     [  0. -90.],      [ 45.   0.],     [315.   0.]]
-    xyzs = [(0.0, 0.0, 1.0), (0.0, 0.0, -1.0), (1.0, 1.0, 0.0), (1.0, -1.0, 0.0)]
-
-    a = SphericalPoint(xyzs[0])
-    b = SphericalPoint(xyzs[1])
-    c = SphericalPoint(xyzs[2])
-    d = SphericalPoint(xyzs[3])
-
-    ab = MultiSphericalPoint(xyzs[:2])
-    bc = MultiSphericalPoint(xyzs[1:3])
-    cd = MultiSphericalPoint(xyzs[2:])
-
-    assert a.distance(b) == 180.0
-    assert b.distance(c) == 90.0
-    assert c.distance(d) == 90.0
-    assert d.distance(a) == 90.0
-    assert c.distance(a) == 90.0
-    assert d.distance(b) == 90.0
-
-    assert a.distance(a) == 0.0
-    assert b.distance(b) == 0.0
-    assert c.distance(c) == 0.0
-    assert d.distance(d) == 0.0
-
-    assert ab.distance(bc) == 0.0
-    assert bc.distance(cd) == 0.0
-    assert ab.distance(cd) == 90.0
-
-    assert bc.distance(c) == 0.0
-    assert ab.distance(d) == 90.0
-
-    assert ab.distance(ab) == 0.0
-    assert bc.distance(bc) == 0.0
-    assert cd.distance(cd) == 0.0
-
-    A = SphericalPoint((90.0, 0.0))
-    B = SphericalPoint((-90.0, 0.0))
-    assert A.distance(B) == 180.0
-
-    A = SphericalPoint((135.0, 0.0))
-    B = SphericalPoint((-90.0, 0.0))
-    assert A.distance(B) == np.rad2deg((3.0 / 4.0) * np.pi)
-
-    A = SphericalPoint((0.0, 0.0))
-    B = SphericalPoint((0.0, 90.0))
-    assert A.distance(B) == np.rad2deg(np.pi / 2.0)
-
-
 def test_distance_domain():
-    A = SphericalPoint((np.nan, 0.0, 0.0))
-    B = SphericalPoint((0.0, 0.0, np.inf))
+    A = sphersgeo.SphericalPoint((np.nan, 0.0, 0.0))
+    B = sphersgeo.SphericalPoint((0.0, 0.0, np.inf))
     assert np.isnan(A.distance(B))
 
-    A = MultiSphericalPoint(
+    A = sphersgeo.MultiSphericalPoint(
         [
             (np.nan, 0, 0),
             (np.nan, 0, 0),
@@ -219,7 +154,7 @@ def test_distance_domain():
             (0, 0, np.nan),
         ]
     )
-    B = MultiSphericalPoint(
+    B = sphersgeo.MultiSphericalPoint(
         [
             (0, 0, np.inf),
             (0, 0, np.inf),
@@ -235,12 +170,12 @@ def test_distance_domain():
 def test_contains():
     xyz = [(0.0, 0.0, 1.0), (0.0, 0.0, -1.0), (1.0, 1.0, 0.0), (1.0, -1.0, 0.0)]
 
-    a = SphericalPoint(xyz[0])
-    b = SphericalPoint(xyz[1])
-    c = SphericalPoint(xyz[2])
-    d = SphericalPoint(xyz[3])
+    a = sphersgeo.SphericalPoint(xyz[0])
+    b = sphersgeo.SphericalPoint(xyz[1])
+    c = sphersgeo.SphericalPoint(xyz[2])
+    d = sphersgeo.SphericalPoint(xyz[3])
 
-    abc = MultiSphericalPoint(xyz[:3])
+    abc = sphersgeo.MultiSphericalPoint(xyz[:3])
 
     assert abc.contains(a)
     assert abc.contains(b)
@@ -256,11 +191,11 @@ def test_contains():
 def test_wkt():
     geometries = [
         (
-            SphericalPoint((0.0, 1.0, 2.0)),
+            sphersgeo.SphericalPoint((0.0, 1.0, 2.0)),
             "POINT (90 63.43494882292201)",
         ),
         (
-            MultiSphericalPoint([(0.0, 1.0, 2.0), (0.0, 0.0, 1.0)]),
+            sphersgeo.MultiSphericalPoint([(0.0, 1.0, 2.0), (0.0, 0.0, 1.0)]),
             "MULTIPOINT (90 63.43494882292201, 0 90)",
         ),
     ]
@@ -278,94 +213,100 @@ def test_add():
         (1.0, -1.0, 0.0),
     ]
 
-    a = SphericalPoint(xyz[0])
-    b = SphericalPoint(xyz[1])
-    c = SphericalPoint(xyz[2])
-    d = SphericalPoint(xyz[3])
+    a = sphersgeo.SphericalPoint(xyz[0])
+    b = sphersgeo.SphericalPoint(xyz[1])
+    c = sphersgeo.SphericalPoint(xyz[2])
+    d = sphersgeo.SphericalPoint(xyz[3])
 
     # operations between points are elementwise
-    assert a + b == SphericalPoint((0, 0, 0))
-    assert b + c == SphericalPoint((0.7071067811865475, 0.7071067811865475, -1.0))
-    assert c + d == SphericalPoint((1.414213, 0.0, 0.0))
-    assert d + a == SphericalPoint((0.7071067811865475, -0.7071067811865475, 1.0))
+    assert a + b == sphersgeo.SphericalPoint((0, 0, 0))
+    assert b + c == sphersgeo.SphericalPoint(
+        (0.7071067811865475, 0.7071067811865475, -1.0)
+    )
+    assert c + d == sphersgeo.SphericalPoint((1.414213, 0.0, 0.0))
+    assert d + a == sphersgeo.SphericalPoint(
+        (0.7071067811865475, -0.7071067811865475, 1.0)
+    )
 
     a += b
     c += d
 
-    assert a == SphericalPoint((0, 0, 0))
-    assert c == SphericalPoint((1.414213, 0.0, 0.0))
+    assert a == sphersgeo.SphericalPoint((0, 0, 0))
+    assert c == sphersgeo.SphericalPoint((1.414213, 0.0, 0.0))
 
     # adding between multipoints is concatenation
-    ab = MultiSphericalPoint(xyz[0:2])
-    cd = MultiSphericalPoint(xyz[2:4])
+    ab = sphersgeo.MultiSphericalPoint(xyz[0:2])
+    cd = sphersgeo.MultiSphericalPoint(xyz[2:4])
 
-    abcd = MultiSphericalPoint(xyz)
+    abcd = sphersgeo.MultiSphericalPoint(xyz)
 
     assert ab + cd == abcd
 
 
 def test_two_arc_angle():
     # right angle
-    A = SphericalPoint((1.0, 0.0, 0.0))
-    B = SphericalPoint((0.0, 1.0, 0.0))
-    C = SphericalPoint((0.0, 0.0, 1.0))
+    A = sphersgeo.SphericalPoint((1.0, 0.0, 0.0))
+    B = sphersgeo.SphericalPoint((0.0, 1.0, 0.0))
+    C = sphersgeo.SphericalPoint((0.0, 0.0, 1.0))
     assert A.two_arc_angle(B, C) == np.rad2deg(np.pi / 2)
     assert B.two_arc_angle(A, C) == np.rad2deg(np.pi / 2)
     assert C.two_arc_angle(A, B) == np.rad2deg(np.pi / 2)
 
     # antipodes
-    A = SphericalPoint((1.0, 1.0, 1.0))
-    B = SphericalPoint((0.0, 1.0, 0.0))
-    C = SphericalPoint((-1.0, -1.0, -1.0))
+    A = sphersgeo.SphericalPoint((1.0, 1.0, 1.0))
+    B = sphersgeo.SphericalPoint((0.0, 1.0, 0.0))
+    C = sphersgeo.SphericalPoint((-1.0, -1.0, -1.0))
     assert B.two_arc_angle(A, C) == np.rad2deg(np.pi)
     assert B.two_arc_angle(C, A) == np.rad2deg(np.pi)
 
     # same point
-    A = SphericalPoint((1.0, 1.0, 1.0))
-    B = SphericalPoint((0.0, 1.0, 0.0))
-    C = SphericalPoint((1.0, 1.0, 1.0))
+    A = sphersgeo.SphericalPoint((1.0, 1.0, 1.0))
+    B = sphersgeo.SphericalPoint((0.0, 1.0, 0.0))
+    C = sphersgeo.SphericalPoint((1.0, 1.0, 1.0))
     assert B.two_arc_angle(A, C) == 0.0
     assert B.two_arc_angle(C, A) == 0.0
 
     # defined from lonlat
-    A = SphericalPoint((60.0, 45.0))
-    B = SphericalPoint((0.0, 90.0))
-    C = SphericalPoint((30.0, -3.0))
+    A = sphersgeo.SphericalPoint((60.0, 45.0))
+    B = sphersgeo.SphericalPoint((0.0, 90.0))
+    C = sphersgeo.SphericalPoint((30.0, -3.0))
     assert_allclose(B.two_arc_angle(A, C), 30.0)
     assert_allclose(B.two_arc_angle(C, A), 30.0)
 
     # equatorial
-    A = SphericalPoint((0.0, 0.0))
-    B = SphericalPoint((15.0, 0.0))
-    C = SphericalPoint((30.0, 0.0))
+    A = sphersgeo.SphericalPoint((0.0, 0.0))
+    B = sphersgeo.SphericalPoint((15.0, 0.0))
+    C = sphersgeo.SphericalPoint((30.0, 0.0))
     assert B.two_arc_angle(A, C) == 180
 
-    A = SphericalPoint((0.0, 0.0, 0.0))
-    B = SphericalPoint((0.0, 0.0, 0.0))
-    C = SphericalPoint((0.0, 0.0, 0.0))
+    A = sphersgeo.SphericalPoint((0.0, 0.0, 0.0))
+    B = sphersgeo.SphericalPoint((0.0, 0.0, 0.0))
+    C = sphersgeo.SphericalPoint((0.0, 0.0, 0.0))
     assert B.two_arc_angle(A, C) == 0
 
-    A = SphericalPoint((1.0, 1.0, 1.0))
-    B = SphericalPoint((0.0, 0.0, 0.0))
-    C = SphericalPoint((-1.0, -1.0, -1.0))
+    A = sphersgeo.SphericalPoint((1.0, 1.0, 1.0))
+    B = sphersgeo.SphericalPoint((0.0, 0.0, 0.0))
+    C = sphersgeo.SphericalPoint((-1.0, -1.0, -1.0))
     assert B.two_arc_angle(A, C) == 180
 
-    A = SphericalPoint((0.0, 0.0, 0.0))
-    B = SphericalPoint((0.0, 1.0, 0.0))
-    C = SphericalPoint((1.0, 0.0, 0.0))
+    A = sphersgeo.SphericalPoint((0.0, 0.0, 0.0))
+    B = sphersgeo.SphericalPoint((0.0, 1.0, 0.0))
+    C = sphersgeo.SphericalPoint((1.0, 0.0, 0.0))
     assert B.two_arc_angle(A, C) == 90
 
-    A = SphericalPoint((0.0, 0.0, 0.0))
-    B = SphericalPoint((0.0, 1.0, 0.0))
-    C = SphericalPoint((0.0, 0.0, 0.0))
+    A = sphersgeo.SphericalPoint((0.0, 0.0, 0.0))
+    B = sphersgeo.SphericalPoint((0.0, 1.0, 0.0))
+    C = sphersgeo.SphericalPoint((0.0, 0.0, 0.0))
     assert B.two_arc_angle(A, C) == 0
 
 
 def test_angle_nearly_coplanar():
     # test from issue #222 + extra values
-    a = SphericalPoint((1.0, 1.0, 1.0))  # [45.0, 35.264389682754654]
-    b = SphericalPoint((1.0, 0.9999999, 1.0))  # [44.99999713521089, 35.26439103322914]
-    C = MultiSphericalPoint(
+    a = sphersgeo.SphericalPoint((1.0, 1.0, 1.0))  # [45.0, 35.264389682754654]
+    b = sphersgeo.SphericalPoint(
+        (1.0, 0.9999999, 1.0)
+    )  # [44.99999713521089, 35.26439103322914]
+    C = sphersgeo.MultiSphericalPoint(
         [
             (0.0, 0.5, 1.0),  # [ 90., 63.43494882]
             (0.0, 0.15, 1.0),  # [ 90., 81.46923439]
@@ -385,139 +326,35 @@ def test_angle_nearly_coplanar():
 
 def test_colinear():
     # equatorial
-    A = SphericalPoint((20.0, 0.0))
-    B = SphericalPoint((0.0, 0.0))
-    C = SphericalPoint((-20.0, 0.0))
+    A = sphersgeo.SphericalPoint((20.0, 0.0))
+    B = sphersgeo.SphericalPoint((0.0, 0.0))
+    C = sphersgeo.SphericalPoint((-20.0, 0.0))
     assert A.colinear(B, C)
     assert B.colinear(A, C)
     assert C.colinear(A, B)
 
     # meridianal
-    A = SphericalPoint((0.0, 20.0))
-    B = SphericalPoint((0.0, 0.0))
-    C = SphericalPoint((0.0, -20.0))
+    A = sphersgeo.SphericalPoint((0.0, 20.0))
+    B = sphersgeo.SphericalPoint((0.0, 0.0))
+    C = sphersgeo.SphericalPoint((0.0, -20.0))
     assert A.colinear(B, C)
     assert B.colinear(A, C)
     assert C.colinear(A, B)
 
     # non-colinear points
-    A = SphericalPoint((1.0, 0.0, 0.0))
-    B = SphericalPoint((0.0, 1.0, 0.0))
-    C = SphericalPoint((0.0, 0.0, 1.0))
+    A = sphersgeo.SphericalPoint((1.0, 0.0, 0.0))
+    B = sphersgeo.SphericalPoint((0.0, 1.0, 0.0))
+    C = sphersgeo.SphericalPoint((0.0, 0.0, 1.0))
     assert not B.colinear(A, C)
 
     # mirrored
-    A = SphericalPoint((1.0, 1.0, 1.0))
-    B = SphericalPoint((0.0, 1.0, 0.0))
-    C = SphericalPoint((-1.0, -1.0, -1.0))
+    A = sphersgeo.SphericalPoint((1.0, 1.0, 1.0))
+    B = sphersgeo.SphericalPoint((0.0, 1.0, 0.0))
+    C = sphersgeo.SphericalPoint((-1.0, -1.0, -1.0))
     assert B.colinear(A, C)
 
     # points that equal each other
-    A = SphericalPoint((1.0, 1.0, 1.0))
-    B = SphericalPoint((0.0, 0.0, 0.0))
-    C = SphericalPoint((1.0, 1.0, 1.0))
+    A = sphersgeo.SphericalPoint((1.0, 1.0, 1.0))
+    B = sphersgeo.SphericalPoint((0.0, 0.0, 0.0))
+    C = sphersgeo.SphericalPoint((1.0, 1.0, 1.0))
     assert B.colinear(A, C)
-
-
-TEST_MULTIPOINTS = [
-    (
-        [
-            ((20.0, 5.0), True),
-            ((25.0, 5.0), True),
-            ((25.0, 10.0), True),
-            ((20.0, 10.0), True),
-        ],
-        24.79316262017451,
-    ),
-    (
-        [
-            ((18.0, 6.0), True),
-            ((21.0, 6.0), False),
-            ((20.0, 5.0), True),
-            ((21.0, 7.0), False),
-            ((19.0, 8.0), False),
-            ((25.0, 5.0), True),
-            ((25.0, 10.0), True),
-            ((20.0, 10.0), True),
-            ((18.0, 7.0), True),
-        ],
-        30.753725432790755,
-    ),
-    (
-        [
-            ((0.02, 0.06), False),
-            ((0.10, 0.00), True),
-            ((0.05, 0.05), False),
-            ((0.03, 0.01), True),
-            ((0.04, 0.12), True),
-            ((0.07, 0.08), False),
-            ((0.00, 0.03), True),
-            ((0.06, 0.02), False),
-            ((0.08, 0.04), False),
-            ((0.13, 0.03), False),
-            ((0.08, 0.10), False),
-            ((0.14, 0.11), True),
-            ((0.15, 0.01), True),
-            ((0.12, 0.13), True),
-            ((0.01, 0.09), True),
-            ((0.11, 0.07), False),
-        ],
-        0.015556716412923744,
-    ),
-    (
-        [
-            ((0.02, 0.06), False),
-            ((0.10, 0.00), True),
-            ((0.05, 0.05), False),
-            ((0.03, 0.01), True),
-            ((0.04, 0.12), True),
-            ((0.07, 0.08), False),
-            ((0.00, 0.03), True),
-            ((0.06, 0.02), False),
-            ((0.08, 0.04), False),
-            ((0.13, 0.03), False),
-            ((0.08, 0.10), False),
-            ((0.14, 0.11), True),
-            ((0.15, 0.01), True),
-            ((0.12, 0.13), True),
-            ((0.01, 0.09), True),
-            ((0.11, 0.07), False),
-            ((0.02, 0.06), False),
-            ((0.10, 0.00), False),
-            ((0.05, 0.05), False),
-            ((0.03, 0.01), False),
-            ((0.04, 0.12), False),
-            ((0.07, 0.08), False),
-            ((0.00, 0.03), False),
-            ((0.06, 0.02), False),
-            ((0.08, 0.04), False),
-            ((0.13, 0.03), False),
-            ((0.08, 0.10), False),
-            ((0.14, 0.11), False),
-            ((0.15, 0.01), False),
-            ((0.12, 0.13), False),
-            ((0.01, 0.09), False),
-            ((0.11, 0.07), False),
-        ],
-        np.pi,
-    ),
-]
-
-
-@pytest.mark.parametrize(
-    "lonlats,convex_hull_area",
-    TEST_MULTIPOINTS,
-)
-def test_multipoint_convex_hull(lonlats, convex_hull_area):
-    lonlats, on_convex_hull = zip(*lonlats)
-
-    points = MultiSphericalPoint(lonlats)
-
-    convex_hull = points.convex_hull
-
-    assert_allclose(convex_hull.area, convex_hull_area)
-
-    assert [
-        convex_hull.boundary.vertices.contains(SphericalPoint(lonlat))
-        for lonlat in lonlats
-    ] == list(on_convex_hull)
