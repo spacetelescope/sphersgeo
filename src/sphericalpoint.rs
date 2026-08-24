@@ -32,6 +32,11 @@ fn xyz_length(xyz: &[f64; 3]) -> f64 {
     (xyz[0].powi(2) + xyz[1].powi(2) + xyz[2].powi(2)).sqrt()
 }
 
+fn normalize(xyz: &[f64; 3]) -> [f64; 3] {
+    let length = xyz_length(&xyz);
+    [xyz[0] / length, xyz[1] / length, xyz[2] / length]
+}
+
 pub fn xyz_dot(a: &[f64; 3], b: &[f64; 3]) -> f64 {
     xyz_sum(&xyz_mul_xyz(a, b))
 }
@@ -159,23 +164,25 @@ fn xyz_rotate_around(a: &[f64; 3], b: &[f64; 3], theta: &f64) -> [f64; 3] {
     let theta_sin = theta.sin();
     let theta_cos = theta.cos();
 
-    xyz_add_xyz(
+    // reformulation from Mihai
+    let i_theta_cos = 2.0 * (theta / 2.0).sin().powi(2);
+
+    // Rodrigues' rotation formula https://en.wikipedia.org/wiki/Rodrigues'_rotation_formula
+    let dot_p = xyz_sum(&xyz_mul_xyz(&a, &b));
+    normalize(&xyz_add_xyz(
         &xyz_add_xyz(
+            &xyz_mul_f64(&a, &theta_cos),
             &xyz_mul_f64(
-                &xyz_mul_xyz(&xyz_mul_xyz(&xyz_neg(b), &xyz_neg(a)), b),
-                &(1.0 - theta_cos),
+                &[
+                    b[1] * a[2] - b[2] * a[1],
+                    -b[0] * a[2] + b[2] * a[0],
+                    b[0] * a[1] - b[1] * a[0],
+                ],
+                &theta_sin,
             ),
-            &xyz_mul_f64(a, &theta_cos),
         ),
-        &xyz_mul_f64(
-            &[
-                -b[2] * a[1] + b[1] * a[2],
-                b[2] * a[0] - b[0] * a[2],
-                -b[1] * a[0] - b[0] * a[1],
-            ],
-            &theta_sin,
-        ),
-    )
+        &xyz_mul_f64(&b, &(i_theta_cos * dot_p)),
+    ))
 }
 
 fn haversine_distance_over_sphere_radians(a: &[f64; 2], b: &[f64; 2]) -> f64 {
@@ -347,11 +354,7 @@ pub struct SphericalPoint {
 impl From<[f64; 3]> for SphericalPoint {
     fn from(xyz: [f64; 3]) -> Self {
         let length = xyz_length(&xyz);
-        let xyz = if length < 2e-11 {
-            xyz
-        } else {
-            [xyz[0] / length, xyz[1] / length, xyz[2] / length]
-        };
+        let xyz = if length < 2e-11 { xyz } else { normalize(&xyz) };
         Self { xyz }
     }
 }
