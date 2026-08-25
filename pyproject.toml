@@ -1,6 +1,6 @@
 [project]
 name = "sphersgeo"
-requires-python = ">=3.10"
+requires-python = ">=3.12"
 authors = [{ name = "Zach Burnett", email = "zburnett@stsci.edu" }]
 classifiers = [
   "Programming Language :: Rust",
@@ -28,4 +28,5 @@ test-requires = ["abi3audit"]
 test-command = "python -c 'from sphersgeo import SphericalPoint, MultiSphericalPoint, ArcString, MultiArcString, SphericalPolygon, MultiSphericalPolygon' && abi3audit --strict --report dist/*.whl"
 
 [tool.maturin]
-features = ["py"]
+features = ["pyo3/extension-module", "py"]
+python-source = "src/python/"

@@ -212,7 +212,11 @@ pub enum AnyGeometry {
 fn try_point_from_wkt_fragment(wkt_fragment: &str) -> Result<Vec<f64>, String> {
     let mut point = vec![];
     for coordinate in wkt_fragment.split_whitespace() {
-        point.push(coordinate.parse::<f64>().map_err(|err| format!("{err}"))?);
+        point.push(
+            coordinate
+                .parse::<f64>()
+                .map_err(|err| format!("{err} `{coordinate}`"))?,
+        );
     }
     Ok(point)
 }
@@ -228,13 +232,16 @@ fn try_points_from_wkt_fragment(wkt_fragment: &str) -> Result<Vec<Vec<f64>>, Str
 fn try_multipoints_from_wkt_fragment(wkt_fragment: &str) -> Result<Vec<Vec<Vec<f64>>>, String> {
     let mut multipoints = vec![];
     for multipoint_fragment in wkt_fragment.split("), (") {
-        multipoints.push(try_points_from_wkt_fragment(multipoint_fragment)?);
+        multipoints.push(try_points_from_wkt_fragment(
+            &multipoint_fragment.trim_matches(|c| c == '(' || c == ')'),
+        )?);
     }
     Ok(multipoints)
 }
 
 /// construct geometry from well-known text representation
 pub fn try_from_wkt(wkt: &str) -> Result<AnyGeometry, String> {
+    let wkt = wkt.trim(); // trim whitespace
     if wkt.starts_with("POINT (") {
         crate::sphericalpoint::SphericalPoint::try_from(&try_point_from_wkt_fragment(
             &wkt[7..wkt.len() - 1],

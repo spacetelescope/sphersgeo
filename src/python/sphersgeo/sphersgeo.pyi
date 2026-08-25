@@ -1,6 +1,18 @@
-from typing import Any, TypeAlias, overload
+from typing import Any, overload
 
 import numpy as np
+
+from sphersgeo import (
+    AnyGeometry,
+    AnyGeometryInputs,
+    ArcStringInputs,
+    GeometryCollection,
+    MultiArcStringInputs,
+    MultiSphericalPointInputs,
+    MultiSphericalPolygonInputs,
+    SphericalPointInputs,
+    SphericalPolygonInputs,
+)
 
 __all__ = [
     "ArcString",
@@ -11,33 +23,9 @@ __all__ = [
     "SphericalPolygon",
 ]
 
-AnyGeometry: TypeAlias = (
-    SphericalPoint
-    | MultiSphericalPoint
-    | ArcString
-    | MultiArcString
-    | SphericalPolygon
-    | MultiSphericalPolygon
-)
-
-AnyGeometryInputs: TypeAlias = (
-    SphericalPointInputs
-    | MultiSphericalPointInputs
-    | ArcStringInputs
-    | MultiArcStringInputs
-    | SphericalPolygonInputs
-    | MultiSphericalPolygonInputs
-)
-
-GeometryCollection: TypeAlias = tuple[
-    MultiSphericalPoint, MultiArcString, MultiSphericalPolygon
-]
-
-
 class Geometry:
     @property
     def vertices(self) -> MultiSphericalPoint: ...
-
     @property
     def boundary(self) -> MultiArcString | ArcString | MultiSphericalPoint | None:
         """
@@ -252,7 +240,6 @@ class Geometry:
         For further explanation of Union see Shapely's `object.union`.
         """
 
-
 class MultiGeometry:
     @overload
     def parts(self: MultiSphericalPoint) -> list[SphericalPoint]: ...
@@ -282,7 +269,6 @@ class MultiGeometry:
         self: MultiSphericalPolygon, index
     ) -> SphericalPolygon | MultiSphericalPolygon | None: ...
     def __getitem__(self, index: int) -> None: ...
-
     @overload
     def append(self: MultiSphericalPoint, other: SphericalPointInputs): ...
     @overload
@@ -351,18 +337,6 @@ class MultiGeometry:
 
         For further explanation of Symmetric Difference see Shapely's `object.symmetric_difference`.
         """
-
-
-SphericalPointInputs: TypeAlias = (
-    tuple[float, float]
-    | np.ndarray[tuple[np.typing.Literal[2]], np.dtype[np.float64]]
-    | tuple[float, float, float]
-    | np.ndarray[tuple[np.typing.Literal[3]], np.dtype[np.float64]]
-    | list[float]
-    | str
-    | SphericalPoint
-)
-
 
 class SphericalPoint(Geometry):
     """single point on the sphere, represented internally as a 3-dimensional Cartesian point (X, Y, Z) with origin at the center of the unit sphere"""
@@ -453,16 +427,6 @@ class SphericalPoint(Geometry):
     def __div__(self, other: SphericalPointInputs) -> SphericalPoint: ...
     def __eq__(self, other) -> bool: ...
 
-
-MultiSphericalPointInputs: TypeAlias = (
-    list[SphericalPointInputs]
-    | np.ndarray[tuple[Any, np.typing.Literal[2]], np.dtype[np.float64]]
-    | np.ndarray[tuple[Any, np.typing.Literal[3]], np.dtype[np.float64]]
-    | str
-    | MultiSphericalPoint
-)
-
-
 class MultiSphericalPoint(Geometry, MultiGeometry):
     """collection of multiple points on the sphere"""
 
@@ -530,10 +494,6 @@ class MultiSphericalPoint(Geometry, MultiGeometry):
     def __iadd__(self, other: MultiSphericalPointInputs): ...
     def __add__(self, other: MultiSphericalPointInputs) -> MultiSphericalPoint: ...
     def __eq__(self, other) -> bool: ...
-
-
-ArcStringInputs: TypeAlias = MultiSphericalPointInputs | ArcString
-
 
 class ArcString(Geometry):
     """
@@ -611,10 +571,6 @@ class ArcString(Geometry):
     def boundary(self) -> MultiSphericalPoint | None: ...
     def __eq__(self, other) -> bool: ...
 
-
-MultiArcStringInputs: TypeAlias = list[ArcStringInputs] | str | MultiArcString
-
-
 class MultiArcString(Geometry):
     """collection of multiple series of great circle arcs (arcstrings)"""
 
@@ -638,15 +594,6 @@ class MultiArcString(Geometry):
     def __iadd__(self, other: MultiArcStringInputs): ...
     def __add__(self, other: MultiArcStringInputs) -> MultiArcString: ...
     def __eq__(self, other) -> bool: ...
-
-
-SphericalPolygonInputs: TypeAlias = (
-    ArcStringInputs
-    | tuple[ArcStringInputs, SphericalPointInputs]
-    | str
-    | SphericalPolygon
-)
-
 
 class SphericalPolygon(Geometry):
     """
@@ -704,12 +651,6 @@ class SphericalPolygon(Geometry):
     def boundary(self) -> ArcString: ...
     def __eq__(self, other) -> bool: ...
 
-
-MultiSphericalPolygonInputs: TypeAlias = (
-    list[SphericalPolygonInputs] | str | MultiSphericalPolygon
-)
-
-
 class MultiSphericalPolygon(Geometry):
     """collection of multiple polygons on the sphere"""
 
@@ -763,7 +704,6 @@ class MultiSphericalPolygon(Geometry):
     def __iadd__(self, other: MultiSphericalPolygonInputs): ...
     def __add__(self, other: MultiSphericalPolygonInputs) -> MultiSphericalPolygon: ...
     def __eq__(self, other) -> bool: ...
-
 
 def from_wkt(wkt: str) -> AnyGeometry:
     """construct geometry from well-known text representation"""

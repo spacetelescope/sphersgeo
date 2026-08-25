@@ -119,7 +119,43 @@ def test_is_convex(polygon: sphersgeo.SphericalPolygon, expected):
     assert polygon.is_convex == expected
 
 
-@pytest.mark.parametrize("polygon", TEST_POLYGONS.values(), ids=TEST_POLYGONS.keys())
+@pytest.mark.parametrize("test_point", TEST_POINTS)
+@pytest.mark.parametrize("rotation", [0, 32])
+@pytest.mark.parametrize(
+    "bounding_box,pixel_shape",
+    [(((-0.5, 4096 - 0.5), (-0.5, 4096 - 0.5)), None)],
+)
+def test_from_wcs(test_point, rotation, bounding_box, pixel_shape):
+    import astropy.coordinates as coord
+    import astropy.modeling.models as amm
+    import astropy.units as u
+    from gwcs import WCS, coordinate_frames
+    from sphersgeo.from_wcs import polygon_from_wcs
+
+    transform = (amm.Shift(-2048) & amm.Shift(-2048)) | (
+        amm.Scale(0.11 / 3600.0) & amm.Scale(0.11 / 3600.0)
+        | amm.Rotation2D(rotation)
+        | amm.Pix2Sky_TAN()
+        | amm.RotateNative2Celestial(*test_point, 180.0)
+    )
+    detector_frame = coordinate_frames.Frame2D(
+        name="detector", axes_names=("x", "y"), unit=(u.pix, u.pix)
+    )
+    sky_frame = coordinate_frames.CelestialFrame(
+        reference_frame=coord.ICRS(), name="icrs", unit=(u.deg, u.deg)
+    )
+    wcsobj = WCS([(detector_frame, transform), (sky_frame, None)])
+    if pixel_shape is not None:
+        wcsobj.pixel_shape = pixel_shape
+    if bounding_box is not None:
+        wcsobj.bounding_box = bounding_box
+
+    polygon = polygon_from_wcs(wcsobj)
+
+    assert polygon.area > 0
+    assert polygon.contains(sphersgeo.SphericalPoint(test_point))
+
+
 @pytest.mark.parametrize("x_offset", list(range(11)))
 @pytest.mark.parametrize("y_offset", [1e-8])
 def test_polygon_offset(polygon: sphersgeo.SphericalPolygon, x_offset, y_offset):
