@@ -17,33 +17,19 @@ use std::{
 #[cfg(feature = "py")]
 use pyo3::prelude::*;
 
-/// surface area of a triangle on the sphere via Girard's theorem
+/// solid angle of a triangle on the sphere via Oosterom-Strackee formula:
 ///
-///     θ_1 + θ_2 + θ_3 − π
+///     2 * arctan((a · (b ⨯ c)) / (1 + (a · b) + (b · c) + (c · a)))
 ///
 /// References
 /// ----------
-/// - Klain, D. A. (2019). A probabilistic proof of the spherical excess formula (No. arXiv:1909.04505). arXiv. https://doi.org/10.48550/arXiv.1909.04505
-/// - Miller, Robert D. Computing the area of a spherical polygon. Graphics Gems IV. 1994. Academic Press. doi:10.5555/180895.180907
-///   `pdf <https://www.google.com/books/edition/Graphics_Gems_IV/CCqzMm_-WucC?hl=en&gbpv=1&dq=Graphics%20Gems%20IV.%20p132&pg=PA133&printsec=frontcover>`_
-pub fn area_of_triangle(a: &[f64; 3], b: &[f64; 3], c: &[f64; 3]) -> f64 {
-    // xyz_two_arc_angle_radians(c, a, b)
-    //     + xyz_two_arc_angle_radians(a, b, c)
-    //     + xyz_two_arc_angle_radians(b, c, a)
-    //     - std::f64::consts::PI
-
-    // redefine Girard's theorem to avoid domain errors
-    let ab = crate::sphericalpoint::arc_distance_over_sphere(a, b);
-    let bc = crate::sphericalpoint::arc_distance_over_sphere(b, c);
-    let ca = crate::sphericalpoint::arc_distance_over_sphere(c, a);
-    let s = (ab + bc + ca) / 2.0;
-
-    4.0 * ((s / 2.0).tan()
-        * ((s - ab) / 2.0).tan()
-        * ((s - bc) / 2.0).tan()
-        * ((s - ca) / 2.0).tan())
-    .sqrt()
-    .atan()
+/// - A. Van Oosterom and J. Strackee, "The Solid Angle of a Plane Triangle," in IEEE Transactions on Biomedical Engineering, vol. BME-30, no. 2, pp. 125-126, Feb. 1983, doi: 10.1109/TBME.1983.325207.
+pub fn solid_angle_of_spherical_triangle(a: &[f64; 3], b: &[f64; 3], c: &[f64; 3]) -> f64 {
+    2.0 * crate::sphericalpoint::xyz_dot(a, &crate::sphericalpoint::xyz_cross(b, c)).atan2(
+        1.0 + crate::sphericalpoint::xyz_dot(a, b)
+            + crate::sphericalpoint::xyz_dot(b, c)
+            + crate::sphericalpoint::xyz_dot(c, a),
+    )
 }
 
 /// whether this polygon is convex, that is, all possible arcs between points inside the polygon never leave the enclosed space
@@ -78,22 +64,27 @@ fn vertex_angles_inside_polygon_boundary(boundary: &ArcString) -> Vec<f64> {
 
 /// surface area of the polygon in square degrees
 ///
-/// deconstructed into triangles via method described in Girard's Theorem
-///
-///     area = (sum_of_angles - (num_vertices - 2) * pi) * radius^2
-///
 /// References
 /// ----------
+/// - https://en.wikipedia.org/wiki/Polygon_triangulation
 /// - Toddhunter, I. (1886). Article 99. In Spherical Trigonometry: For the Use of Colleges and Schools (pp. 73–74). print.
 fn area_inside_polygon_boundary(boundary: &ArcString) -> f64 {
-    let interior_angles = vertex_angles_inside_polygon_boundary(boundary);
+    let xyzs = &boundary.points.xyzs;
+    // if the polygon is convex, we can do fan triangulation from any arbitrary point
+    // if the polygon is concave, the area given by Oosterom-Strackee is signed
+    // such that exterior triangles cancel out interior triangles
+    let a = xyzs[0];
+    let solid_angle = (1..xyzs.len() - 1)
+        .map(|index| {
+            let b = xyzs[index];
+            let c = xyzs[index + 1];
 
-    // sum the interior angles at each vertex,
-    // subtract pi for each vertex sans 2 (or four right angles),
-    // then convert from steradians to square degrees
-    (interior_angles.iter().sum::<f64>()
-        - ((interior_angles.len() - 2) as f64 * std::f64::consts::PI))
-        * 3282.8065632
+            solid_angle_of_spherical_triangle(&a, &b, &c)
+        })
+        .sum::<f64>();
+
+    // convert from steradians to square degrees
+    solid_angle * 3282.8065632
 }
 
 /// choose an interior point from the region to the left of the given boundary

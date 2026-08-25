@@ -25,15 +25,15 @@ pub fn linspace(x0: f64, xend: f64, n: usize) -> Vec<f64> {
     x
 }
 
-/// length of the underlying xyz vector
+/// vector norm of xyz
 ///
 ///     r = sqrt(x^2 + y^2 + z^2)
-fn xyz_norm(xyz: &[f64; 3]) -> f64 {
+fn xyz_length(xyz: &[f64; 3]) -> f64 {
     (xyz[0].powi(2) + xyz[1].powi(2) + xyz[2].powi(2)).sqrt()
 }
 
 fn normalize(xyz: &[f64; 3]) -> [f64; 3] {
-    let length = xyz_norm(&xyz);
+    let length = xyz_length(&xyz);
     [xyz[0] / length, xyz[1] / length, xyz[2] / length]
 }
 
@@ -120,6 +120,7 @@ pub fn xyzs_mean(xyzs: &Vec<[f64; 3]>) -> [f64; 3] {
 /// References
 /// ----------
 /// - Miller, Robert D. Computing the area of a spherical polygon. Graphics Gems IV. 1994. Academic Press. doi:10.5555/180895.180907
+///   `pdf <https://www.google.com/books/edition/Graphics_Gems_IV/CCqzMm_-WucC?hl=en&gbpv=1&dq=Graphics%20Gems%20IV.%20p132&pg=PA133&printsec=frontcover>`_
 fn lonlat_to_xyz(lonlat: &[f64; 2]) -> [f64; 3] {
     let lon = lonlat[0].to_radians();
     let lat = lonlat[1].to_radians();
@@ -140,6 +141,7 @@ fn lonlat_to_xyz(lonlat: &[f64; 2]) -> [f64; 3] {
 /// References
 /// ----------
 /// - Miller, Robert D. Computing the area of a spherical polygon. Graphics Gems IV. 1994. Academic Press. doi:10.5555/180895.180907
+///   `pdf <https://www.google.com/books/edition/Graphics_Gems_IV/CCqzMm_-WucC?hl=en&gbpv=1&dq=Graphics%20Gems%20IV.%20p132&pg=PA133&printsec=frontcover>`_
 fn xyz_to_lonlat(xyz: &[f64; 3]) -> [f64; 2] {
     if xyz_eq(xyz, &[0.0, 0.0, 0.0]) {
         // directionless vector
@@ -300,7 +302,7 @@ pub fn xyzs_coplanar(a: &[f64; 3], b: &[f64; 3], c: &[f64; 3]) -> bool {
         let tolerance = 2e-8;
 
         let normal = xyz_cross(a, b);
-        let normal_length = xyz_norm(&normal);
+        let normal_length = xyz_length(&normal);
 
         if normal_length < tolerance {
             return false;
@@ -359,8 +361,12 @@ pub struct SphericalPoint {
 
 impl From<[f64; 3]> for SphericalPoint {
     fn from(xyz: [f64; 3]) -> Self {
-        let length = xyz_norm(&xyz);
-        let xyz = if length < 2e-11 { xyz } else { normalize(&xyz) };
+        let length = xyz_length(&xyz);
+        let xyz = if length - 1.0 < 2e-11 {
+            xyz
+        } else {
+            normalize(&xyz)
+        };
         Self { xyz }
     }
 }
@@ -607,7 +613,7 @@ impl SphericalPoint {
 
     /// length of the underlying xyz vector
     pub fn vector_length(&self) -> f64 {
-        xyz_norm(&self.xyz)
+        xyz_length(&self.xyz)
     }
 
     /// cross product of this xyz vector with another xyz vector
@@ -965,7 +971,7 @@ impl TryFrom<Vec<[f64; 3]>> for MultiSphericalPoint {
             let xyzs: Vec<[f64; 3]> = xyzs
                 .into_iter()
                 .map(|xyz| {
-                    let length = xyz_norm(&xyz);
+                    let length = xyz_length(&xyz);
                     if length < 3e-11 {
                         xyz
                     } else {
@@ -1156,6 +1162,7 @@ impl MultiSphericalPoint {
     /// References
     /// ----------
     /// - Miller, Robert D. Computing the area of a spherical polygon. Graphics Gems IV. 1994. Academic Press. doi:10.5555/180895.180907
+    ///   `pdf <https://www.google.com/books/edition/Graphics_Gems_IV/CCqzMm_-WucC?hl=en&gbpv=1&dq=Graphics%20Gems%20IV.%20p132&pg=PA133&printsec=frontcover>`_
     pub fn try_from_lonlats(lonlats: &[[f64; 2]]) -> Result<Self, String> {
         Self::try_from(lonlats.iter().map(lonlat_to_xyz).collect::<Vec<[f64; 3]>>())
     }
@@ -1171,6 +1178,7 @@ impl MultiSphericalPoint {
     /// References
     /// ----------
     /// - Miller, Robert D. Computing the area of a spherical polygon. Graphics Gems IV. 1994. Academic Press. doi:10.5555/180895.180907
+    ///   `pdf <https://www.google.com/books/edition/Graphics_Gems_IV/CCqzMm_-WucC?hl=en&gbpv=1&dq=Graphics%20Gems%20IV.%20p132&pg=PA133&printsec=frontcover>`_
     pub fn to_lonlats(&self) -> Vec<[f64; 2]> {
         self.into()
     }
@@ -1192,7 +1200,7 @@ impl MultiSphericalPoint {
 
     /// lengths of the underlying xyz vectors
     pub fn vectors_lengths(&self) -> Vec<f64> {
-        self.xyzs.iter().map(xyz_norm).collect()
+        self.xyzs.iter().map(xyz_length).collect()
     }
 
     fn recreate_kdtree(&mut self) {
