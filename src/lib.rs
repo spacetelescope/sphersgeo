@@ -2080,6 +2080,8 @@ mod py_sphersgeo {
 
     #[pyfunction]
     fn from_wkt(wkt: &str) -> PyResult<AnyGeometry> {
-        crate::geometry::try_from_wkt(wkt).map_err(PyValueError::new_err)
+        let wkt = wkt.trim();
+        crate::geometry::try_from_wkt(wkt)
+            .map_err(|err| PyValueError::new_err(format!("{err} when parsing `{wkt}`")))
     }
 }
