@@ -1,7 +1,6 @@
 import numpy as np
-from numpy.testing import assert_allclose
-
 import sphersgeo
+from numpy.testing import assert_allclose
 
 
 def test_init():
