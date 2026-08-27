@@ -375,11 +375,12 @@ impl ArcString {
         Ok(instance)
     }
 
-    /// angle subtended on the sphere by each arc
+    /// degrees subtended on the sphere by each arc
     pub fn lengths(&self) -> Vec<f64> {
         let mut lengths = (0..self.points.len() - 1)
             .map(|index| {
                 arc_distance_over_sphere(&self.points.xyzs[index], &self.points.xyzs[index + 1])
+                    .to_degrees()
             })
             .collect::<Vec<f64>>();
 
@@ -1326,12 +1327,16 @@ impl Geometry for MultiArcString {
     }
 
     fn boundary(&self) -> Option<MultiSphericalPoint> {
-        Some(
-            self.arcstrings
-                .iter()
-                .filter_map(|arcstring| arcstring.boundary())
-                .sum(),
-        )
+        let boundaries = self
+            .arcstrings
+            .iter()
+            .filter_map(|arcstring| arcstring.boundary())
+            .collect::<Vec<MultiSphericalPoint>>();
+        if !boundaries.is_empty() {
+            Some(boundaries.into_iter().sum())
+        } else {
+            None
+        }
     }
 
     fn representative(&self) -> crate::sphericalpoint::SphericalPoint {

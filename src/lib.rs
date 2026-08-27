@@ -1543,7 +1543,7 @@ mod py_sphersgeo {
         }
 
         #[getter]
-        fn py_to_wkt(&self) -> String {
+        fn get_wkt(&self) -> String {
             self.to_wkt(true)
         }
 

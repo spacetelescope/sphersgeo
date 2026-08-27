@@ -1,4 +1,4 @@
-from typing import Any
+from typing import Any, TypeAlias
 
 import numpy as np
 
@@ -14,7 +14,7 @@ from .sphersgeo import (
     from_wkt,
 )
 
-type AnyGeometry = (
+AnyGeometry: TypeAlias = (  # noqa: UP040
     SphericalPoint
     | MultiSphericalPoint
     | ArcString
@@ -23,7 +23,44 @@ type AnyGeometry = (
     | MultiSphericalPolygon
 )
 
-type AnyGeometryInputs = (
+GeometryCollection: TypeAlias = tuple[  # noqa: UP040
+    MultiSphericalPoint, MultiArcString, MultiSphericalPolygon
+]
+
+SphericalPointInputs: TypeAlias = (  # noqa: UP040
+    tuple[float, float]
+    | np.ndarray[tuple[2], np.dtype[np.float64]]
+    | tuple[float, float, float]
+    | np.ndarray[tuple[3], np.dtype[np.float64]]
+    | list[float]
+    | str
+    | SphericalPoint
+)
+
+MultiSphericalPointInputs: TypeAlias = (  # noqa: UP040
+    list[SphericalPointInputs]
+    | np.ndarray[tuple[Any, 2], np.dtype[np.float64]]
+    | np.ndarray[tuple[Any, 3], np.dtype[np.float64]]
+    | str
+    | MultiSphericalPoint
+)
+
+ArcStringInputs: TypeAlias = MultiSphericalPointInputs | ArcString  # noqa: UP040
+
+MultiArcStringInputs: TypeAlias = list[ArcStringInputs] | str | MultiArcString  # noqa: UP040
+
+SphericalPolygonInputs: TypeAlias = (  # noqa: UP040
+    ArcStringInputs
+    | tuple[ArcStringInputs, SphericalPointInputs]
+    | str
+    | SphericalPolygon
+)
+
+MultiSphericalPolygonInputs: TypeAlias = (  # noqa: UP040
+    list[SphericalPolygonInputs] | str | MultiSphericalPolygon
+)
+
+AnyGeometryInputs: TypeAlias = (  # noqa: UP040
     SphericalPointInputs
     | MultiSphericalPointInputs
     | ArcStringInputs
@@ -32,42 +69,12 @@ type AnyGeometryInputs = (
     | MultiSphericalPolygonInputs
 )
 
-type GeometryCollection = tuple[
-    MultiSphericalPoint, MultiArcString, MultiSphericalPolygon
-]
-
-type SphericalPointInputs = (
-    tuple[float, float]
-    | np.ndarray[tuple[np.typing.Literal[2]], np.dtype[np.float64]]
-    | tuple[float, float, float]
-    | np.ndarray[tuple[np.typing.Literal[3]], np.dtype[np.float64]]
-    | list[float]
-    | str
-    | SphericalPoint
+MultiGeometry: TypeAlias = (  # noqa: UP040
+    sphersgeo.MultiSphericalPoint
+    | sphersgeo.MultiArcString
+    | sphersgeo.MultiSphericalPolygon
 )
 
-type MultiSphericalPointInputs = (
-    list[SphericalPointInputs]
-    | np.ndarray[tuple[Any, np.typing.Literal[2]], np.dtype[np.float64]]
-    | np.ndarray[tuple[Any, np.typing.Literal[3]], np.dtype[np.float64]]
-    | str
-    | MultiSphericalPoint
-)
-
-type ArcStringInputs = MultiSphericalPointInputs | ArcString
-
-type MultiArcStringInputs = list[ArcStringInputs] | str | MultiArcString
-
-type SphericalPolygonInputs = (
-    ArcStringInputs
-    | tuple[ArcStringInputs, SphericalPointInputs]
-    | str
-    | SphericalPolygon
-)
-
-type MultiSphericalPolygonInputs = (
-    list[SphericalPolygonInputs] | str | MultiSphericalPolygon
-)
 
 __all__ = [
     "AnyGeometry",
@@ -76,6 +83,7 @@ __all__ = [
     "ArcStringInputs",
     "MultiArcString",
     "MultiArcStringInputs",
+    "MultiGeometry",
     "MultiSphericalPoint",
     "MultiSphericalPointInputs",
     "MultiSphericalPolygon",
