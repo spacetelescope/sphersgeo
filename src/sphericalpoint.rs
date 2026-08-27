@@ -835,15 +835,15 @@ impl GeometricRelationships<crate::sphericalpolygon::MultiSphericalPolygon> for 
 
 impl GeometricOperations<Self> for SphericalPoint {
     fn intersection(&self, other: &Self) -> GeometryCollection {
-        (
-            if self.intersects(other) {
+        GeometryCollection {
+            points: if self.intersects(other) {
                 Some(MultiSphericalPoint::from(self.to_owned()))
             } else {
                 None
             },
-            None,
-            None,
-        )
+            strings: None,
+            polygons: None,
+        }
     }
 
     fn difference(&self, other: &Self) -> Option<MultiSphericalPoint> {
@@ -855,15 +855,15 @@ impl GeometricOperations<Self> for SphericalPoint {
     }
 
     fn union(&self, other: &Self) -> GeometryCollection {
-        (
-            if self.equals(other) {
+        GeometryCollection {
+            points: if self.equals(other) {
                 Some(MultiSphericalPoint::from(self.to_owned()))
             } else {
                 MultiSphericalPoint::try_from(vec![self.to_owned(), other.to_owned()]).ok()
             },
-            None,
-            None,
-        )
+            strings: None,
+            polygons: None,
+        }
     }
 }
 
@@ -1806,15 +1806,15 @@ impl GeometricRelationships<crate::sphericalpolygon::MultiSphericalPolygon>
 
 impl GeometricOperations<SphericalPoint, SphericalPoint> for MultiSphericalPoint {
     fn intersection(&self, other: &SphericalPoint) -> GeometryCollection {
-        (
-            if self.contains(other) {
+        GeometryCollection {
+            points: if self.contains(other) {
                 Some(MultiSphericalPoint::from(other.to_owned()))
             } else {
                 None
             },
-            None,
-            None,
-        )
+            strings: None,
+            polygons: None,
+        }
     }
 
     fn difference(&self, other: &SphericalPoint) -> Option<Self> {
@@ -1827,15 +1827,15 @@ impl GeometricOperations<SphericalPoint, SphericalPoint> for MultiSphericalPoint
     }
 
     fn union(&self, other: &SphericalPoint) -> GeometryCollection {
-        (
-            Some(if self.contains(other) {
+        GeometryCollection {
+            points: Some(if self.contains(other) {
                 self.unary_union()
             } else {
                 (self + other).unary_union()
             }),
-            None,
-            None,
-        )
+            strings: None,
+            polygons: None,
+        }
     }
 }
 
@@ -1847,8 +1847,8 @@ impl GeometricOperations<Self, SphericalPoint> for MultiSphericalPoint {
             (other, self)
         };
 
-        (
-            Self::try_from(
+        GeometryCollection {
+            points: Self::try_from(
                 shorter
                     .xyzs
                     .iter()
@@ -1862,9 +1862,9 @@ impl GeometricOperations<Self, SphericalPoint> for MultiSphericalPoint {
                     .collect::<Vec<[f64; 3]>>(),
             )
             .ok(),
-            None,
-            None,
-        )
+            strings: None,
+            polygons: None,
+        }
     }
 
     fn difference(&self, other: &Self) -> Option<Self> {
@@ -1884,8 +1884,8 @@ impl GeometricOperations<Self, SphericalPoint> for MultiSphericalPoint {
     }
 
     fn union(&self, other: &Self) -> GeometryCollection {
-        (
-            MultiSphericalPoint::try_from({
+        GeometryCollection {
+            points: MultiSphericalPoint::try_from({
                 let mut xyzs = self.xyzs.to_owned();
                 xyzs.extend(
                     other
@@ -1903,9 +1903,9 @@ impl GeometricOperations<Self, SphericalPoint> for MultiSphericalPoint {
                 xyzs
             })
             .ok(),
-            None,
-            None,
-        )
+            strings: None,
+            polygons: None,
+        }
     }
 }
 

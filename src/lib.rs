@@ -16,8 +16,8 @@ extern crate numpy;
 mod py_sphersgeo {
     use super::*;
     use crate::geometry::{
-        AnyGeometry, GeometricOperations, GeometricRelationships, Geometry, GeometryCollection,
-        MultiGeometry, MultiGeometryUnaryOperations,
+        AnyGeometry, GeometricOperations, GeometricRelationships, Geometry, MultiGeometry,
+        MultiGeometryUnaryOperations,
     };
     use numpy::{
         IntoPyArray, PyArray1, PyArray2, PyReadonlyArray1, PyReadonlyArray2,
@@ -2075,6 +2075,82 @@ mod py_sphersgeo {
 
         fn __repr__(&self) -> String {
             self.to_string()
+        }
+    }
+
+    #[pymodule_export]
+    use crate::geometry::GeometryCollection;
+
+    #[pymethods]
+    impl GeometryCollection {
+        #[new]
+        fn py_new(
+            points: PyMultiSphericalPointInputs,
+            strings: PyMultiArcStringInputs,
+            polygons: PyMultiSphericalPolygonInputs,
+        ) -> PyResult<Self> {
+            Ok(Self {
+                points: Some(MultiSphericalPoint::py_new(points).map_err(PyValueError::new_err)?),
+                strings: Some(MultiArcString::py_new(strings).map_err(PyValueError::new_err)?),
+                polygons: Some(
+                    MultiSphericalPolygon::py_new(polygons).map_err(PyValueError::new_err)?,
+                ),
+            })
+        }
+
+        #[getter]
+        fn get_points(&self) -> Option<crate::sphericalpoint::MultiSphericalPoint> {
+            self.points.to_owned()
+        }
+
+        #[getter]
+        fn get_strings(&self) -> Option<crate::arcstring::MultiArcString> {
+            self.strings.to_owned()
+        }
+
+        #[getter]
+        fn get_polygons(&self) -> Option<crate::sphericalpolygon::MultiSphericalPolygon> {
+            self.polygons.to_owned()
+        }
+
+        #[getter]
+        fn get_vertices(&self) -> MultiSphericalPoint {
+            self.vertices()
+        }
+
+        #[getter]
+        fn get_boundary(&self) -> Option<Self> {
+            self.boundary()
+        }
+
+        #[getter]
+        fn get_representative(&self) -> SphericalPoint {
+            self.representative()
+        }
+
+        #[getter]
+        fn get_centroid(&self) -> SphericalPoint {
+            self.centroid()
+        }
+
+        #[getter]
+        fn get_convex_hull(&self) -> Option<SphericalPolygon> {
+            self.convex_hull()
+        }
+
+        #[getter]
+        fn get_area(&self) -> f64 {
+            self.area()
+        }
+
+        #[getter]
+        fn get_length(&self) -> f64 {
+            self.length()
+        }
+
+        #[getter]
+        fn get_wkt(&self) -> String {
+            self.to_wkt(true)
         }
     }
 

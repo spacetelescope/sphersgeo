@@ -6,7 +6,6 @@ from sphersgeo import (
     AnyGeometry,
     AnyGeometryInputs,
     ArcStringInputs,
-    GeometryCollection,
     MultiArcStringInputs,
     MultiSphericalPointInputs,
     MultiSphericalPolygonInputs,
@@ -60,6 +59,7 @@ class Geometry:
     def wkt(self) -> str:
         """well-known text representation of this geometry in degrees"""
 
+class GeometricRelationships:
     def distance(
         self,
         other: AnyGeometryInputs,
@@ -174,6 +174,7 @@ class Geometry:
         or Shapely's `object.disjoint`.
         """
 
+class GeometricOperations:
     @overload
     def intersection(
         self: SphericalPoint | MultiSphericalPoint,
@@ -338,7 +339,27 @@ class MultiGeometry:
         For further explanation of Symmetric Difference see Shapely's `object.symmetric_difference`.
         """
 
-class SphericalPoint(Geometry):
+class GeometryCollection(Geometry):
+    """collection of points, strings, and polygons"""
+
+    def __init__(
+        self,
+        points: MultiSphericalPointInputs,
+        strings: MultiArcStringInputs,
+        polygons: MultiSphericalPolygonInputs,
+    ) -> GeometryCollection:
+        """
+        Create a new `GeometryCollection` from points, strings, and polygons.
+        """
+
+    @property
+    def points(self) -> MultiSphericalPoint | None: ...
+    @property
+    def strings(self) -> MultiArcString | None: ...
+    @property
+    def polygons(self) -> MultiSphericalPolygon | None: ...
+
+class SphericalPoint(Geometry, GeometricRelationships, GeometricOperations):
     """single point on the sphere, represented internally as a 3-dimensional Cartesian point (X, Y, Z) with origin at the center of the unit sphere"""
 
     def __init__(
@@ -427,7 +448,9 @@ class SphericalPoint(Geometry):
     def __div__(self, other: SphericalPointInputs) -> SphericalPoint: ...
     def __eq__(self, other) -> bool: ...
 
-class MultiSphericalPoint(Geometry, MultiGeometry):
+class MultiSphericalPoint(
+    Geometry, MultiGeometry, GeometricRelationships, GeometricOperations
+):
     """collection of multiple points on the sphere"""
 
     def __init__(
@@ -495,7 +518,7 @@ class MultiSphericalPoint(Geometry, MultiGeometry):
     def __add__(self, other: MultiSphericalPointInputs) -> MultiSphericalPoint: ...
     def __eq__(self, other) -> bool: ...
 
-class ArcString(Geometry):
+class ArcString(Geometry, GeometricRelationships, GeometricOperations):
     """
     series of great circle arcs across the sphere, which can be open at the end or closed (returns to the initial point)
 
@@ -571,7 +594,7 @@ class ArcString(Geometry):
     def boundary(self) -> MultiSphericalPoint | None: ...
     def __eq__(self, other) -> bool: ...
 
-class MultiArcString(Geometry):
+class MultiArcString(Geometry, GeometricRelationships, GeometricOperations):
     """collection of multiple series of great circle arcs (arcstrings)"""
 
     def __init__(
@@ -595,7 +618,7 @@ class MultiArcString(Geometry):
     def __add__(self, other: MultiArcStringInputs) -> MultiArcString: ...
     def __eq__(self, other) -> bool: ...
 
-class SphericalPolygon(Geometry):
+class SphericalPolygon(Geometry, GeometricRelationships, GeometricOperations):
     """
     polygon on the sphere, represented by a **counterclockwise** `ArcString` (assumed to be closed) to form the boundary, and a `SphericalPoint` guaranteed to be inside the polygon (inferred if not provided)
 
@@ -651,7 +674,7 @@ class SphericalPolygon(Geometry):
     def boundary(self) -> ArcString: ...
     def __eq__(self, other) -> bool: ...
 
-class MultiSphericalPolygon(Geometry):
+class MultiSphericalPolygon(Geometry, GeometricRelationships, GeometricOperations):
     """collection of multiple polygons on the sphere"""
 
     def __init__(self, polygons: MultiSphericalPolygonInputs) -> MultiSphericalPolygon:

@@ -6,6 +6,7 @@ import sphersgeo
 
 from .sphersgeo import (
     ArcString,
+    GeometryCollection,
     MultiArcString,
     MultiSphericalPoint,
     MultiSphericalPolygon,
@@ -22,10 +23,6 @@ AnyGeometry: TypeAlias = (  # noqa: UP040
     | SphericalPolygon
     | MultiSphericalPolygon
 )
-
-GeometryCollection: TypeAlias = tuple[  # noqa: UP040
-    MultiSphericalPoint, MultiArcString, MultiSphericalPolygon
-]
 
 SphericalPointInputs: TypeAlias = (  # noqa: UP040
     tuple[float, float]
@@ -81,6 +78,7 @@ __all__ = [
     "AnyGeometryInputs",
     "ArcString",
     "ArcStringInputs",
+    "GeometryCollection",
     "MultiArcString",
     "MultiArcStringInputs",
     "MultiGeometry",

@@ -1118,7 +1118,11 @@ impl GeometricOperations<Self> for ArcString {
             }
         }
 
-        (MultiSphericalPoint::try_from(crossings).ok(), todo!(), None)
+        crate::geometry::GeometryCollection {
+            points: MultiSphericalPoint::try_from(crossings).ok(),
+            strings: todo!(),
+            polygons: None,
+        }
     }
 
     fn difference(&self, other: &Self) -> Option<MultiArcString> {
@@ -1126,9 +1130,9 @@ impl GeometricOperations<Self> for ArcString {
     }
 
     fn union(&self, other: &Self) -> GeometryCollection {
-        (
-            None,
-            if self.closed || other.closed {
+        GeometryCollection {
+            points: None,
+            strings: if self.closed || other.closed {
                 Some(self + other)
             } else {
                 let mut graph = EdgeGraph::<Self>::from(vec![self, other]);
@@ -1137,8 +1141,8 @@ impl GeometricOperations<Self> for ArcString {
 
                 MultiArcString::try_from(Vec::<ArcString>::from(graph)).ok()
             },
-            None,
-        )
+            polygons: None,
+        }
     }
 }
 
