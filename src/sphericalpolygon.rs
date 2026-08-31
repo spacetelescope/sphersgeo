@@ -2,9 +2,10 @@ use crate::{
     arcstring::{ArcString, MultiArcString, points_are_on_same_side, xyzs_turn_orientations},
     edgegraph::EdgeGraph,
     geometry::{
-        GeometricOperations, GeometricRelationships, Geometry, GeometryCollection, MultiGeometry,
+        GeometricOperations, GeometricRelationships, Geometry, MultiGeometry,
         MultiGeometryUnaryOperations,
     },
+    geometrycollection::GeometryCollection,
     sphericalpoint::{MultiSphericalPoint, SphericalPoint, xyz_div_f64, xyzs_sum},
 };
 use std::{

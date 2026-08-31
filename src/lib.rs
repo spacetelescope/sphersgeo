@@ -2,6 +2,7 @@
 mod arcstring;
 mod edgegraph;
 mod geometry;
+mod geometrycollection;
 mod sphericalpoint;
 mod sphericalpolygon;
 
@@ -2079,7 +2080,7 @@ mod py_sphersgeo {
     }
 
     #[pymodule_export]
-    use crate::geometry::GeometryCollection;
+    use crate::geometrycollection::GeometryCollection;
 
     #[pymethods]
     impl GeometryCollection {

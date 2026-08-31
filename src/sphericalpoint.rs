@@ -1,6 +1,9 @@
-use crate::geometry::{
-    GeometricOperations, GeometricRelationships, Geometry, GeometryCollection, MultiGeometry,
-    MultiGeometryUnaryOperations,
+use crate::{
+    geometry::{
+        GeometricOperations, GeometricRelationships, Geometry, MultiGeometry,
+        MultiGeometryUnaryOperations,
+    },
+    geometrycollection::GeometryCollection,
 };
 use kiddo::{ImmutableKdTree, SquaredEuclidean};
 use std::{

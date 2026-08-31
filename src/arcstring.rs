@@ -1,9 +1,10 @@
 use crate::{
     edgegraph::EdgeGraph,
     geometry::{
-        GeometricOperations, GeometricRelationships, Geometry, GeometryCollection, MultiGeometry,
+        GeometricOperations, GeometricRelationships, Geometry, MultiGeometry,
         MultiGeometryUnaryOperations,
     },
+    geometrycollection::GeometryCollection,
     sphericalpoint::{
         MultiSphericalPoint, SphericalPoint, arc_distance_over_sphere, point_within_kdtree,
         xyz_add_xyz, xyz_cross, xyz_div_f64, xyz_dot, xyz_eq, xyz_mul_xyz, xyz_neg, xyz_sub_xyz,
@@ -1118,7 +1119,7 @@ impl GeometricOperations<Self> for ArcString {
             }
         }
 
-        crate::geometry::GeometryCollection {
+        GeometryCollection {
             points: MultiSphericalPoint::try_from(crossings).ok(),
             strings: todo!(),
             polygons: None,
