@@ -416,6 +416,13 @@ def test_intersects_self(geometry: sphersgeo.AnyGeometry):
             TEST_GEOMETRIES["pts_northpole_southpole"],
             True,
         ),
+        (TEST_GEOMETRIES["pgn_other5"], TEST_GEOMETRIES["pgn_other7"], True),
+        (TEST_GEOMETRIES["pgn_other10"], TEST_GEOMETRIES["pgn_other11"], True),
+        (TEST_GEOMETRIES["pgn_other10"], TEST_GEOMETRIES["pgn_other12"], True),
+        (TEST_GEOMETRIES["pgn_other10"], TEST_GEOMETRIES["pgn_other13"], True),
+        (TEST_GEOMETRIES["pgn_other14"], TEST_GEOMETRIES["pgn_other15"], False),
+        (TEST_GEOMETRIES["pgn_intersectioncrash1"], TEST_GEOMETRIES["pgn_intersectioncrash2"], True),
+        (TEST_GEOMETRIES["pgn_intersectioncrash3"], TEST_GEOMETRIES["pgn_intersectioncrash4"], True),
         # TODO add expected intersects / disjoint
     ],
 )
@@ -425,6 +432,7 @@ def test_intersects(a, b, expected):
 
     assert geometry_a.intersects(geometry_b) is expected
     assert geometry_a.disjoint(geometry_b) is not expected
+
 
 
 @pytest.mark.parametrize(

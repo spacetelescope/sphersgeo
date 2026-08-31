@@ -55,7 +55,7 @@ jobs:
     outputs:
       python-version-json: ${{ steps.versions.outputs.json }}
       oldest: ${{ steps.versions.outputs.oldest }}
-      latest: ${{ steps.versions.outputs.latest }} 
+      latest: ${{ steps.versions.outputs.latest }}
   test:
     needs:
       - supported-pythons
