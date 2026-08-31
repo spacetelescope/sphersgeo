@@ -5,26 +5,9 @@ import pytest
 import sphersgeo
 from numpy.testing import assert_allclose
 
-
-def read_geometry_wkt_txt(
-    *filenames: Path,
-) -> dict[
-    str,
-    sphersgeo.AnyGeometry,
-]:
-    lines = []
-    for filename in filenames:
-        with open(filename) as geometries_file:
-            lines.extend(geometries_file.readlines())
-
-    geometries = {}
-    for line in lines:
-        name, wkt = line.split(",", 1)
-        geometries[name] = sphersgeo.from_wkt(wkt)
-    return geometries
-
-
-TEST_GEOMETRIES = read_geometry_wkt_txt(Path(__file__).parent / "data" / "strings.csv")
+TEST_GEOMETRIES = pytest.helpers.read_geometry_wkt_txt(
+    Path(__file__).parent / "data" / "strings.csv"
+)
 
 
 def test_midpoint():

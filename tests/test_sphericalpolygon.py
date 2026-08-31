@@ -5,34 +5,12 @@ import pytest
 import sphersgeo
 from numpy.testing import assert_almost_equal
 
-
-def read_geometry_wkt_txt(
-    *filenames: Path,
-) -> dict[
-    str,
-    sphersgeo.AnyGeometry,
-]:
-    lines = []
-    for filename in filenames:
-        with open(filename) as geometries_file:
-            lines.extend(geometries_file.readlines())
-
-    geometries = {}
-    for line in lines:
-        name, wkt = line.split(",", 1)
-        geometries[name] = sphersgeo.from_wkt(wkt)
-    return geometries
-
-
-TEST_GEOMETRIES = read_geometry_wkt_txt(Path(__file__).parent / "data" / "polygons.csv")
-TEST_POLYGONS = {
-    name: polygon
-    for name, polygon in TEST_GEOMETRIES
-    if isinstance(polygon, sphersgeo.SphericalPolygon)
-}
+TEST_POLYGONS = pytest.helpers.read_geometry_wkt_txt(
+    Path(__file__).parent / "data" / "polygons.csv"
+)
 TEST_MULTIPOLYGONS = {
     name: multipolygon
-    for name, multipolygon in TEST_GEOMETRIES
+    for name, multipolygon in TEST_POLYGONS.items()
     if isinstance(multipolygon, sphersgeo.MultiSphericalPolygon)
 }
 
@@ -182,3 +160,31 @@ def test_polygon_vertices_on_convex_hull(polygon: sphersgeo.SphericalPolygon):
     else:
         assert any(polygon_vertices_shared_with_convex_hull)
         assert convex_hull.area > polygon.area
+
+
+DEGENERATE_POLYGONS = {
+    "samepoints": np.array(4 * [[1, 0, 0]]),
+    "quartersphere": np.array([[1, 0, 0], [0, 1, 0], [-1, 0, 0]]),
+    "hasnullvector": [
+        (0, 0),
+        (15, 0),
+        (75, 0),
+        (75, 15),
+        (0, 0, 0),  # null vector
+        (15, 25),
+        (0, 25),
+        (0, 15),
+        (0, 0),
+    ],
+    "ongreatcircle": np.stack([90 * np.arange(5), 5 * [0]], axis=1),
+}
+
+
+@pytest.mark.parametrize(
+    "xyzs",
+    list(DEGENERATE_POLYGONS.values()),
+    ids=DEGENERATE_POLYGONS.keys(),
+)
+def test_degenerate_polygon(xyzs):
+    with pytest.raises(ValueError):
+        sphersgeo.SphericalPolygon(xyzs)

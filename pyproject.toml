@@ -16,7 +16,7 @@ dynamic = [
 
 [dependency-groups]
 docs = ["furo", "sphinx", "sphinx-autoapi", "sphinx_inline_tabs", "towncrier"]
-test = ["gwcs", "pytest"]
+test = ["gwcs", "pytest", "pytest-helpers-namespace"]
 
 [build-system]
 requires = ["maturin>=1.9,<2.0"]
