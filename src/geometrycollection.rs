@@ -1,6 +1,6 @@
 use std::fmt::Display;
 
-use crate::geometry::{GeometricOperations, GeometricRelationships, Geometry};
+use crate::geometry::Geometry;
 
 #[cfg(feature = "py")]
 use pyo3::prelude::*;
