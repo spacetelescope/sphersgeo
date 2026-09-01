@@ -9,9 +9,13 @@ build:
     python: latest
   jobs:
     post_checkout:
-      - git fetch --unshallow --tags
+      - git fetch --unshallow || true
+      - git config remote.origin.fetch '+refs/heads/*:refs/remotes/origin/*' || true
+      - git fetch --all --tags || true
+    pre_install:
+      - git update-index --assume-unchanged docs/source/conf.py
     pre_build:
-      - git describe --exact-match || towncrier build --keep --version=dev
+      - git describe --exact-match || towncrier build --keep
 
 python:
   install:
@@ -25,3 +29,7 @@ sphinx:
   builder: html
   configuration: docs/conf.py
   fail_on_warning: true
+
+formats:
+  - htmlzip
+  - pdf

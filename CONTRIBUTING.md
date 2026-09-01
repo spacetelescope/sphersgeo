@@ -1,8 +1,6 @@
 # Contributing to sphersgeo
 
-`sphersgeo` is an open source package written in Rust.
-Python classes are defined with `pyo3` in `src/lib.rs`, and a Python wheel built with `maturin`.
-
+`sphersgeo` is an open source package written in Rust, with Python bindings via `pyo3`.
 The source code is available at https://github.com/spacetelescope/sphersgeo.
 New contributions and contributors are very welcome!
 Do not hesitate to reach out to the package maintainers if you are new to open-source development or if you have any questions or concerns.
@@ -24,7 +22,7 @@ To suggest a specific code change, or to contribute new code:
 2. Clone your fork to your local machine:
 
    ```shell
-   git clone https://github.com/YOUR_USERNAME/sphersgeo
+   git clone https://github.com/spacetelescope/sphersgeo
    cd sphersgeo/
    ```
 
@@ -99,10 +97,7 @@ git push -u origin -f feature/cool_new_feature
 
 ## Creating a development environment
 
-When developing `sphersgeo` (or any other Python package), you should install the package locally to a development environment.
-
-> [!TIP]
-> Python "environments" are isolated Python installations, confined to a single directory, where you can install packages, dependencies, and tools without cluttering your system Python libraries.
+When developing `sphersgeo` (or any other package), you should install the package locally to a development environment.
 
 You can create a development environment with `mamba` / `conda`:
 
@@ -123,9 +118,9 @@ Breaking down what these lines do:
    ```shell
    mamba activate sphersgeo_dev_env
    ```
-3. Install the local package (`sphersgeo`) to your environment in "editable mode", so that any code changes will be instantly reflected in the installed package (useful for testing):
+3. Install the local package (`sphersgeo`) to your environment in "editable mode" using `maturin`, so that any code changes will be instantly reflected in the installed package (useful for testing):
    ```shell
-   pip install -e .
+   maturin develop
    ```
 4. Run your editor of choice (in this example I use Helix `hx`):
    ```shell
@@ -159,3 +154,7 @@ The full configuration for `pre-commit` checks can be found in `.pre-commit-conf
 ### Spell checking
 
 We use [Codespell](https://github.com/codespell-project/codespell) to check for common misspellings in both our codebase and documentation.
+
+## Writing and maintaining documentation
+
+See [`docs/README.md`](./docs/README.md) for instructions.

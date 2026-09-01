@@ -3,20 +3,24 @@
 # For the full list of built-in configuration values, see the documentation:
 # https://www.sphinx-doc.org/en/master/usage/configuration.html
 
+import datetime
 import importlib
 import tomllib
-import datetime
 from pathlib import Path
 
 # -- Project information -----------------------------------------------------
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#project-information
 
-with open(Path(__file__).parent.parent / "pyproject.toml", "rb") as metadata_file:
+with Path.open(Path(__file__).parent.parent / "pyproject.toml", "rb") as metadata_file:
     metadata = tomllib.load(metadata_file)["project"]
 
 project = metadata["name"]
-author = "Space Telescope Science Institute"
-copyright = f"{datetime.datetime.today().year}, {author}"
+author = "Space Telescope Science Institute (`STScI <https://stsci.edu>`_)"
+copyright = (
+    f"{datetime.datetime.now(tz=datetime.UTC).year}, "
+    "Association of Universities for Research in Astronomy "
+    "(`AURA <https://www.aura-astronomy.org>`_)"
+)
 
 package = importlib.import_module(metadata["name"])
 try:
@@ -35,7 +39,6 @@ extensions = [
     "sphinx.ext.autodoc",
     "sphinx.ext.intersphinx",
     "sphinx.ext.viewcode",
-    "sphinx_inline_tabs",
 ]
 
 templates_path = ["_templates"]
@@ -44,15 +47,41 @@ exclude_patterns = ["_build", "Thumbs.db", ".DS_Store"]
 # reST default role used for single backticks (`text`)
 default_role = "obj"
 
-# -- Options for HTML output -------------------------------------------------
+# -- HTML output configuration ----------------------------------------------
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#options-for-html-output
 
 html_theme = "furo"
 html_static_path = ["_static"]
 html_theme_options = {
-    "light_logo": "stsci_pri_combo_mark_light_bkgd.png",
-    "dark_logo": "stsci_pri_combo_mark_dark_bkgd.png",
+    "light_logo": "https://github.com/spacetelescope/stsci-package-template/blob/0c4b13779e02ff9b8fb3585615e26d51cadcc14b/docs/_static/stsci_pri_combo_mark_dark_bkgd.png",
+    "dark_logo": "https://github.com/spacetelescope/stsci-package-template/blob/0c4b13779e02ff9b8fb3585615e26d51cadcc14b/docs/_static/stsci_pri_combo_mark_dark_bkgd.png",
 }
+html_last_updated_fmt = "%b %d, %Y"
+html_sidebars = {"**": ["globaltoc.html", "relations.html", "searchbox.html"]}
+html_domain_indices = True
+html_use_index = True
+
+# -- EPUB output configuration -----------------------------------------------
+
+epub_show_urls = "footnote"
+
+# -- linkcheck configuration -------------------------------------------------
+
+linkcheck_retry = 5
+linkcheck_ignore = [
+    "http://stsci.edu/schemas/fits-schema/",  # Old schema from CHANGES.rst
+    "https://outerspace.stsci.edu",  # CI blocked by service provider
+    "https://jira.stsci.edu/",  # Internal access only
+    r"https://.*\.readthedocs\.io",  # 429 Client Error: Too Many Requests
+    "https://doi.org",  # CI blocked by service provider (timeout)
+]
+linkcheck_timeout = 180
+linkcheck_anchors = False
+linkcheck_report_timeouts_as_broken = True
+linkcheck_allow_unauthorized = False
+
+# Enable nitpicky mode - which ensures that all references in the docs resolve.
+nitpicky = True
 
 # # -- sphinx-autoapi configuration --------------------------------------------
 # # https://sphinx-autoapi.readthedocs.io/en/latest/reference/config.html
@@ -63,19 +92,25 @@ autoapi_generate_api_docs = False
 autoapi_member_order = "bysource"
 autoapi_python_class_content = "both"
 
-# -- sphinx.ext.intersphinx configuration --------------------------------------------
+# -- sphinx.ext.intersphinx configuration ------------------------------------
 # https://www.sphinx-doc.org/en/master/usage/extensions/intersphinx.html#configuration
 
 intersphinx_mapping = {
     "asdf": ("https://www.asdf-format.org/projects/asdf/en/stable/", None),
     "astropy": ("https://docs.astropy.org/en/stable/", None),
+    "drizzle": ("https://spacetelescope-drizzle.readthedocs.io/en/latest/", None),
     "gwcs": ("https://gwcs.readthedocs.io/en/latest/", None),
     "shapely": ("https://shapely.readthedocs.io/en/stable/", None),
     "matplotlib": ("https://matplotlib.org/stable/", None),
     "numpy": ("https://numpy.org/devdocs", None),
+    "photutils": ("https://photutils.readthedocs.io/en/stable/", None),
     "python": ("https://docs.python.org/3/", None),
+    "requests": ("https://requests.readthedocs.io/en/latest/", None),
     "scipy": ("https://scipy.github.io/devdocs", None),
+    "stcal": ("https://stcal.readthedocs.io/en/latest/", None),
+    "stdatamodels": ("https://stdatamodels.readthedocs.io/en/latest/", None),
+    "stpipe": ("https://stpipe.readthedocs.io/en/latest/", None),
+    "synphot": ("https://synphot.readthedocs.io/en/latest/", None),
+    "tweakwcs": ("https://tweakwcs.readthedocs.io/en/latest/", None),
 }
-
-# -- sphinx.ext.autodoc configuration --------------------------------------------
-# https://www.sphinx-doc.org/en/master/usage/extensions/autodoc.html#configuration
+intersphinx_disabled_domains = ["std"]

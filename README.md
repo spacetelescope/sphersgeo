@@ -1,14 +1,13 @@
 <a href="https://stsci.edu">
-  <img src="docs/_static/stsci_symbol_pantone279.png" alt="STScI Logo" width="15%" style="margin-left: auto;"/>
-  <img src="docs/_static/stsci_wordmark_grey.png" alt="STScI Name" width="68%"/>
+  <img src="https://github.com/spacetelescope/stsci-package-template/blob/0c4b13779e02ff9b8fb3585615e26d51cadcc14b/docs/_static/stsci_pri_combo_mark_horizonal_white_bkgd.png" alt="Space Telescope Science Institute" width="83%" style="margin-left: auto;"/>
 </a>
 
 # sphersgeo
 
 [![build](https://github.com/spacetelescope/sphersgeo/actions/workflows/build.yml/badge.svg)](https://github.com/spacetelescope/sphersgeo/actions/workflows/build.yml)
 [![tests](https://github.com/spacetelescope/sphersgeo/actions/workflows/tests.yml/badge.svg)](https://github.com/spacetelescope/sphersgeo/actions/workflows/tests.yml)
-[![readthedocs](https://readthedocs.org/projects/sphersgeo/badge/?version=latest)](https://sphersgeo.readthedocs.io)
 [![Powered by STScI](https://img.shields.io/badge/powered%20by-STScI-blue.svg?colorA=707170&colorB=3e8ddd&style=flat)](https://www.stsci.edu)
+[![ReadTheDocs](https://readthedocs.org/projects/sphersgeo/badge/?version=latest)](https://sphersgeo.readthedocs.io/en/latest/?badge=latest)
 
 [`sphersgeo`](https://sphersgeo.readthedocs.io) is an object-oriented spherical geometry package written in Rust with Python accessor classes and methods.
 

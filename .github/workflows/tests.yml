@@ -6,17 +6,18 @@ on:
       - opened
       - synchronize
       - reopened
-      - ready_for_review
   push:
     branches:
       - main
+    tags:  
+      - "*"
   workflow_dispatch:
-
-permissions: {}
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
+
+permissions: {}
 
 env:
   PYTHON_VERSIONS: 3.9 3.10 3.11 3.12 3.13 3.14

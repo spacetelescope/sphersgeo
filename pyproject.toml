@@ -3,6 +3,9 @@ name = "sphersgeo"
 requires-python = ">=3.12"
 authors = [{ name = "Zach Burnett", email = "zburnett@stsci.edu" }]
 classifiers = [
+  "Intended Audience :: Science/Research",
+  "Programming Language :: Python",
+  "Programming Language :: Python :: 3",
   "Programming Language :: Rust",
 ]
 dependencies = ["numpy>=2.1"]

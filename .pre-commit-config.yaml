@@ -44,12 +44,20 @@ repos:
     rev: v1.7.11
     hooks:
       - id: actionlint
+  # harden GitHub Actions workflows
+  - repo: https://github.com/zizmorcore/zizmor-pre-commit
+    rev: v1.25.2
+    hooks:
+      - id: zizmor
+        args: ["--fix=all"]
   # format and lint TOML
   - repo: https://github.com/tombi-toml/tombi-pre-commit
-    rev: v0.9.17
+    rev: v0.9.25
     hooks:
       - id: tombi-format
+        args: ["--offline"]
       - id: tombi-lint
+        args: ["--offline"]
   # spell-checking
   - repo: https://github.com/codespell-project/codespell
     rev: v2.4.1
@@ -76,3 +84,13 @@ repos:
         args:
           - --fix
           - --show-fixes
+  # validate numpy-style docstrings
+  - repo: https://github.com/numpy/numpydoc
+    rev: v1.10.0
+    hooks:
+      - id: numpydoc-validation
+        exclude: |
+          (?x)^(
+            docs/.* |
+            .*/tests/test_.*
+          )$

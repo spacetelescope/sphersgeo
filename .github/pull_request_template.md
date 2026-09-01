@@ -14,7 +14,12 @@ This change ...
 
 ## Tasks
 
-- [ ] If this change affects user-facing code or public API, add news fragment file(s) to `changes/` (see [the changelog instructions](https://github.com/spacetelescope/sphersgeo/blob/main/changes/README.md)).
-      Otherwise, add the `no-changelog-entry-needed` label.
 - [ ] update or add relevant tests
 - [ ] update relevant docstrings and / or `docs/` page
+- [ ] If this change affects user-facing code or public API, add news fragment file(s) to `changes/` (see [the changelog instructions](https://github.com/spacetelescope/sphersgeo/blob/main/changes/README.md)).
+      Otherwise, add the `no-changelog-entry-needed` label.
+
+## Generative AI Usage Disclosure
+
+<!-- If generative AI or LLMs were used in the process of making this change, describe their use here. -->
+<!-- Otherwise, indicate "No genAI tools used". -->
