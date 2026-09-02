@@ -172,22 +172,6 @@ pub trait GeometricOperations<O: Geometry = Self, S: Geometry = Self> {
     fn union(&self, other: &O) -> GeometryCollection;
 }
 
-/// define angular separation between 3D vectors
-pub struct AngularSeparation {}
-
-impl kiddo::traits::DistanceMetric<f64, 3> for AngularSeparation {
-    #[inline]
-    fn dist(a: &[f64; 3], b: &[f64; 3]) -> f64 {
-        // radians subtended
-        (a[0] * b[0] + a[1] * b[1] + a[2] * b[2]).acos()
-    }
-
-    #[inline]
-    fn dist1(a: f64, b: f64) -> f64 {
-        (a - b).abs()
-    }
-}
-
 #[cfg_attr(feature = "py", derive(FromPyObject, IntoPyObject))]
 #[derive(Debug, Clone, PartialEq)]
 pub enum AnyGeometry {

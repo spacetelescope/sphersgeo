@@ -1,0 +1,1 @@
+update ``kiddo`` to ``6.1.0``

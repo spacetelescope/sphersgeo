@@ -325,7 +325,12 @@ pub fn xyzs_coplanar(a: &[f64; 3], b: &[f64; 3], c: &[f64; 3]) -> bool {
 
 pub fn point_within_kdtree(xyz: &[f64; 3], kdtree: &ImmutableKdTree<f64, 3>) -> bool {
     // take advantage of the kdtree's distance function in 3D space
-    kdtree.nearest_one::<SquaredEuclidean>(xyz).distance < 3e-11
+    kdtree
+        .query(xyz)
+        .nearest_one::<SquaredEuclidean<f64>>()
+        .execute()
+        .distance
+        < 3e-11
 }
 
 pub fn arc_interpolate_points(
@@ -958,10 +963,20 @@ impl GeometricOperations<crate::sphericalpolygon::MultiSphericalPolygon> for Sph
 
 /// collection of points on the sphere
 #[cfg_attr(feature = "py", pyclass(from_py_object))]
-#[derive(Clone, Debug)]
+#[derive(Debug)]
 pub struct MultiSphericalPoint {
     pub xyzs: Vec<[f64; 3]>,
     pub kdtree: ImmutableKdTree<f64, 3>,
+}
+
+impl Clone for MultiSphericalPoint {
+    fn clone(&self) -> Self {
+        // TODO: there has to be a better way to clone a kiddo kd tree than recreating it from data every time
+        Self {
+            xyzs: self.xyzs.to_owned(),
+            kdtree: ImmutableKdTree::<f64, 3>::new_from_slice(&self.xyzs).unwrap(),
+        }
+    }
 }
 
 impl TryFrom<Vec<[f64; 3]>> for MultiSphericalPoint {
@@ -982,7 +997,7 @@ impl TryFrom<Vec<[f64; 3]>> for MultiSphericalPoint {
                     }
                 })
                 .collect();
-            let kdtree = ImmutableKdTree::<f64, 3>::from(xyzs.as_slice());
+            let kdtree = ImmutableKdTree::<f64, 3>::new_from_slice(xyzs.as_slice()).unwrap();
             Ok(Self { xyzs, kdtree })
         }
     }
@@ -1189,11 +1204,11 @@ impl MultiSphericalPoint {
     /// retrieve the nearest of these points to the given point, along with the normalized 3D Cartesian distance to that point across the unit sphere
     pub fn nearest(&self, other: &SphericalPoint) -> (SphericalPoint, f64) {
         // since the kdtree is over normalized vectors, the nearest vector in 3D space is also the nearest in angular distance
-        let nearest = self.kdtree.nearest_one::<SquaredEuclidean>(&[
-            other.xyz[0],
-            other.xyz[1],
-            other.xyz[2],
-        ]);
+        let nearest = self
+            .kdtree
+            .query(&[other.xyz[0], other.xyz[1], other.xyz[2]])
+            .nearest_one::<SquaredEuclidean<f64>>()
+            .execute();
 
         (
             SphericalPoint::from(self.xyzs[nearest.item as usize]),
@@ -1207,7 +1222,7 @@ impl MultiSphericalPoint {
     }
 
     fn recreate_kdtree(&mut self) {
-        self.kdtree = ImmutableKdTree::<f64, 3>::from(self.xyzs.as_slice());
+        self.kdtree = ImmutableKdTree::<f64, 3>::new_from_slice(self.xyzs.as_slice()).unwrap();
     }
 
     fn unique(&self) -> HashMap<usize, Vec<usize>> {
@@ -1220,7 +1235,11 @@ impl MultiSphericalPoint {
                 continue;
             }
 
-            let close = self.kdtree.within_unsorted::<SquaredEuclidean>(xyz, 3e-11);
+            let close = self
+                .kdtree
+                .query(xyz)
+                .within::<SquaredEuclidean<f64>>(3e-11)
+                .execute();
 
             if !unique.contains_key(&xyz_index) {
                 unique.insert(xyz_index, vec![]);
@@ -1340,7 +1359,9 @@ impl Geometry for MultiSphericalPoint {
         let num_candidates = std::num::NonZero::try_from(self.len() - 1).unwrap();
         let farthest_neighbor_index = self
             .kdtree
-            .nearest_n::<SquaredEuclidean>(&centroid.xyz, num_candidates)
+            .query(&centroid.xyz)
+            .nearest_n::<SquaredEuclidean<f64>>(num_candidates)
+            .execute()
             .last()
             .unwrap()
             .item;
@@ -1354,7 +1375,9 @@ impl Geometry for MultiSphericalPoint {
             // query the kdtree for all points, sorting them by distance from the current working end of the convex hull
             let candidates = self
                 .kdtree
-                .nearest_n::<SquaredEuclidean>(&working_end, num_candidates);
+                .query(&working_end)
+                .nearest_n::<SquaredEuclidean<f64>>(num_candidates)
+                .execute();
 
             for candidate in &candidates {
                 // skip candidates already on the convex hull...
@@ -1564,7 +1587,11 @@ impl GeometricRelationships<Self> for MultiSphericalPoint {
             .iter()
             .enumerate()
             .map(|(self_index, self_xyz)| {
-                let nearest = other.kdtree.nearest_one::<SquaredEuclidean>(self_xyz);
+                let nearest = other
+                    .kdtree
+                    .query(self_xyz)
+                    .nearest_one::<SquaredEuclidean<f64>>()
+                    .execute();
                 (self_index, nearest.item as usize, nearest.distance)
             })
             .min_by(|a, b| a.2.partial_cmp(&b.2).unwrap())
@@ -1822,7 +1849,11 @@ impl GeometricOperations<SphericalPoint, SphericalPoint> for MultiSphericalPoint
 
     fn difference(&self, other: &SphericalPoint) -> Option<Self> {
         let mut xyzs = self.xyzs.to_owned();
-        let closest = self.kdtree.nearest_one::<SquaredEuclidean>(&other.xyz);
+        let closest = self
+            .kdtree
+            .query(&other.xyz)
+            .nearest_one::<SquaredEuclidean<f64>>()
+            .execute();
         if closest.distance < 3e-11 {
             xyzs.remove(closest.item as usize);
         }

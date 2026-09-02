@@ -26,7 +26,7 @@ requires = ["maturin>=1.9,<2.0"]
 build-backend = "maturin"
 
 [tool.cibuildwheel]
-build = "cp311-*"
+build = "cp312-*"
 test-requires = ["abi3audit"]
 test-command = "python -c 'from sphersgeo import SphericalPoint, MultiSphericalPoint, ArcString, MultiArcString, SphericalPolygon, MultiSphericalPolygon' && abi3audit --strict --report dist/*.whl"
 
