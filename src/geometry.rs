@@ -189,9 +189,13 @@ pub enum AnyGeometry {
     MultiSphericalPolygon(crate::sphericalpolygon::MultiSphericalPolygon),
 }
 
-fn try_point_from_wkt_fragment(wkt_fragment: &str) -> Result<Vec<f64>, String> {
+fn try_point_from_wkt_fragment(wkt_fragment: &str, drop_m: bool) -> Result<Vec<f64>, String> {
     let mut point = vec![];
-    for coordinate in wkt_fragment.split_whitespace() {
+    let mut values = wkt_fragment.split_whitespace().collect::<Vec<&str>>();
+    if drop_m {
+        values.pop();
+    }
+    for coordinate in values {
         point.push(
             coordinate
                 .parse::<f64>()
@@ -201,19 +205,23 @@ fn try_point_from_wkt_fragment(wkt_fragment: &str) -> Result<Vec<f64>, String> {
     Ok(point)
 }
 
-fn try_points_from_wkt_fragment(wkt_fragment: &str) -> Result<Vec<Vec<f64>>, String> {
+fn try_points_from_wkt_fragment(wkt_fragment: &str, drop_m: bool) -> Result<Vec<Vec<f64>>, String> {
     let mut points = vec![];
     for point_fragment in wkt_fragment.split(", ") {
-        points.push(try_point_from_wkt_fragment(point_fragment)?);
+        points.push(try_point_from_wkt_fragment(point_fragment, drop_m)?);
     }
     Ok(points)
 }
 
-fn try_multipoints_from_wkt_fragment(wkt_fragment: &str) -> Result<Vec<Vec<Vec<f64>>>, String> {
+fn try_multipoints_from_wkt_fragment(
+    wkt_fragment: &str,
+    drop_m: bool,
+) -> Result<Vec<Vec<Vec<f64>>>, String> {
     let mut multipoints = vec![];
     for multipoint_fragment in wkt_fragment.split("), (") {
         multipoints.push(try_points_from_wkt_fragment(
             &multipoint_fragment.trim_matches(|c| c == '(' || c == ')'),
+            drop_m,
         )?);
     }
     Ok(multipoints)
@@ -222,37 +230,45 @@ fn try_multipoints_from_wkt_fragment(wkt_fragment: &str) -> Result<Vec<Vec<Vec<f
 /// construct geometry from well-known text representation
 pub fn try_from_wkt(wkt: &str) -> Result<AnyGeometry, String> {
     let wkt = wkt.trim(); // trim whitespace
-    if wkt.starts_with("POINT (") {
+    let opening_parentheses_index = wkt.chars().position(|c| c == '(').expect("malformed WKT") + 1;
+    let has_m = if let Some(attributes) = wkt[..opening_parentheses_index]
+        .split_whitespace()
+        .collect::<Vec<&str>>()
+        .get(1)
+    {
+        attributes.contains("M")
+    } else {
+        false
+    };
+    if wkt.starts_with("POINT") {
         crate::sphericalpoint::SphericalPoint::try_from(&try_point_from_wkt_fragment(
-            &wkt[7..wkt.len() - 1],
+            &wkt[opening_parentheses_index..wkt.len() - 1],
+            has_m,
         )?)
         .map(|point| AnyGeometry::SphericalPoint(point))
-    } else if wkt.starts_with("MULTIPOINT (") || wkt.starts_with("LINESTRING (") {
+    } else if wkt.starts_with("MULTIPOINT") || wkt.starts_with("LINESTRING") {
         let points = crate::sphericalpoint::MultiSphericalPoint::try_from(
-            &try_points_from_wkt_fragment(&wkt[12..wkt.len() - 1])?,
+            &try_points_from_wkt_fragment(&wkt[opening_parentheses_index..wkt.len() - 1], has_m)?,
         )?;
 
-        if wkt.starts_with("MULTIPOINT (") {
+        if wkt.starts_with("MULTIPOINT") {
             Ok(AnyGeometry::MultiSphericalPoint(points))
         } else {
             crate::arcstring::ArcString::try_from(points)
                 .map(|arcstring| AnyGeometry::ArcString(arcstring))
         }
-    } else if wkt.starts_with("MULTILINESTRING ((") || wkt.starts_with("POLYGON ((") {
+    } else if wkt.starts_with("MULTILINESTRING") || wkt.starts_with("POLYGON") {
         let mut linestrings = vec![];
         for multipoint in try_multipoints_from_wkt_fragment(
-            &wkt[if wkt.starts_with("MULTILINESTRING ((") {
-                18
-            } else {
-                10
-            }..wkt.len() - 2],
+            &wkt[opening_parentheses_index + 1..wkt.len() - 2],
+            has_m,
         )? {
             linestrings.push(crate::arcstring::ArcString::try_from(
                 crate::sphericalpoint::MultiSphericalPoint::try_from(&multipoint)?,
             )?);
         }
 
-        if wkt.starts_with("MULTILINESTRING ((") {
+        if wkt.starts_with("MULTILINESTRING") {
             crate::arcstring::MultiArcString::try_from(linestrings)
                 .map(|multiarcstring| AnyGeometry::MultiArcString(multiarcstring))
         } else {
@@ -265,9 +281,9 @@ pub fn try_from_wkt(wkt: &str) -> Result<AnyGeometry, String> {
                 ))
             }
         }
-    } else if wkt.starts_with("MULTIPOLYGON (((") {
+    } else if wkt.starts_with("MULTIPOLYGON") {
         let mut polygons = vec![];
-        for polygon_fragment in wkt[16..wkt.len() - 3].split(")), ((") {
+        for polygon_fragment in wkt[opening_parentheses_index + 2..wkt.len() - 3].split(")), ((") {
             polygons.push(
                 match try_from_wkt(format!("POLYGON (({polygon_fragment}))").as_str())? {
                     AnyGeometry::SphericalPolygon(polygon) => polygon,
@@ -280,7 +296,7 @@ pub fn try_from_wkt(wkt: &str) -> Result<AnyGeometry, String> {
 
         crate::sphericalpolygon::MultiSphericalPolygon::try_from(polygons)
             .map(|multipolygon| AnyGeometry::MultiSphericalPolygon(multipolygon))
-    } else if wkt.starts_with("GEOMETRYCOLLECTION (") {
+    } else if wkt.starts_with("GEOMETRYCOLLECTION") {
         Err(String::from("GEOMETRYCOLLECTION not implemented"))
     } else {
         Err(format!("unknown well-known text: {wkt}"))
