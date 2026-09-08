@@ -695,7 +695,8 @@ impl Geometry for SphericalPoint {
 
     fn to_wkt(&self, angular: bool) -> String {
         format!(
-            "POINT ({})",
+            "POINT {}({})",
+            if !angular { "Z " } else { "" },
             if angular {
                 xyz_to_lonlat(&self.xyz).to_vec()
             } else {
@@ -1443,7 +1444,8 @@ impl Geometry for MultiSphericalPoint {
 
     fn to_wkt(&self, angular: bool) -> String {
         format!(
-            "MULTIPOINT ({})",
+            "MULTIPOINT {}({})",
+            if !angular { "Z " } else { "" },
             if angular {
                 self.to_lonlats()
                     .into_iter()

@@ -403,7 +403,8 @@ impl Geometry for SphericalPolygon {
     fn to_wkt(&self, angular: bool) -> String {
         // no holes
         format!(
-            "POLYGON ({})",
+            "POLYGON {}({})",
+            if !angular { "Z " } else { "" },
             self.boundary.to_wkt(angular).replace("LINESTRING ", "")
         )
     }
@@ -855,7 +856,10 @@ impl Geometry for MultiSphericalPolygon {
             "MULTIPOLYGON ({})",
             self.polygons
                 .iter()
-                .map(|polygon| polygon.to_wkt(angular).replace("POLYGON ", ""))
+                .map(|polygon| polygon.to_wkt(angular).replace(
+                    format!("POLYGON {}", if !angular { "Z " } else { "" }).as_str(),
+                    ""
+                ))
                 .collect::<Vec<String>>()
                 .join("), (")
         )
