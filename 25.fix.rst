@@ -1,0 +1,1 @@
+invert negative area when orientation is majorly clockwise
