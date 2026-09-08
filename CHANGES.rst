@@ -8,7 +8,8 @@ Fixes
   <https://github.com/spacetelescope/sphersgeo/issues/24>`_)
 - invert negative area of clockwise polygons (`#25
   <https://github.com/spacetelescope/sphersgeo/issues/25>`_)
-
+- support writing WKT with `Z` (`#26
+  <https://github.com/spacetelescope/sphersgeo/issues/26>`_)
 
 0.2.1 (2026-09-02)
 ==================
