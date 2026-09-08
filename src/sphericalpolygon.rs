@@ -75,7 +75,7 @@ fn area_inside_polygon_boundary(boundary: &ArcString) -> f64 {
     // if the polygon is concave, the area given by Oosterom-Strackee is signed
     // such that exterior triangles cancel out interior triangles
     let a = xyzs[0];
-    let solid_angle = (1..xyzs.len() - 1)
+    let mut solid_angle = (1..xyzs.len() - 1)
         .map(|index| {
             let b = xyzs[index];
             let c = xyzs[index + 1];
@@ -83,6 +83,10 @@ fn area_inside_polygon_boundary(boundary: &ArcString) -> f64 {
             solid_angle_of_spherical_triangle(&a, &b, &c)
         })
         .sum::<f64>();
+
+    if solid_angle < 0.0 {
+        solid_angle += 4.0 * std::f64::consts::PI;
+    }
 
     // convert from steradians to square degrees
     solid_angle * 3282.8065632
