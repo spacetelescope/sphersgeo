@@ -1372,7 +1372,10 @@ impl Geometry for MultiArcString {
             "MULTILINESTRING ({})",
             self.arcstrings
                 .iter()
-                .map(|arcstring| arcstring.to_wkt(angular).replace("LINESTRING ", ""))
+                .map(|arcstring| arcstring.to_wkt(angular).replace(
+                    format!("LINESTRING {}", if !angular { "Z " } else { "" }).as_str(),
+                    ""
+                ))
                 .collect::<Vec<String>>()
                 .join("), (")
         )
