@@ -23,8 +23,8 @@ def polygon_from_wcs(wcs, steps: int | None = None) -> SphericalPolygon:
     Returns
     -------
     `sphersgeo.SphericalPolygon`
-    """
 
+    """
     if steps is None:
         steps = 1
 
