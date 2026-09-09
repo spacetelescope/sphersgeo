@@ -8,7 +8,7 @@ Fixes
   <https://github.com/spacetelescope/sphersgeo/issues/24>`_)
 - invert negative area of clockwise polygons (`#25
   <https://github.com/spacetelescope/sphersgeo/issues/25>`_)
-- support writing WKT with `Z` (`#26
+- support writing WKT with ``Z`` (`#26
   <https://github.com/spacetelescope/sphersgeo/issues/26>`_)
 
 0.2.1 (2026-09-02)
@@ -47,7 +47,7 @@ Other Changes
 Documentation Changes
 ---------------------
 
-- remove `license` from `Cargo.toml` in favor of keeping `license-file` (`#15
+- remove ``license`` from ``Cargo.toml`` in favor of keeping ``license-file`` (`#15
   <https://github.com/spacetelescope/sphersgeo/issues/15>`_)
 - update branding and switch theme to ``furo`` (`#16
   <https://github.com/spacetelescope/sphersgeo/issues/16>`_)
@@ -67,10 +67,10 @@ Breaking Changes
 Documentation Changes
 ---------------------
 
-- build documentation with Sphinx and `autoapi`, and set up ReadTheDocs
+- build documentation with Sphinx and ``autoapi``, and set up ReadTheDocs
   configuration (`#12
   <https://github.com/spacetelescope/sphersgeo/issues/12>`_)
-- move change log to its own `toctree` and distinguish Rust from Python install
+- move change log to its own ``toctree`` and distinguish Rust from Python install
   options (`#14 <https://github.com/spacetelescope/sphersgeo/issues/14>`_)
 
 
@@ -90,7 +90,7 @@ Documentation Changes
 Fixes
 -----
 
-- fix typing by moving `sphersgeo.pyi` stub file into `src/python/sphersgeo/`
+- fix typing by moving ``sphersgeo.pyi`` stub file into ``src/python/sphersgeo/``
   (see https://pyo3.rs/main/python-typing-hints and
   https://github.com/PyO3/maturin/blob/0dee40510083c03607834c821eea76964140a126/Readme.md#mixed-rustpython-projects)
   (`#8 <https://github.com/spacetelescope/sphersgeo/issues/8>`_)
@@ -98,5 +98,5 @@ Fixes
 Documentation Changes
 ---------------------
 
-- fix reference to `src/sphersgeo.pyi` in README (`#5
+- fix reference to ``src/sphersgeo.pyi`` in README (`#5
   <https://github.com/spacetelescope/sphersgeo/issues/5>`_)
