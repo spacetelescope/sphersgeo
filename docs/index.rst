@@ -30,8 +30,6 @@ Contributing
 The source code is `available on GitHub <https://github.com/spacetelescope/sphersgeo>`_.
 New contributions and contributors are very welcome!
 
-Please read `CONTRIBUTING.md <https://github.com/spacetelescope/sphersgeo/blob/main/CONTRIBUTING.md>`_.
-
 We strive to provide a welcoming community by abiding with our `CODE_OF_CONDUCT.md <https://github.com/spacetelescope/sphersgeo/blob/main/CODE_OF_CONDUCT.md>`_.
 
 .. toctree::
