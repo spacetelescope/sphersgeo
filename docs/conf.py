@@ -54,8 +54,8 @@ default_role = "obj"
 html_theme = "furo"
 html_static_path = ["_static"]
 html_theme_options = {
-    "light_logo": "https://github.com/spacetelescope/stsci-package-template/blob/0c4b13779e02ff9b8fb3585615e26d51cadcc14b/docs/_static/stsci_pri_combo_mark_dark_bkgd.png",
-    "dark_logo": "https://github.com/spacetelescope/stsci-package-template/blob/0c4b13779e02ff9b8fb3585615e26d51cadcc14b/docs/_static/stsci_pri_combo_mark_dark_bkgd.png",
+    "light_logo": "stsci_pri_combo_mark_light_bkgd.png",
+    "dark_logo": "stsci_pri_combo_mark_dark_bkgd.png",
 }
 html_last_updated_fmt = "%b %d, %Y"
 html_domain_indices = True
