@@ -1,0 +1,24 @@
+{
+  "template": "https://github.com/spacetelescope/stsci-package-template",
+  "commit": "034115fc3a65a032582230c6616ca58b73c6e9d3",
+  "checkout": null,
+  "context": {
+    "cookiecutter": {
+      "project_name": "sphersgeo",
+      "package_name": "sphersgeo",
+      "repository_url": "https://github.com/spacetelescope/sphersgeo",
+      "git_username": "zacharyburnett",
+      "project_description": "rwawd",
+      "manage_changelog_with_towncrier": true,
+      "publish_docs_to": "readthedocs.io",
+      "task_runner": "nox",
+      "python_version": ">=3.12",
+      "python_c_extensions": false,
+      "python_build_backend": "setuptools",
+      "crds_observatory": "none",
+      "_template": "https://github.com/spacetelescope/stsci-package-template",
+      "_commit": "034115fc3a65a032582230c6616ca58b73c6e9d3"
+    }
+  },
+  "directory": "python-package"
+}

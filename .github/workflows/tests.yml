@@ -83,11 +83,10 @@ jobs:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
           persist-credentials: false
-      - uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6.2.0
+      - uses: wntrblm/nox@5a277b752f6094150e25237d47c34168e2b7526e # 2026.02.09
         with:
-          python-version: ${{ matrix.python-version }}
-      - run: pip install . --group=test ${{ matrix.coverage && 'coverage pytest-cov' || '' }} pytest-xdist
-      - run: pytest ${{ matrix.coverage && '--cov' || '' }} -n=auto
+          python-versions: ${{ matrix.python-version }}
+      - run: nox -s "test${{ matrix.coverage && '-with-coverage' || '' }}"
       - if: matrix.coverage
         name: report coverage to summary
         run: |
