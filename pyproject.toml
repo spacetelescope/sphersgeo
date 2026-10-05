@@ -20,7 +20,7 @@ dynamic = [
 [dependency-groups]
 contrib = ["nox", "pyrefly", "ruff"]
 docs = ["furo", "sphinx", "sphinx-autoapi", "sphinx_inline_tabs", "towncrier"]
-test = ["coverage", "gwcs", "pytest", "pytest-helpers-namespace"]
+test = ["coverage", "gwcs", "pytest>=9", "pytest-helpers-namespace"]
 
 [build-system]
 requires = ["maturin>=1.9,<2.0"]
