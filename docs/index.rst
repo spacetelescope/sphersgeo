@@ -15,7 +15,7 @@ is an object-oriented spherical geometry package written in Rust with Python acc
 
    .. code-block:: shell
 
-      cargo install --git https://github.com/spacetelescope/sphersgeo
+      cargo add --git https://github.com/spacetelescope/sphersgeo
 
 .. attention::
    `sphersgeo` is still in development
